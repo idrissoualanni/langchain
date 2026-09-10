@@ -1,0 +1,41 @@
+id: biology
+name: Biologie
+domain: sciences
+description: >
+  Science du vivant : cellule, génétique, écologie.
+teaching_style:
+  - visuel
+  - analogies
+pedagogical_guidelines:
+  - utiliser des schémas décrits
+  - relier structure et fonction
+capabilities:
+  - explain
+  - quiz
+  - evaluate
+tools:
+  common:
+    - create_exercise
+    - evaluate_answer
+    - give_hint
+  specialized:
+    - analyze_diagram
+knowledge:
+  sources:
+    - sciences/biologie/cell
+    - sciences/biologie/genetics
+topics:
+  - cellule
+  - membrane
+  - mitochondrie
+  - noyau
+  - genetique
+  - adn
+  - ecologie
+aliases:
+  - biologie
+  - biology
+  - science du vivant
+model:
+  provider: ollama
+  name: qwen2.5

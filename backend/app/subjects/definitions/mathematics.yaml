@@ -1,0 +1,41 @@
+id: mathematics
+name: Mathématiques
+domain: sciences
+description: >
+  Algèbre, calcul, résolution d'équations.
+teaching_style:
+  - rigoureux
+  - étape par étape
+pedagogical_guidelines:
+  - décomposer en sous-étapes
+  - vérifier chaque étape
+capabilities:
+  - explain
+  - exercise
+  - evaluate
+tools:
+  common:
+    - create_exercise
+    - evaluate_answer
+    - give_hint
+  specialized:
+    - verify_solution
+    - symbolic_calculation
+knowledge:
+  sources:
+    - mathematics/algebre/equations
+topics:
+  - algebre
+  - equations
+  - inconnue
+  - calcul
+  - derivees
+  - integrales
+aliases:
+  - mathematiques
+  - maths
+  - math
+  - algebre
+model:
+  provider: ollama
+  name: qwen2.5

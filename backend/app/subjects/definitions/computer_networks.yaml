@@ -1,0 +1,43 @@
+id: computer_networks
+name: Réseaux informatiques
+domain: informatique
+description: >
+  Réseaux : modèle OSI, TCP/IP, protocoles.
+teaching_style:
+  - progressif
+  - couche par couche
+pedagogical_guidelines:
+  - partir du concret
+  - remonter le modèle en couches
+capabilities:
+  - explain
+  - quiz
+  - evaluate
+tools:
+  common:
+    - create_exercise
+    - evaluate_answer
+    - give_hint
+  specialized: []
+knowledge:
+  sources:
+    - informatique/reseaux/osi_model
+    - informatique/reseaux/tcp_ip
+topics:
+  - osi
+  - tcp
+  - ip
+  - protocoles
+  - couches
+  - dns
+aliases:
+  - reseaux informatiques
+  - computer networks
+  - osi
+  - tcp/ip
+  - tcp ip
+  - protocole
+  - dns
+model:
+  provider: ollama
+  name: qwen2.5

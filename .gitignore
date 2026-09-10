@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Bases de données locales
+backend/database/*.db
+backend/database/*.db-journal
+backend/database/*.db-shm
+backend/database/*.db-wal
+
+# Artefacts de session agent (harness)
+.omo/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Cache npm/pnpm locaux (sandbox)
+.npm-cache/
+.pnpm-store/
+
+# Env — ne jamais commit les clés
+.env
+backend/.env
+
+# Logs volumineux (l'historique peut être conservé si souhaité)
+logs/*.log
+
+# OS
+.DS_Store
+Thumbs.db

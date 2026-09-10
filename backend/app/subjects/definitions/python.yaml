@@ -1,0 +1,54 @@
+id: python
+name: Python
+domain: informatique
+description: >
+  Programmation avec le langage Python.
+teaching_style:
+  - pratique
+  - progressif
+  - orienté résolution de problèmes
+pedagogical_guidelines:
+  - commencer par un exemple concret
+  - favoriser la pratique
+  - donner des indices avant la solution
+  - vérifier la compréhension
+capabilities:
+  - explain
+  - exercise
+  - quiz
+  - evaluate
+  - debug
+  - review
+tools:
+  common:
+    - create_exercise
+    - evaluate_answer
+    - give_hint
+  specialized:
+    - execute_python
+    - analyze_python_error
+knowledge:
+  sources:
+    - informatique/python/basics
+    - informatique/python/functions
+    - informatique/python/loops
+    - informatique/python/oop
+topics:
+  - variables
+  - fonctions
+  - functions
+  - return
+  - boucles
+  - loops
+  - classes
+  - heritages
+  - oop
+  - decorators
+  - modules
+  - async
+aliases:
+  - python
+  - langage python
+model:
+  provider: ollama
+  name: qwen2.5
