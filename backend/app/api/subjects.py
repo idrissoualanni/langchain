@@ -77,19 +77,30 @@ def api_context_preview(
 
     Route dev : expose la sélection interne (router, knowledge,
     mémoire). À protéger/limiter si exposée en production (§35).
+    Alias canonique V5 : POST /api/context/preview (§44).
     """
+    return build_context_preview(payload)
+
+
+def build_context_preview(
+    payload: ContextPreviewRequest,
+) -> ContextPreviewResponse:
+    """Handler partagé preview (utilisé par /api/context/preview
+    et /api/subjects/preview/context)."""
     init_db()
     if get_user(payload.user_id) is None:
         raise HTTPException(
             status_code=404, detail="Utilisateur introuvable"
         )
 
+    # BuiltContext (pydantic V5) → dict pour la réponse API
     context = build_context(
         user_id=payload.user_id,
         thread_id=payload.thread_id or "",
         query=payload.query,
         subject=payload.subject,
     )
+    ctx = context.model_dump()
     prompt = build_system_prompt(
         core_prompt=CORE_PROMPT,
         context=context,
@@ -97,12 +108,12 @@ def api_context_preview(
         thread_id=payload.thread_id or "",
     )
     return ContextPreviewResponse(
-        router=context["router"],
-        subject=context["subject"],
-        knowledge=context["knowledge"],
-        tools=context["tools"],
-        user=context["user"],
-        thread=context["thread"],
+        router=ctx["routing"],
+        subject=ctx["subject"],
+        knowledge=ctx["knowledge"],
+        tools=ctx["tools"],
+        user=ctx["user"],
+        thread=ctx["thread"],
         prompt_preview=prompt,
-        stats=context["stats"],
+        stats=ctx["stats"],
     )

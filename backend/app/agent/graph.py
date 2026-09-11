@@ -1,3 +1,8 @@
+# Graph V5 — assemblage de l'agent (§63).
+#
+# Ce module CONNECTE uniquement : model, tools, checkpointer,
+# store, middleware, state/context schemas. Aucune logique de
+# routing/knowledge/prompt ici (tout est dans les couches métier).
 import sqlite3
 
 from langchain.agents import create_agent
@@ -11,10 +16,11 @@ from app.config import (
     OLLAMA_HOST,
     ollama_headers,
 )
-from app.agent.middleware import ToolEventMiddleware
+from app.agent.middleware import build_middleware_stack
 from app.agent.prompts import SYSTEM_PROMPT
 from app.agent.state import CustomAgentState
 from app.agent.tools import all_tools
+from app.context.schemas import AgentContext
 from app.logging.events import log_event
 
 _conn: sqlite3.Connection | None = None
@@ -35,11 +41,11 @@ def get_agent():
         client_kwargs={"headers": headers} if headers else None,
     )
 
-    # Checkpointer SQLite officiel — persistance réelle du state LangGraph
+    # Checkpointer SQLite officiel — persistance du thread state (§7)
     _conn = sqlite3.connect(CHECKPOINTS_DB_PATH, check_same_thread=False)
     checkpointer = SqliteSaver(_conn)
 
-    # Store longue durée officiel — profil utilisateur cross-thread
+    # Store longue durée officiel — User Memory cross-thread (§6)
     store = get_store()
 
     log_event(
@@ -54,7 +60,8 @@ def get_agent():
         checkpointer=checkpointer,
         store=store,
         state_schema=CustomAgentState,
-        middleware=[ToolEventMiddleware()],
+        context_schema=AgentContext,  # Runtime Context natif (§4)
+        middleware=build_middleware_stack(),
     )
 
     return _agent

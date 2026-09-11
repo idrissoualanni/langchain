@@ -210,12 +210,12 @@ export interface KnowledgeContext {
   searched_sources: number;
 }
 
+// ---- V5 : ToolsContext = ResolvedTools (resolve_tools §28/§39) ----
+
 export interface ToolsContext {
   available: string[];
-  declared_common: string[];
-  declared_specialized: string[];
-  available_count: number;
-  declared_count: number;
+  declared: string[];
+  unavailable: string[];
 }
 
 /** SubjectConfig telle qu'exposée par le builder (sans topics/tools_*) */

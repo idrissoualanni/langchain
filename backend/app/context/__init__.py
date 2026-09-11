@@ -1,12 +1,14 @@
-# Package context — Context Engineering (V4)
+# Package context — Context Engineering (V5)
 #
-#   router           → subject/topic/status d'une question
-#   build_context()  → sélectionne les infos pertinentes multi-sources
-#   prompt_builder   → assemble le system prompt final
+#   schemas.py        → schémas structurés centralisés (§11/§14/§30)
+#   router            → RoutingResult pydantic (classification)
+#   build_context()   → BuiltContext (sélection multi-sources)
+#   prompt_builder    → présentation uniquement (§35)
 #
-# Architecture V4 (§29) :
-#   ROUTER + SUBJECT CONFIG + KNOWLEDGE + TOOLS + USER MEMORY
-#   + THREAD STATE (+ LEARNING réservé V5+) → BUILDER → PROMPT → MODEL
+# Architecture V5 (§72) :
+#   ROUTER + SUBJECT REGISTRY + KNOWLEDGE + TOOLS + USER MEMORY
+#   + THREAD STATE (+ LEARNING réservé V6+) → BUILDER →
+#   DYNAMIC PROMPT (@dynamic_prompt natif) → MODEL
 from app.context.builder import (
     build_context,
     build_system_prompt,
@@ -15,6 +17,14 @@ from app.context.builder import (
 )
 from app.context.prompt_builder import build_system_prompt  # noqa: F811
 from app.context.router import route_subject
+from app.context.schemas import (  # noqa: F401
+    AgentContext,
+    BuiltContext,
+    KnowledgeResult,
+    KnowledgeSearchResult,
+    ResolvedTools,
+    RoutingResult,
+)
 
 __all__ = [
     "build_context",
@@ -22,4 +32,10 @@ __all__ = [
     "build_thread_context",
     "build_user_context",
     "route_subject",
+    "AgentContext",
+    "BuiltContext",
+    "KnowledgeResult",
+    "KnowledgeSearchResult",
+    "ResolvedTools",
+    "RoutingResult",
 ]

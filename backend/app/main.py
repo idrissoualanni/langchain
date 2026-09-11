@@ -6,7 +6,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agent.graph import get_agent
-from app.api import chat, health, logs, memory, subjects, threads, users
+from app.api import (
+    chat,
+    context,
+    health,
+    logs,
+    memory,
+    subjects,
+    threads,
+    users,
+)
 from app.db.connections import init_db
 from app.logging.events import log_event, setup_logging
 from app.logging.sse import sse_events
@@ -72,6 +81,7 @@ app.include_router(memory.router)
 app.include_router(logs.router)
 app.include_router(health.router)
 app.include_router(subjects.router)
+app.include_router(context.router)
 
 # SSE — événements agent temps réel
 app.add_api_route(

@@ -332,24 +332,18 @@ export function ContextInspectorCard({
 
             <Section
               title="tools"
-              badge={`${preview.tools.available_count} dispo`}
+              badge={`${preview.tools.available.length} dispo`}
               open={openTools}
               onToggle={() => setOpenTools(!openTools)}
             >
               <div className="space-y-1.5 font-mono text-[10.5px]">
                 <div className="text-[#22c55e]">
-                  implémentés : {preview.tools.available.join(', ')}
+                  disponibles : {preview.tools.available.join(', ') || '—'}
                 </div>
-                {preview.tools.declared_common.length > 0 && (
-                  <div className="text-[#94a3b8]">
-                    déclarés communs (à venir) :{' '}
-                    {preview.tools.declared_common.join(', ')}
-                  </div>
-                )}
-                {preview.tools.declared_specialized.length > 0 && (
-                  <div className="text-[#94a3b8]">
-                    déclarés spécialisés (à venir) :{' '}
-                    {preview.tools.declared_specialized.join(', ')}
+                {preview.tools.unavailable.length > 0 && (
+                  <div className="text-[#f59e0b]">
+                    déclarés non enregistrés (non exposés au modèle) :{' '}
+                    {preview.tools.unavailable.join(', ')}
                   </div>
                 )}
               </div>

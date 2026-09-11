@@ -1,20 +1,34 @@
-# Runner — orchestration d'un run agent avec événements observables
+# Runner V5 — orchestration d'un run agent (§61).
+#
+# Changement V5 : user_id/thread_id transportés via le RUNTIME
+# CONTEXT natif (context=AgentContext(...), §4) en PLUS du
+# configurable (thread_id requis par le checkpointer ; user_id
+# conservé dans configurable pour rétrocompatibilité observabilité
+# — la source de vérité du middleware est désormais le runtime).
 import asyncio
 import time
 from typing import AsyncIterator
 
 from app.agent.graph import get_agent
+from app.context.schemas import AgentContext
 from app.logging.events import log_event
 
 
 def _config_for(thread_id: str, user_id: str = "") -> dict:
-    """Config LangGraph : thread_id (conversation) + user_id (observabilité)."""
+    """Config LangGraph : thread_id (conversation, checkpointer §7)
+    + user_id (observabilité logs)."""
     return {
         "configurable": {
             "thread_id": thread_id,
             "user_id": user_id,
         }
     }
+
+
+def _runtime_context(user_id: str, thread_id: str) -> AgentContext:
+    """Runtime Context natif LangGraph (§4) — DI pour middleware
+    et tools (request.runtime.context.user_id)."""
+    return AgentContext(user_id=user_id, thread_id=thread_id)
 
 
 def _message_to_dict(message) -> dict:
@@ -76,7 +90,6 @@ def _checkpoint_summary(snapshot, parent_messages_count: int) -> str:
     if len(messages) <= parent_messages_count:
         return "State checkpoint"
 
-    # Messages ajoutés depuis le checkpoint parent
     added = messages[parent_messages_count:]
     last = added[-1]
 
@@ -109,7 +122,6 @@ def get_thread_history(user_id: str, thread_id: str) -> list[dict]:
     for snapshot in agent.get_state_history(_config_for(thread_id, user_id)):
         snapshots.append(snapshot)
 
-    # get_state_history : plus récent d'abord → on inverse pour chrono
     snapshots.reverse()
 
     history = []
@@ -143,6 +155,26 @@ def get_thread_history(user_id: str, thread_id: str) -> list[dict]:
     return history
 
 
+def _extract_response(result: dict) -> str:
+    """Contenu du dernier message assistant du résultat."""
+    messages = result.get("messages", [])
+    last_message = messages[-1] if messages else None
+    if last_message is not None:
+        content = getattr(last_message, "content", "")
+        return content if isinstance(content, str) else str(content)
+    return ""
+
+
+def _build_input(user_id: str, message: str, interaction_count: int) -> dict:
+    """Input state du run (§62 : user_id dans le state persisté,
+    interaction_count compteur du thread)."""
+    return {
+        "messages": [{"role": "user", "content": message}],
+        "user_id": user_id,
+        "interaction_count": interaction_count,
+    }
+
+
 async def run_agent_stream(
     user_id: str,
     thread_id: str,
@@ -152,11 +184,12 @@ async def run_agent_stream(
 
     Pipeline émis (événements réels, jamais simulés) :
       RUN_START → STATE_LOAD → USER_MESSAGE →
-      (LLM → TOOL_START → TOOL_END/TOOL_ERROR → LLM …) →
+      (ROUTING → CONTEXT_BUILD → PROMPT_BUILD → LLM → TOOLS …) →
       ASSISTANT_MESSAGE → CHECKPOINT_SAVED → RUN_END
     """
     agent = get_agent()
     config = _config_for(thread_id, user_id)
+    context = _runtime_context(user_id, thread_id)
 
     log_event(
         "RUN_START",
@@ -172,7 +205,7 @@ async def run_agent_stream(
         "message": "Run started",
     }
 
-    # ----- State existant -----
+    # ----- State existant (checkpointer, §7) -----
     previous = agent.get_state(config)
     previous_values = previous.values if previous else {}
     interaction_count = (
@@ -197,7 +230,6 @@ async def run_agent_stream(
         "interaction_count": interaction_count,
     }
 
-    # ----- Message utilisateur -----
     log_event(
         "USER_MESSAGE",
         message=message,
@@ -212,22 +244,17 @@ async def run_agent_stream(
         "message": message,
     }
 
-    input_state = {
-        "messages": [
-            {"role": "user", "content": message}
-        ],
-        "user_id": user_id,
-        "interaction_count": interaction_count,
-    }
+    input_state = _build_input(user_id, message, interaction_count)
 
-    # ----- Invoke agent (dans un thread pour ne pas bloquer la loop) -----
     start = time.perf_counter()
 
     try:
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
             None,
-            lambda: agent.invoke(input_state, config=config),
+            lambda: agent.invoke(
+                input_state, config=config, context=context
+            ),
         )
     except Exception as exc:
         log_event(
@@ -248,18 +275,7 @@ async def run_agent_stream(
 
     duration_ms = int((time.perf_counter() - start) * 1000)
 
-    # Les événements TOOL_START/TOOL_END/TOOL_ERROR ont été émis
-    # en temps réel par ToolEventMiddleware pendant l'invoke —
-    # le frontend les reçoit via le bus SSE (filtre thread_id).
-
-    messages = result.get("messages", [])
-    last_message = messages[-1] if messages else None
-    response_content = ""
-    if last_message is not None:
-        content = getattr(last_message, "content", "")
-        response_content = (
-            content if isinstance(content, str) else str(content)
-        )
+    response_content = _extract_response(result)
 
     log_event(
         "ASSISTANT_MESSAGE",
@@ -276,7 +292,6 @@ async def run_agent_stream(
         "response": response_content,
     }
 
-    # ----- Checkpoint -----
     new_state = agent.get_state(config)
     new_count = len(new_state.values.get("messages", []))
     checkpoint_id = (
@@ -324,6 +339,7 @@ def run_agent(user_id: str, thread_id: str, message: str) -> dict:
     """Mode synchrone (POST /api/chat) — même pipeline, sans stream."""
     agent = get_agent()
     config = _config_for(thread_id, user_id)
+    context = _runtime_context(user_id, thread_id)
 
     log_event(
         "RUN_START",
@@ -352,24 +368,13 @@ def run_agent(user_id: str, thread_id: str, message: str) -> dict:
         thread_id=thread_id,
     )
 
-    input_state = {
-        "messages": [
-            {"role": "user", "content": message}
-        ],
-        "user_id": user_id,
-        "interaction_count": interaction_count,
-    }
+    input_state = _build_input(user_id, message, interaction_count)
 
-    result = agent.invoke(input_state, config=config)
+    result = agent.invoke(
+        input_state, config=config, context=context
+    )
 
-    messages = result.get("messages", [])
-    last_message = messages[-1] if messages else None
-    response_content = ""
-    if last_message is not None:
-        content = getattr(last_message, "content", "")
-        response_content = (
-            content if isinstance(content, str) else str(content)
-        )
+    response_content = _extract_response(result)
 
     log_event(
         "ASSISTANT_MESSAGE",

@@ -597,3 +597,117 @@ Le brief exigeait des vraies implémentations (pas des simulations). Trois tools
 - **Frontend** : TOOL_NAMES 10 → 13, build tsc strict 0 erreur.
 
 **Non-invention vérifiée** : chaque sortie cite sa source (`python/functions`, `biologie/cell`…) ; un topic absent de la base ne produit jamais d'exercice fabriqué — le tool retourne la liste des topics réels et le prompt interdit d'inventer.
+
+
+## 31. V5 — Audit & Refactorisation : mécanismes natifs LangChain/LangGraph
+
+**Mission** : distinguer les mécanismes officiels LangChain des composants métier, et câbler le projet sur les APIs natives. **Contrainte** : ne rien casser (SqliteSaver, SqliteStore, user_id, thread_id, MemoryFacts, mémoire cross-thread, isolation utilisateurs, tools pédagogiques, SSE, EventBus, logs, frontend, API).
+
+### 31.1. APIs LangChain/LangGraph natives utilisées (audit final)
+
+| API | Version | Pourquoi | Référence documentaire |
+|---|---|---|---|
+| `create_agent(...)` | langchain 1.3.15 | Assemblage standard de l'agent (model, tools, system_prompt, checkpointer, store, state_schema, context_schema, middleware) | docs.langchain.com/oss/python/langchain/agents |
+| `context_schema=AgentContext` (paramètre de create_agent) | langchain 1.3.15 | Déclare le schéma du Runtime Context — user_id/thread_id voyagent dans `context=` (§4), plus dans le configurable | docs.langchain.com/oss/python/langchain/runtime |
+| `agent.invoke(input, config=..., context=AgentContext(...))` | langgraph 1.2.11 | Injection du Runtime Context à chaque appel LLM — le middleware y lit user_id via `request.runtime.context` | docs.langchain.com/oss/python/langchain/runtime |
+| `@dynamic_prompt` (decorator → AgentMiddleware) | langchain 1.3.15 | **Remplace** le wrap_model_call custom qui écrasait le prompt : le prompt dynamique devient le mécanisme officiel (§8/§34) | docs.langchain.com/oss/python/langchain/runtime (dynamic prompt) |
+| `ModelRequest` (request.runtime.context / .state) | langchain 1.3.15 | Signature officielle du dynamic prompt ; le métier lit le contexte du runtime, pas get_config() | docs.langchain.com/oss/python/langchain/runtime |
+| `SqliteSaver` (langgraph-checkpoint-sqlite 3.1.1) | langgraph 1.2.11 | Checkpointer thread state — conversation continuity, get_state, get_state_history (§7) | docs.langchain.com/oss/python/langgraph/persistence |
+| `SqliteStore` (BaseStore) | langgraph 1.2.11 | Store longue durée — User Memory cross-thread, namespace user (§6) | docs.langchain.com/oss/python/langgraph/persistence (stores) |
+| `AgentMiddleware.wrap_tool_call` | langchain 1.3.15 | Observabilité TOOL_* + forçage user_id (sécurité mémoire, §47) via request.runtime.context | docs.langchain.com/oss/python/langchain/middleware |
+| Pydantic v2 (`BaseModel`, `Field`, `Literal`) | pydantic 2.12.5 | RoutingResult / BuiltContext / KnowledgeSearchResult / ResolvedTools — sorties structurées validées (§14/§30) | docs.langchain.com/oss/python/langchain/structured-output |
+
+### 31.2. Composants métier (custom) — pourquoi ils restent
+
+| Composant | Rôle métier | Pourquoi ce n'est pas un mécanisme LangChain |
+|---|---|---|
+| `subjects/registry.py` | Subject Registry YAML (singleton) | LangChain n'a pas de concept de « matière configurable » ; c'est le Domain du projet |
+| `context/router.py` | Classification subject/topic/status → RoutingResult | Le routing métier (taxonomy, alias, anti-collision) est du Domain Knowledge, pas une API LangChain |
+| `context/knowledge_retriever.py` | Récupération knowledge par topic (§26) | Base knowledge locale = métier ; structure prête pour un remplacement embeddings (V6) |
+| `context/builder.py` | Assemblage BuiltContext (sélection, priorisation, budget §30/§31) | Le Context Builder orchestre les SOURCES de contexte — le mécanisme LangChain est en amont (dynamic_prompt) et aval (ModelRequest) |
+| `context/prompt_builder.py` | Présentation du BuiltContext → prompt (§35) | Pure fonction de mise en forme — appelée PAR le dynamic_prompt natif |
+| `subjects/tool_registry.py` | resolve_tools : croise déclaré × implémenté (§28/§39) | Filtrage métier ; les tools restent des @tool LangChain standards |
+| `agent/memory.py` | Memory Facts sur SqliteStore (CRUD + search) | Namespace/format métier sur le Store officiel |
+| `logging/events.py` + SSE | EventBus observabilité | Infrastructure projet (temps réel frontend) |
+
+**Principe appliqué** : LangChain transporte et expose (`context=`, `request.runtime.context`, `dynamic_prompt`, `wrap_tool_call`) ; le métier décide (routing, sélection, priorisation).
+
+### 31.3. Audit des hardcodes (§58)
+
+- **Aucun** `if subject == ...` dans le moteur (grep exhaustif) — l'architecture V4 avait déjà éliminé le hardcode matière.
+- 4 heuristiques locales légitimes (classe C — heuristiques de composant, documentées, testables, sans impact routing) : `_STOP_WORDS` (memory.py — dédup mémoire), `_EVAL_STOP_WORDS` (pedagogical_tools.py — scoring évaluation), `_KN_STOP_WORDS` (knowledge_retriever.py — scoring pertinence), listes taxonomy/alias (`subjects/taxonomy.py` — **données de configuration**, pas du code : ajouter une matière = 1 YAML, le taxonomy s'applique à tous).
+- Décision : **conservées** — ce sont des heuristiques de composant local, pas du routing de matière.
+
+### 31.4. Flux de contexte V5 (§72 appliqué)
+
+```
+USER MESSAGE (thread t, user u)
+   │
+   ├─ runner.run_agent_stream : agent.invoke(input, config={thread_id}, context=AgentContext(u, t))
+   │      └─ thread_id reste dans configurable (checkpointer §7) ; user_id VIA le runtime
+   │
+   ├─ [@dynamic_prompt natif] request.runtime.context.user_id → build_context()
+   │      ├─ router.route_subject()          → RoutingResult (pydantic §14)
+   │      ├─ registry.get_subject()          → SubjectConfig (YAML §12)
+   │      ├─ knowledge_retriever.search()    → KnowledgeSearchResult (§26)
+   │      ├─ tool_registry.resolve_tools()   → ResolvedTools {available, unavailable} (§28/§39)
+   │      ├─ memory (SqliteStore, search)    → facts pertinents (§31 : search d'abord, fill=personnalisation)
+   │      └─ thread_context (léger §32)     → métadonnées
+   │      → BuiltContext (pydantic §30)
+   │      → prompt_builder.build_system_prompt() → prompt (§35, §36 : aucune VALEUR d'ID)
+   │      → request.override(system_message=...)  [mécanisme officiel]
+   │      └─ fallback §37 : exception → log CONTEXT_BUILD_ERROR → CORE_PROMPT seul (jamais de crash)
+   │
+   ├─ [wrap_tool_call] TOOL_START/END/ERROR + forçage user_id des tools mémoire
+   │      (request.runtime.context.user_id remplace get_config() — isolation §47 testée LLM réel)
+   │
+   └─ SqliteSaver checkpoint → SqliteStore memory cross-thread
+```
+
+### 31.5. Tests V5 — tous PASS, aucune simulation
+
+**Architecture (`backend/tests/test_v5_architecture.py` — 30/30)** :
+- §54 routing structuré : RoutingResult pydantic validé, Literal rejeté si invalide, confidence bornée
+- §51 ambiguïté réseaux : candidates=[computer_networks, neural_networks] ; §50 astrophysique unsupported ; §17 unknown sans invention
+- §49 **ajout de matière par config seule** : astronomy.yaml + 1 .md → découverte registry/routing/knowledge SANS toucher builder/graph/runner/middleware (test effectué, fichiers supprimés après vérification)
+- §53 tool inexistant : execute_python déclaré → unavailable + log, jamais exposé
+- §30 BuiltContext pydantic + stats budget ; §48 configs non mélangées (python vs biology)
+- §45 sélection mémoire : interests topiques absents (search vide → fill = preferences/identity seulement, 66 chars)
+- §55 dynamic prompt natif : MATIÈRE + USER CONTEXT (5102 chars), nouveau MemoryFact visible à l'appel suivant
+- §56 fallback : sans user_id → CORE seul ; builder en erreur → CONTEXT_BUILD_ERROR → CORE (testé avec un VRAI ModelRequest.override)
+- §36 aucune valeur d'ID technique dans le prompt ; §4 AgentContext câblé graph/runner (inspect.getsource)
+
+**Intégration serveur (`backend/tests/test_v5_integration.py` — 10/10, LLM réel)** :
+- chat LLM avec Runtime Context + dynamic prompt natif ; checkpointer intact (messages persistés)
+- mémoire cross-thread (thread 2 répond la préférence enregistrée au thread 1) ; fallback unsupported honnête
+- isolation A/B via preview ; **forçage user_id via runtime context vérifié LLM réel** (B voit Bruno, pas la mémoire de A ; A sauvegarde via tool save_user_memory → catégories ['interest','preference'])
+- create_exercise appelé par le LLM ; 11+ événements observabilité présents (ROUTING_*, CONTEXT_BUILD_*, PROMPT_BUILD, TOOL_*, RUN_*, CHECKPOINT_SAVED) ; preview BuiltContext sérialisé identique sur les 2 routes
+
+**Régression** : suite mémoire LLM (isolation + save via tool) PASS ; frontend `npm run build` (tsc strict) 0 erreur.
+
+### 31.6. Fichiers modifiés / créés
+
+**Créés** :
+- `backend/app/context/schemas.py` — AgentContext (runtime), RoutingResult, KnowledgeResult, KnowledgeSearchResult, ResolvedTools, ContextPriority, Subject/User/ThreadContextInfo, ContextStats, BuiltContext
+- `backend/app/api/context.py` — POST /api/context/preview (§44, alias canonique ; l'ancienne route reste pour le frontend)
+- `backend/tests/test_v5_architecture.py`, `backend/tests/test_v5_integration.py`
+
+**Modifiés** :
+- `backend/app/context/router.py` — retourne RoutingResult pydantic (logique V4 inchangée)
+- `backend/app/context/builder.py` — retourne BuiltContext ; fill mémoire = personnalisation uniquement (§45) ; KNOWLEDGE_UNAVAILABLE loggé (§38)
+- `backend/app/context/prompt_builder.py` — présentation pure (§35), consomme BuiltContext
+- `backend/app/agent/middleware.py` — @dynamic_prompt natif + wrap_tool_call (rôle réduit §60) ; user_id depuis request.runtime.context (plus get_config)
+- `backend/app/agent/graph.py` — context_schema=AgentContext ; stack middleware build_middleware_stack()
+- `backend/app/agent/runner.py` — context=AgentContext(...) à chaque invoke
+- `backend/app/subjects/tool_registry.py` — resolve_tools (§28/§39) + compat get_tools_for_subject
+- `backend/app/api/subjects.py` + `main.py` — preview via BuiltContext.model_dump(), route context
+- `frontend/src/types/agent.ts` — ToolsContext = {available, declared, unavailable}
+- `frontend/src/components/memory/ContextInspectorCard.tsx` — affichage unavailable (§39)
+
+### 31.7. Régressions confirmées non-cassées
+
+SqliteSaver (checkpoints, get_state, history) ; SqliteStore (MemoryFacts CRUD+search) ; user_id/thread_id (transportés runtime + configurable compat) ; mémoire cross-thread ; isolation utilisateurs (LLM réel) ; 13 tools pédagogiques/mémoire (create_exercise appelé par le LLM en intégration) ; SSE/EventBus (11+ événements) ; logs ; frontend (build 0 erreur, preview OK) ; API (routes existantes + alias §44, réponses identiques).
+
+### 31.8. Non implémenté (réservé)
+
+Learning Profile (clé `learning` dans BuiltContext, null) ; RAG embeddings ; documents utilisateur ; multi-agents ; HITL ; tools spécialisés par matière (execute_python : déclaré, détecté unavailable, loggé §39).
