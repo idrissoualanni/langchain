@@ -99,10 +99,12 @@ check(
 )
 
 # 9. LEARNING PROFILE (V6 — source de progression, §58)
-learning = bc.learning or {}
+# V6.8.1 §20 : learning est TYPÉ (LearningContextInfo) —
+# le shim .get() maintient la lecture historique.
+learning = bc.learning or None
 check(
     "Learning Profile présent (source, pas engine §58)",
-    isinstance(learning, dict)
+    learning is not None
     and learning.get("status") in ("active", "not_started"),
     f"status={learning.get('status')}, "
     f"mastery={learning.get('mastery')}",

@@ -1,0 +1,10 @@
+C:\Users\hp\AppData\Roaming\Python\Python314\site-packages\langchain_core\utils\pydantic.py:41: UserWarning: Core Pydantic V1 functionality isn't compatible with Python 3.14 or greater.
+  from pydantic.v1 import BaseModel as BaseModelV1
+INFO:     Started server process [9868]
+INFO:     Waiting for application startup.
+{"timestamp": "2026-09-12T19:37:36", "level": "INFO", "event": "SERVER_START", "user_id": "", "thread_id": "", "tool_name": "", "message": "Backend starting"}
+{"timestamp": "2026-09-12T19:37:38", "level": "INFO", "event": "MEMORY_STORE_INIT", "user_id": "", "thread_id": "", "tool_name": "", "message": "SqliteStore long-term memory on C:\\Users\\hp\\Desktop\\langchain\\backend\\database\\long_term_memory.db | namespace=users/profile"}
+{"timestamp": "2026-09-12T19:37:38", "level": "INFO", "event": "DATABASE_INIT", "user_id": "", "thread_id": "", "tool_name": "", "message": "SqliteSaver checkpointer on C:\\Users\\hp\\Desktop\\langchain\\backend\\database\\checkpoints.db | model=gemma4:31b-cloud"}
+{"timestamp": "2026-09-12T19:37:38", "level": "INFO", "event": "AGENT_READY", "user_id": "", "thread_id": "", "tool_name": "", "message": "LangGraph agent initialized with SqliteSaver"}
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)

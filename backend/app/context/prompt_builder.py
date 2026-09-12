@@ -159,22 +159,24 @@ def build_system_prompt(
     # Format voulu par le brief : Mastery / Weak point / Attempts,
     # uniquement pour le subject/topic de la question — jamais
     # toute la progression (pas de biologie pour du Python).
+    # V6.8.1 §20 : learning est TYPÉ (LearningContextInfo) —
+    # accès par attributs, plus de dict.get().
     learning = context.learning
-    if isinstance(learning, dict) and learning.get("status") == "active":
+    if learning is not None and learning.status == "active":
         lines = [
             "## LEARNING (progression de l'étudiant sur ce topic)"
         ]
         topic_label = (
-            f"{learning.get('subject') or '?'} / "
-            f"{learning.get('topic') or '?'}"
+            f"{learning.subject or '?'} / "
+            f"{learning.topic or '?'}"
         )
         lines.append(f"Topic : {topic_label}")
 
-        mastery = learning.get("mastery")
+        mastery = learning.mastery
         if mastery is not None:
             pct = round(mastery * 100)
             lines.append(f"Mastery : {pct}%")
-            conf = learning.get("confidence")
+            conf = learning.confidence
             if conf is not None:
                 lines.append(
                     f"(estimation — confiance {round(conf * 100)}%)"
@@ -184,30 +186,30 @@ def build_system_prompt(
                 "Mastery : pas encore évalué (topic jamais travaillé)"
             )
 
-        attempts = learning.get("attempts") or 0
+        attempts = learning.attempts or 0
         lines.append(f"Attempts : {attempts}")
 
-        strengths = learning.get("strengths") or []
+        strengths = learning.strengths or []
         if strengths:
             lines.append(
                 "Strengths : " + " ; ".join(strengths[:3])
             )
-        weak_points = learning.get("weak_points") or []
+        weak_points = learning.weak_points or []
         if weak_points:
             lines.append(
                 "Weak points : " + " ; ".join(weak_points[:3])
             )
 
-        if learning.get("last_assessed_at"):
+        if learning.last_assessed_at:
             lines.append(
                 f"Dernière évaluation : "
-                f"{learning['last_assessed_at'][:10]}"
+                f"{learning.last_assessed_at[:10]}"
             )
 
-        goal = learning.get("goal")
-        if goal and goal.get("status") == "active":
+        goal = learning.goal
+        if goal is not None and goal.status == "active":
             lines.append(
-                f"Objectif actif : {goal.get('description', '')}"
+                f"Objectif actif : {goal.description}"
             )
 
         lines.append(
@@ -217,8 +219,8 @@ def build_system_prompt(
         parts.append("\n".join(lines))
 
     elif (
-        isinstance(learning, dict)
-        and learning.get("status") == "not_started"
+        learning is not None
+        and learning.status == "not_started"
         and routing.status == "supported"
         and subject
     ):
@@ -250,8 +252,8 @@ def build_system_prompt(
             "knowledge_items": len(context.knowledge.items),
             "memories_used": len(context.relevant_memories),
             "learning_status": (
-                context.learning.get("status")
-                if isinstance(context.learning, dict)
+                context.learning.status
+                if context.learning is not None
                 else None
             ),
         },

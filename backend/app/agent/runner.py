@@ -302,13 +302,23 @@ async def run_agent_stream(
     )
 
     # V6.7 §26 : normalisation (activité + fallback du registre)
-    from app.agent.middleware import get_last_context
+    from app.agent.middleware import (
+        get_last_context,
+        register_activity,
+    )
     from app.agent.normalizer import normalize_response
 
     new_state_pre = agent.get_state(config)
     activity_pre = dict(
         (new_state_pre.values or {}).get("learning_activity") or {}
     )
+    # V6.8.1 §13/§23 : enrichit le BuiltContext du registre avec
+    # le résumé d'activité (copie explicite — §17) pour que le
+    # contrat agrégé consommé par V7 soit complet.
+    try:
+        register_activity(thread_id, activity_pre)
+    except Exception:
+        pass
     fallback_pre = None
     search_results_pre = None
     search_used_pre = False
@@ -455,12 +465,20 @@ def run_agent(user_id: str, thread_id: str, message: str) -> dict:
     # AgentResponse (contrat public). Le texte brut reste
     # disponible (rétrocompatibilité) ; agent_response est la
     # voie structurée du frontend.
-    from app.agent.middleware import get_last_context
+    from app.agent.middleware import (
+        get_last_context,
+        register_activity,
+    )
     from app.agent.normalizer import normalize_response
 
     activity = dict(
         (new_state.values or {}).get("learning_activity") or {}
     )
+    # V6.8.1 §13/§23 : BuiltContext du registre enrichi (copie).
+    try:
+        register_activity(thread_id, activity)
+    except Exception:
+        pass
     # FallbackDecision du run courant (registre du middleware)
     fallback = None
     search_results = None

@@ -34,6 +34,7 @@ from app.context.model_capabilities import (
 )
 from app.context.router import route_subject
 from app.context.schemas import (
+    ActivityContextInfo,
     BuiltContext,
     ContextStats,
     KnowledgeResult,
@@ -135,12 +136,18 @@ def build_context(
     topic: str | None = None,
     max_memories: int = 12,
     max_knowledge: int = 3,
+    learning_activity: dict | None = None,
 ) -> BuiltContext:
     """Construit le contexte complet d'un appel LLM (V5 structuré).
 
     Retourne BuiltContext (pydantic validé) — routing, subject,
     knowledge, tools, user, thread, stats. Émet CONTEXT_BUILD_START/
     END + SELECTED_* par source.
+
+    V6.8.1 §13/§16 : learning_activity (state LangGraph
+    thread-local) est optionnel — le builder en expose un RÉSUMÉ
+    (ActivityContextInfo) dans BuiltContext.activity, sans jamais
+    y mettre les données de l'exercice (question/expected).
     """
     log_event(
         "CONTEXT_BUILD_START",
@@ -153,6 +160,13 @@ def build_context(
         extra={
             "operation": "context_build",
             "query": (query or "")[:100],
+            "activity": (
+                "present"
+                if learning_activity
+                and learning_activity.get("status")
+                not in (None, "idle", "completed", "abandoned")
+                else "none"
+            ),
         },
     )
 
@@ -479,13 +493,19 @@ def build_context(
     # Appliquer les décisions du budget au BuiltContext.
     # P0/P1 learning n'est jamais droppé par apply_budget (P1)
     # — la branche learning ci-dessous est une défense théorique.
+    # V6.8.1 §17 : les sections droppées sont RECONSTRUITES
+    # (nouvelles instances), l'original KnowledgeSearchResult/
+    # SearchResponse n'est jamais muté en place — items et
+    # results restent synchronisés (validateur §8).
     if "thread" in budget_result.dropped_keys:
         thread.text = ""
     if "user_memory" in budget_result.dropped_keys:
         user.text = ""
         relevant = []
     if "web_search" in budget_result.dropped_keys:
-        web_response.results = []
+        web_response = web_response.model_copy(
+            update={"results": []}
+        )
     else:
         web_kept = [
             s for s in budget_result.kept
@@ -500,11 +520,17 @@ def build_context(
         ):
             # top_k réduit (§44) : garder les premiers (ordre
             # de pertinence du ranking déjà trié)
-            web_response.results = web_response.results[
-                : len(web_kept[0].payload)
-            ]
+            web_response = web_response.model_copy(
+                update={
+                    "results": web_response.results[
+                        : len(web_kept[0].payload)
+                    ]
+                }
+            )
     if "knowledge" in budget_result.dropped_keys:
-        knowledge.items = []
+        knowledge = knowledge.model_copy(
+            update={"items": [], "results": []}
+        )
 
     log_event(
         "CONTEXT_BUDGET",
@@ -555,6 +581,31 @@ def build_context(
         sources_dropped=budget_result.sources_dropped,
     )
 
+    # V6.8.1 §13 : résumé activité thread-locale (vue exposée
+    # au contexte — jamais les données de l'exercice). Le state
+    # LangGraph reste la source de vérité complète.
+    activity_info: ActivityContextInfo | None = None
+    if learning_activity and learning_activity.get("status") in (
+        "waiting_for_answer",
+        "waiting_for_retry",
+        "evaluating",
+        "giving_hint",
+        "checking_understanding",
+    ):
+        activity_info = ActivityContextInfo(
+            activity_id=learning_activity.get(
+                "activity_id", ""
+            ),
+            activity_type=learning_activity.get(
+                "activity_type", ""
+            ),
+            status=learning_activity.get("status", ""),
+            subject=learning_activity.get("subject", ""),
+            topic=learning_activity.get("topic", ""),
+            hint_level=learning_activity.get("hint_level", 0),
+            attempts=learning_activity.get("attempts", 0),
+        )
+
     context = BuiltContext(
         routing=routing,
         subject=subject_info,
@@ -564,9 +615,16 @@ def build_context(
         tools=tools,
         user=user,
         thread=thread,
-        learning=learning.model_dump(),
+        # V6.8.1 §20 : learning TYPÉ (LearningContextInfo) —
+        # plus de dict anonyme. Vue dict historique : learning_dict().
+        learning=learning,
         relevant_memories=relevant,
         stats=stats,
+        # V6.8.1 §16 : le budget détaillé et le modèle ont un
+        # propriétaire dans l'agrégé canonique.
+        budget=budget,
+        model=caps,
+        activity=activity_info,
     )
 
     log_event(

@@ -1750,4 +1750,114 @@ frontend/src/
 
 **Fin du rapport V6.6–V6.8.** Le socle est complet : Router → Retrieval (local + web) → Fallback Decision → Context Builder → Context Budget → Dynamic Prompt → LLM → Response Normalizer → AgentResponse → ResponseRenderer. Les 5 couches d'état (public/activité/search/routing/fallback) vivent leur vie séparée, chaque décision est testable sans LLM, le budget protège les P0, et le frontend rend la nature des réponses sans jamais parser de texte — **le projet est prêt pour V7 Learning Engine** sans devoir refaire le routing, la recherche, les fallbacks, le contexte ou le frontend.
 
+---
+
+# 36. MISSION V6.8.1 — UNIFICATION DES CONTRATS DE CONTEXTE
+
+État de référence vérifié (§3) : `git status` propre, branche `master`, commit de base `b1dcfa1`, suite de référence **277/277 PASS** (186 historiques + 91 V6.6–V6.8). Aucun comportement V6.8 modifié ; aucun test supprimé (une assertion de type migrée §20, sémantique inchangée).
+
+## 36.A — Audit et classification (§4/§5, phase lecture seule)
+
+Méthode : audit intégralement effectué par l'agent parent (les 4 sous-agents §31 n'ont pas pu démarrer — panne du runner sandbox du host ; chaque constat ci-dessous provient d'un read/grep réel). Inventaire complet des contrats transportant du contexte :
+
+| Contrat | Fichier | Producteur | Consommateurs | Rôle | Catégorie §5 | Verdict |
+|---|---|---|---|---|---|---|
+| AgentContext (dataclass) | context/schemas.py | runner (`context=`) | middleware, tools | runtime ids | A.Runtime | conservé (user_id/thread_id uniquement) |
+| RoutingResult | context/schemas.py | router | builder, prompt, normalizer, preview | routing | B.Routing | conservé + extra=forbid |
+| SearchResult | context/schemas.py | knowledge_retriever, web_search | builder, normalizer | item retrieval | C.Retrieval | conservé + extra=forbid |
+| SearchResponse | context/schemas.py | web_search, builder | prompt (web), preview, normalizer | recherche | C.Retrieval | conservé + extra=forbid |
+| KnowledgeResult | context/schemas.py | builder | prompt, preview | item knowledge + topic | C.Retrieval | conservé (extension §9 justifiée) |
+| **KnowledgeSearchResult** | context/schemas.py | builder | prompt, preview, tests V5/V6 | vue knowledge | C.Retrieval | **fusionné dans SearchResponse (sous-classe)** |
+| FallbackDecision | context/schemas.py | decide_fallback | prompt, normalizer, preview | décision fallback | D.Fallback | conservé + extra=forbid |
+| UserContextInfo / ThreadContextInfo / SubjectContextInfo / ResolvedTools | context/schemas.py | builder | prompt, preview | vues sources | E/K.Presentation | conservés + extra=forbid |
+| LearningContextInfo | learning/schemas.py | get_learning_context | builder → BuiltContext.learning | sélection progression | F.Learning | conservé, **typé dans BuiltContext** + extra=forbid |
+| LearningProfile (+ Topic/Subject/Goal/Observation) | learning/schemas.py | learning_profile.py | learning_context, API learning | profil persistant | F.Learning | conservés (persistence, inchangés) |
+| LearningActivityState (TypedDict) + QuizState + ActivityLogEntry | agent/activity_state.py | tools pédagogiques | state LangGraph, normalizer, API activity | activité thread-locale | G.Activity | conservés (TypedDict justifié : state sérialisable) |
+| **ActivityContextInfo (NOUVEAU)** | context/schemas.py | builder / register_activity | BuiltContext.activity | résumé activité exposé | G.Activity | créé (vue §13, jamais les données d'exercice) |
+| ModelCapabilities | context/model_capabilities.py | registry YAML | budget, builder, tests | capacités modèle | H.ModelCapability | conservé (inchangé) |
+| ContextBudget / BudgetSection / BudgetResult | context/budget.py | build_budget/apply_budget | builder | budget détaillé | I.Budget | conservés (détaillés dans BuiltContext.budget) |
+| ContextStats | context/schemas.py | builder | preview, tests | télémétrie | I.Budget | conservé — **duplication §15 tranchée : stats = résumé télémétrie exposé, budget = état détaillé ; champs communs documentés comme dérivés** |
+| BuiltContext | context/schemas.py | build_context | prompt, normalizer, preview, registre | agrégé canonique | J.AggregatedContext | enrichi (learning typé, budget, model, activity) + extra=forbid |
+| AgentResponse | agent/response.py | normalizer | API chat/SSE, frontend | réponse publique | — | hors périmètre context (déjà verrouillé V6.7) |
+| ContextPreviewResponse | api/schemas.py | build_context_preview | frontend | DTO public | — | conservé — **dérivé du dump BuiltContext, pas une deuxième source** |
+| **ContextPriority (Enum)** | context/schemas.py | **aucun** | **aucun** | priorités legacy | — | **SUPPRIMÉ (contrat mort — le budget réel utilise P0-P4 dans budget.py)** |
+| Types TS (agent.ts, agentResponse.ts, learning.ts) | frontend/src/types | dérivés du backend | composants | DTO frontend | — | conservés (items lus côté TS = dump inchangé) |
+
+## 36.B — Unification implémentée (§6-§22)
+
+1. **§8/§9 Retrieval unifié** : `KnowledgeSearchResult` devient **sous-classe de `SearchResponse`** — un seul contrat retrieval (status found/insufficient/unavailable/error, source_type local_knowledge/web). Le champ historique `items` est une **vue synchronisée** de `results` : validateur bidirectionnel (`items` fourni → `results` dérivé et inversement), dump expose les deux (contrat preview/frontend/tests inchangé). `KnowledgeResult` reste l'extension spécialisée (topic) de `SearchResult` — le knowledge local n'est plus un système parallèle.
+2. **§20 learning typé** : `BuiltContext.learning` passe de `dict` anonyme à **`LearningContextInfo | None`**. Vue historique maintenue : shim `__getitem__`/`.get()` sur LearningContextInfo (tests V5/V6 et preview inchangés) + `BuiltContext.learning_dict()` explicite. `prompt_builder` migré aux attributs typés (plus un seul `.get()`).
+3. **§16 agrégé canonique enrichi** : `BuiltContext` gagne `budget: ContextBudget | None` (état détaillé §15), `model: ModelCapabilities | None` (§14), `activity: ActivityContextInfo | None` (§13) — chaque champ a UN propriétaire (routing=A, subject=K, knowledge/web=B, fallback=D, user/thread=E, learning=F, activity=G, model=H, budget=I, stats=télémétrie).
+4. **§13 activité** : `ActivityContextInfo` = vue thread-locale de `LearningActivityState` (activity_id/type/status/subject/topic/hint_level/attempts) — **jamais** question/expected/réponse. Le dynamic_prompt ne voit pas le state LangGraph (ModelRequest = messages + runtime) : le builder accepte `learning_activity=` optionnel, et `register_activity()` (middleware) enrichit le BuiltContext du registre par **copie explicite** après lecture du snapshot post-run.
+5. **§17 immutabilité par convention** : les drops du budget appliquent `model_copy(update=...)` (nouvelles instances), plus aucune mutation en place de `web_response.results`/`knowledge.items` ; l'original n'est jamais modifié, toute dérivation est une copie documentée.
+6. **§26 incompatibilité explicite** : `extra=forbid` sur RoutingResult, FallbackDecision, SearchResult, SearchResponse, KnowledgeSearchResult (hérité), ResolvedTools, Subject/User/ThreadContextInfo, ContextStats, BuiltContext, LearningContextInfo, ActivityContextInfo. `RoutingResult(learning=...)`, `FallbackDecision(results=...)`, `BuiltContext(second_context=...)`, `LearningContextInfo(decision=...)` sont **rejetés** — pas d'architecture parallèle implicite (§3).
+7. **RoutingResult** gagne un défaut honnête `status="unknown"` (aucun routing effectué) — `BuiltContext()` reste constructible pour les defaults de contrat.
+
+## 36.C — Garde-fous V7 (§23/§27/§28)
+
+- `decide(context=built_context)` : le scénario K1-K5 (test_context_contracts §30) prouve qu'un moteur consomme **directement** l'agrégé — routing/learning/activity/knowledge/fallback lus sans reconstruction ; copie dérivée via `model_copy` pour les variantes.
+- §27 canonicité : `build_context` → un seul `BuiltContext` (I1-I5) ; §28 non-duplication : le builder ne référence aucun `learning_engine` (J1).
+- **Conséquence V7** : `LearningEngine.decide(context: BuiltContext) → LearningDecision` s'écrit sans toucher au router, au retrieval, au profil CRUD ni au state — le contrat de décision (§12 : LearningContextInfo = faits, LearningDecision = choix) est physiquement séparé par extra=forbid.
+
+## 36.D — Tests (§25-§30)
+
+Nouvelle suite **test_context_contracts.py — 50/50 PASS** :
+- §25 required (A1-A5), Literal rejetés (B1-B6), null honnête (C1-C5), round-trip sérialisation (D1-D3), nested BuiltContext complet + §17 copie (E1-E5) ;
+- §26 incompatibilité (F1-F6) :RoutingResult(learning/knowledge), FallbackDecision(results), BuiltContext(second_context), SearchResponse(items), LearningContextInfo(decision) tous REJETÉS ;
+- §8/§9 unification retrieval (G1-G4) ; §20 typage + shim (H1-H5) ; §27 canonicité pipeline réel (I1-I5) ; §28 non-duplication (J1) ; §30 scénario mock-V7 decide(built_context) + priorité activité + isolation A/B (K1-K5).
+- Non-régression : **277/277 PASS** (une assertion de type migrée §58→§20, sémantique identique). Frontend : **tsc PASS, vite build PASS, oxlint 0 erreur** (§32 : aucun composant modifié, dump preview inchangé).
+
+## 36.E — Arbre réel après V6.8.1
+
+```text
+langchain/
+├── RAPPORT.md
+├── backend/
+│   ├── app/
+│   │   ├── agent/
+│   │   │   ├── activity_state.py      # LearningActivityState, QuizState, ActivityLogEntry (TypedDict thread-local)
+│   │   │   ├── graph.py               # create_agent LangGraph natif
+│   │   │   ├── learning_tools.py      # tools Learning Profile (user_id forcé)
+│   │   │   ├── memory.py              # Store mémoire longue durée
+│   │   │   ├── middleware.py          # dynamic_prompt + registre BuiltContext + register_activity §13
+│   │   │   ├── normalizer.py          # normalize_response → AgentResponse
+│   │   │   ├── pedagogical_tools.py   # exercice/quiz/compréhension (state LG)
+│   │   │   ├── prompts.py             # CORE_PROMPT
+│   │   │   ├── response.py            # AgentResponse (contrat public V6.7)
+│   │   │   ├── runner.py              # run_agent / run_agent_stream + enrichissement registre
+│   │   │   └── state.py               # AgentState LangGraph (learning_activity dict)
+│   │   ├── api/                       # chat.py, subjects.py (preview), learning.py, schemas.py (DTO)
+│   │   ├── context/
+│   │   │   ├── budget.py              # ContextBudget, BudgetSection, BudgetResult, P0-P4
+│   │   │   ├── builder.py             # build_context → BuiltContext canonique
+│   │   │   ├── fallback.py            # decide_fallback (matrice §6 V6.6)
+│   │   │   ├── model_capabilities.py  # ModelCapabilities + models.yaml
+│   │   │   ├── prompt_builder.py      # présentation (learning typé §20)
+│   │   │   ├── router.py              # RoutingResult
+│   │   │   └── schemas.py             # contrats unifiés V6.8.1 (ContextPriority supprimé)
+│   │   ├── learning/
+│   │   │   ├── learning_context.py    # sélection pertinente → LearningContextInfo
+│   │   │   ├── learning_profile.py    # CRUD + Profile Updater (persistence)
+│   │   │   └── schemas.py             # Profile/Topic/Goal/Observation/ContextInfo (extra=forbid sur Info)
+│   │   └── ...
+│   ├── models.yaml
+│   └── tests/                         # 13 suites (12 + test_context_contracts.py 50/50)
+└── frontend/src/
+    ├── types/                          # agent.ts, agentResponse.ts, learning.ts (DTO dérivés)
+    └── components/                     # ResponseRenderer + cartes (§32 intacts)
+```
+
+## 36.F — Limitations honnêtes
+
+1. `items` reste la vue lue par prompt/preview/tests V5/V6 — migration progressive vers `results` documentée, le validateur garantit la cohérence.
+2. Shims `__getitem__`/`.get()` de LearningContextInfo = dette de transition assumée (retrait prévu quand tous les consommateurs sont migrés).
+3. `register_activity` enrichit le registre post-run : le BuiltContext utilisé PENDANT le run a activity=None si l'activité démarre dans ce même run (le prompt n'en a pas besoin — P0 by design) ; le BuiltContext exposé au Learning Engine V7 est complet.
+4. ContextStats garde les 7 champs budget dérivés (contrat preview verrouillé) — duplication assumée et documentée (résumé vs état détaillé).
+5. Les 4 sous-agents d'audit (§31) n'ont pas tourné (panne sandbox host) — l'audit parent les remplace intégralement, chaque constat sourcé read/grep.
+
+---
+
+**Fin du rapport V6.8.1.** Tous les contrats de contexte ont un propriétaire unique, les doublons sont fusionnés (retrieval) ou supprimés (ContextPriority), BuiltContext est l'agrégé canonique typé complet (routing/subject/knowledge/web/fallback/tools/user/thread/learning/budget/model/activity/stats), l'incompatibilité entre contrats est rejetée explicitement, et 50 tests contractuels verrouillent le tout — **V7 peut écrire `decision = learning_engine.decide(context)` sans rien reconstruire.**
+
+
 

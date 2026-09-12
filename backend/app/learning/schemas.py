@@ -162,7 +162,13 @@ class LearningContextInfo(BaseModel):
     C'est ce qui alimente BuiltContext.learning : uniquement
     le subject/topic de la question courante — JAMAIS tout le
     profil (pas de biologie pour une question Python).
+
+    V6.8.1 §12/§26 : extra=forbid — c'est un contrat de FAITS
+    (progression observée), JAMAIS de décision : décider est le
+    rôle du Learning Engine V7 (LearningDecision, à part).
     """
+
+    model_config = {"extra": "forbid"}
 
     status: Literal["active", "not_started", "unavailable"] = (
         Field(
@@ -187,6 +193,28 @@ class LearningContextInfo(BaseModel):
         default=None, ge=0.0, le=1.0
     )
     goal: LearningGoal | None = None
+
+    # ----------------------------------------------------------
+    # V6.8.1 §20 — SHIM DE TRANSITION (lecture dict historique).
+    # BuiltContext.learning est TYPÉE depuis V6.8.1 ; les
+    # consommateurs legacy accèdent encore via ["status"] /
+    # .get("mastery") comme au temps du dict. Ces deux méthodes
+    # maintiennent la compat sans dupliquer le contrat — à
+    # retirer quand tous les consommateurs sont migrés vers les
+    # attributs (une entrée de dette dédiée suit la migration).
+    # ----------------------------------------------------------
+
+    def __getitem__(self, key: str):
+        """Accès dict historique : info["status"] (transition)."""
+        if not hasattr(self, key):
+            raise KeyError(key)
+        return getattr(self, key)
+
+    def get(self, key: str, default=None):
+        """Accès dict historique : info.get("mastery")."""
+        if not hasattr(self, key):
+            return default
+        return getattr(self, key)
 
 
 __all__ = [

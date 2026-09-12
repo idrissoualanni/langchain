@@ -9,10 +9,22 @@
 #   - BuiltContext     = contexte métier assemblé par le Context
 #     Builder (§30) — sélectionné puis présenté par le Prompt Builder.
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import (
+    BaseModel,
+    Field,
+    model_validator,
+)
+
+# V6.8.1 §20 : le contrat learning vit dans app.learning.schemas
+# (LearningContextInfo). Import direct SANS cycle : app.learning
+# ne dépend pas d'app.context (audit V6.8.1 §4). Idem budget /
+# model_capabilities : ils n'importent pas app.context.schemas
+# en retour — résolution runtime des annotations Pydantic.
+from app.context.budget import ContextBudget
+from app.context.model_capabilities import ModelCapabilities
+from app.learning.schemas import LearningContextInfo
 
 
 # ------------------------------------------------------------------
@@ -48,7 +60,15 @@ class RoutingResult(BaseModel):
 
     Le router répond UNIQUEMENT à « de quoi parle la demande ? »
     (§15) — jamais quelle réponse donner.
+
+    V6.8.1 §26 : extra=forbid — RoutingResult est un contrat
+    de ROUTING SEUL : RoutingResult(learning=..., knowledge=...)
+    est REJETÉ (incompatibilité explicite, jamais silencieuse).
     """
+
+    model_config = {"extra": "forbid"}
+
+    model_config = {"extra": "forbid"}
 
     status: Literal[
         "supported",
@@ -57,10 +77,11 @@ class RoutingResult(BaseModel):
         "unknown",
         "multi_domain",
     ] = Field(
+        default="unknown",
         description="Statut du routing : supported (matière "
         "configurée), ambiguous (plusieurs interprétations), "
         "unsupported (matière détectée non configurée), unknown "
-        "(rien d'identifié), multi_domain (domaines multiples)"
+        "(rien d'identifié), multi_domain (domaines multiples)",
     )
     subject: str | None = Field(
         default=None,
@@ -108,7 +129,12 @@ class FallbackDecision(BaseModel):
     source_status : concaténation documentée des états d'origine
     (ex: "supported/insufficient/web_error") — les états ne sont
     JAMAIS convertis silencieusement (§7).
+
+    V6.8.1 §26 : extra=forbid — contrat de DÉCISION, il ne
+    transporte ni routing ni results (incompatibilité rejetée).
     """
+
+    model_config = {"extra": "forbid"}
 
     action: Literal[
         "use_local_knowledge",
@@ -151,7 +177,13 @@ class SearchResult(BaseModel):
     Toute source (knowledge local, web) produit ce format — le
     Context Builder ne consomme QUE ça. Jamais de chaîne
     concaténée brute.
+
+    V6.8.1 §26 : extra=forbid — item retrieval strict (le
+    topic knowledge est une EXTENSION KnowledgeResult, pas un
+    champ ad hoc ici).
     """
+
+    model_config = {"extra": "forbid"}
 
     title: str = Field(
         default="",
@@ -204,6 +236,8 @@ class SearchResponse(BaseModel):
       error        → échec technique (exception, réseau)
     """
 
+    model_config = {"extra": "forbid"}
+
     status: Literal[
         "found",
         "insufficient",
@@ -248,28 +282,51 @@ class KnowledgeResult(SearchResult):
         )
 
 
-class KnowledgeSearchResult(BaseModel):
-    """Résultat complet d'une recherche knowledge (§38).
+class KnowledgeSearchResult(SearchResponse):
+    """Recherche knowledge locale — VUE du contrat retrieval.
 
-    Compatibilité V5 : garde status 3-valeurs + items — le
-    pipeline V6.5 consomme SearchResponse, le BuiltContext
-    expose cette vue. status "error" est replié en
-    "insufficient" ici (l'erreur est loggée SEARCH_ERROR).
+    V6.8.1 §8/§9 : SOUS-CLASSE de SearchResponse (plus deux
+    systèmes parallèles). Le knowledge local utilise le même
+    contrat retrieval (source_type=local_knowledge) ; cette vue
+    ajoute :
+      - items : vue historique V5 de results (les DEUX champs
+        sont synchronisés par validateur — les consommateurs
+        V5/V6 (prompt_builder, preview, tests) continuent de
+        lire .items sans rupture ; migration progressive vers
+        .results documentée)
+      - searched_sources : volumétrie propre au knowledge local
+
+    Compat : status "error" local est replié en "insufficient"
+    par le builder (l'erreur est loggée SEARCH_ERROR) — le
+    statut 4-valeurs du contrat retrieval est accepté ici.
     """
 
-    status: Literal["found", "insufficient", "unavailable"] = (
-        Field(
-            default="unavailable",
-            description="found : sections pertinentes trouvées ; "
-            "insufficient : sources parcourues mais rien de "
-            "pertinent ; unavailable : aucune source disponible",
-        )
-    )
     items: list[KnowledgeResult] = Field(default_factory=list)
     searched_sources: int = Field(
         default=0,
         description="Nombre de sources knowledge parcourues",
     )
+
+    @model_validator(mode="after")
+    def _sync_items_results(self) -> "KnowledgeSearchResult":
+        """items ↔ results synchronisés : items = vue typée
+        KnowledgeResult, results = source de vérité retrieval.
+        Si l'un est fourni seul, l'autre est dérivé."""
+        if self.items and not self.results:
+            object.__setattr__(
+                self, "results", list(self.items)
+            )
+        elif self.results and not self.items:
+            object.__setattr__(
+                self,
+                "items",
+                [
+                    r if isinstance(r, KnowledgeResult)
+                    else KnowledgeResult.from_search(r, "")
+                    for r in self.results
+                ],
+            )
+        return self
 
 
 # ------------------------------------------------------------------
@@ -286,23 +343,16 @@ class ResolvedTools(BaseModel):
                     loggés, jamais exposés au modèle)
     """
 
+    model_config = {"extra": "forbid"}
+
     available: list[str] = Field(default_factory=list)
     declared: list[str] = Field(default_factory=list)
     unavailable: list[str] = Field(default_factory=list)
 
 
-# ------------------------------------------------------------------
-# Context priorité + budget (§40/§41) — préparation V5+
-# ------------------------------------------------------------------
-
-
-class ContextPriority(str, Enum):
-    """Priorité d'une source de contexte (budget futur)."""
-
-    critical = "critical"
-    high = "high"
-    medium = "medium"
-    low = "low"
+# V6.8.1 : ContextPriority (Enum critical/high/medium/low) SUPPRIMÉ
+# — contrat mort depuis V6.8 (le budget réel utilise P0-P4 dans
+# budget.py, priorités §41). Aucun consommateur (audit §4).
 
 
 # ------------------------------------------------------------------
@@ -312,6 +362,8 @@ class ContextPriority(str, Enum):
 
 class SubjectContextInfo(BaseModel):
     """Config matière exposée au contexte (depuis le Registry)."""
+
+    model_config = {"extra": "forbid"}
 
     id: str
     name: str
@@ -325,12 +377,16 @@ class SubjectContextInfo(BaseModel):
 class UserContextInfo(BaseModel):
     """Contexte utilisateur sélectionné (mémoire + profil)."""
 
+    model_config = {"extra": "forbid"}
+
     text: str = ""
     facts_count: int = 0
 
 
 class ThreadContextInfo(BaseModel):
     """Contexte thread léger (métadonnées — PAS l'historique, §32)."""
+
+    model_config = {"extra": "forbid"}
 
     thread_id: str = ""
     message_count: int | None = None
@@ -344,7 +400,13 @@ class ContextStats(BaseModel):
     budget_status ∈ ok/near_limit/compressed/exceeded/unknown
     (§48) — unknown = fenêtre inconnue (assomption conservatrice
     documentée, budget.py).
+
+    V6.8.1 §15 : TÉLÉMÉTRIE (résumé post-run exposé au
+    preview/frontend). NE DUPlique PAS ContextBudget : le détail
+    du budget (sections, drops) vit dans BuiltContext.budget.
     """
+
+    model_config = {"extra": "forbid"}
 
     memories_used: int = 0
     knowledge_items: int = 0
@@ -360,12 +422,61 @@ class ContextStats(BaseModel):
     sources_dropped: int = 0
 
 
+class ActivityContextInfo(BaseModel):
+    """Résumé de l'ACTIVITÉ pédagogique EN COURS (V6.8.1 §13/§16).
+
+    VUE thread-locale de LearningActivityState (state LangGraph,
+    activity_state.py) — construite par le builder quand une
+    activité est active, POUR LE RUN courant uniquement.
+
+    Frontières (§5-G/§13) :
+      - ≠ LearningContextInfo : progression PERSISTANTE du
+        profil (mastery...) — l'activité est l'ICI ET MAINTENANT
+      - ≠ LearningActivityState : le TypedDict complet vit dans
+        le state (source de vérité thread) ; ceci n'expose au
+        contexte que les champs consommables (pas question/
+        expected answer — les données de l'exercice ne sont
+        JAMAIS mises dans le prompt).
+    """
+
+    model_config = {"extra": "forbid"}
+
+    activity_id: str = ""
+    activity_type: str = ""
+    status: str = ""
+    subject: str = ""
+    topic: str = ""
+    hint_level: int = 0
+    attempts: int = 0
+
+
 class BuiltContext(BaseModel):
     """Contexte métier complet assemblé par le Context Builder.
 
     C'est l'objet structuré unique transmis au Prompt Builder —
     plus de dictionnaire non documenté (§11).
+
+    V6.8.1 — CONTRAT AGRÉGÉ CANONIQUE (§16) :
+      - chaque champ a UN propriétaire unique (classification
+        §5 A-K) : routing=A, subject=K, knowledge/web=B,
+        fallback=D, tools=K, user/thread=E, learning=F,
+        activity=G, model=H, budget=I, stats=télémétrie
+      - learning : TYPÉ LearningContextInfo (§20 — plus de dict
+        anonyme) ; la vue dict (model_dump) reste disponible via
+        .learning_dict pour la transition
+      - budget : budget DÉTAILLÉ du run (§16/§15) — ContextStats
+        reste le RÉSUMÉ télémétrie exposé
+      - model : capacités du modèle actif (§14)
+      - activity : résumé de l'activité thread-locale (§13)
+      - §17 IMMUTABLE PAR CONVENTION : le Learning Engine V7
+        (§23) fait decision = decide(built_context) SANS
+        reconstruire — toute dérivation produit une COPIE
+        (model_copy(update=...)), l'original n'est jamais muté
+      - §26 extra=forbid : BuiltContext(unknown_source=...) est
+        rejeté — pas de champ parallèle implicite
     """
+
+    model_config = {"extra": "forbid"}
 
     routing: RoutingResult = Field(default_factory=RoutingResult)
     subject: SubjectContextInfo | None = None
@@ -395,16 +506,46 @@ class BuiltContext(BaseModel):
     thread: ThreadContextInfo = Field(
         default_factory=ThreadContextInfo
     )
-    learning: dict | None = Field(
+    learning: LearningContextInfo | None = Field(
         default=None,
-        description="Réservé Learning Profile (V6+) — toujours null",
+        description="Sélection Learning Profile PERTINENTE "
+        "(V6.8.1 §20 : TYPÉE — progressivement consommée en "
+        "attributs ; dict historique via .learning_dict)",
     )
     relevant_memories: list[dict] = Field(default_factory=list)
     stats: ContextStats = Field(default_factory=ContextStats)
+    # --- V6.8.1 §16 : le budget détaillé et le modèle ont un
+    # propriétaire dans l'agrégé (plus de champs hors contrat) ---
+    budget: "ContextBudget | None" = Field(
+        default=None,
+        description="Budget détaillé du run (§15 : ContextBudget "
+        "= état détaillé ; ContextStats = résumé télémétrie)",
+    )
+    model: "ModelCapabilities | None" = Field(
+        default=None,
+        description="Capacités du modèle actif (§14 — registry "
+        "models.yaml)",
+    )
+    activity: ActivityContextInfo | None = Field(
+        default=None,
+        description="Résumé activité pédagogique thread-locale "
+        "(§13 — nulle si aucune activité en cours)",
+    )
+
+    def learning_dict(self) -> dict | None:
+        """Vue dict historique de learning (transition V6.8.1).
+
+        Les consommateurs legacy (dict.get) migrent vers les
+        attributs typés ; cette vue reste pour compat.
+        """
+        if self.learning is None:
+            return None
+        return self.learning.model_dump()
 
 
 # Compatibilité d'import pour les modules qui référencent
 # RouterResult (ancien nom dataclass du router V4).
+# V6.8.1 : ContextPriority SUPPRIMÉ (contrat mort, §4 audit).
 __all__ = [
     "AgentContext",
     "RoutingResult",
@@ -414,7 +555,7 @@ __all__ = [
     "KnowledgeResult",
     "KnowledgeSearchResult",
     "ResolvedTools",
-    "ContextPriority",
+    "ActivityContextInfo",
     "SubjectContextInfo",
     "UserContextInfo",
     "ThreadContextInfo",

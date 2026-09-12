@@ -121,6 +121,59 @@ def get_last_context(thread_id: str):
     return _last_context_registry.get(thread_id)
 
 
+def register_activity(thread_id: str, activity: dict) -> None:
+    """V6.8.1 §13/§16/§23 — enrichit le BuiltContext du registre
+    avec le résumé d'activité du run.
+
+    Le dynamic_prompt (qui construit le BuiltContext) n'a PAS
+    accès au state LangGraph (ModelRequest = messages + runtime
+    uniquement) — l'activité vit dans le state, mise à jour par
+    les tools pédagogiques PENDANT le run. Le runner lit le
+    state POST-run et dérive la vue ici.
+
+    §17 : DÉRIVATION EXPLICITE PAR COPIE — l'original n'est
+    jamais muté ; le registre reçoit la copie enrichie. C'est
+    ce BuiltContext complet que le Learning Engine V7 consommera
+    (decision = decide(built_context), §23) sans reconstruction.
+    """
+    if not thread_id or not activity:
+        return
+    if activity.get("status") in (
+        None,
+        "",
+        "idle",
+        "completed",
+        "abandoned",
+    ):
+        return
+    last = _last_context_registry.get(thread_id)
+    if last is None:
+        return
+    try:
+        from app.context.schemas import ActivityContextInfo
+
+        if getattr(last, "activity", None) is not None:
+            return  # déjà enrichi (builder §13)
+        enriched = last.model_copy(
+            update={
+                "activity": ActivityContextInfo(
+                    activity_id=activity.get("activity_id", ""),
+                    activity_type=activity.get("activity_type", ""),
+                    status=activity.get("status", ""),
+                    subject=activity.get("subject", ""),
+                    topic=activity.get("topic", ""),
+                    hint_level=activity.get("hint_level", 0),
+                    attempts=activity.get("attempts", 0),
+                )
+            }
+        )
+        _last_context_registry[thread_id] = enriched
+    except Exception:
+        # Défense : l'enrichissement ne doit JAMAIS faire échouer
+        # le run — le BuiltContext original reste utilisable.
+        pass
+
+
 @dynamic_prompt
 def tutor_dynamic_prompt(request: ModelRequest) -> str:
     """Dynamic prompt officiel LangChain (§8/§34).
