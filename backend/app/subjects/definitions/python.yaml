@@ -24,9 +24,13 @@ tools:
     - create_exercise
     - evaluate_answer
     - give_hint
+    - create_quiz
+    - assess_understanding
+    - propose_review
   specialized:
-    - execute_python
-    - analyze_python_error
+    - execute_code
+    - run_tests
+    - analyze_code
 knowledge:
   sources:
     - informatique/python/basics

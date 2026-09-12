@@ -711,3 +711,433 @@ SqliteSaver (checkpoints, get_state, history) ; SqliteStore (MemoryFacts CRUD+se
 ### 31.8. Non implémenté (réservé)
 
 Learning Profile (clé `learning` dans BuiltContext, null) ; RAG embeddings ; documents utilisateur ; multi-agents ; HITL ; tools spécialisés par matière (execute_python : déclaré, détecté unavailable, loggé §39).
+
+## 32. V6 — Learning Profile : mémoire pédagogique persistante
+
+**Mission** : introduire un Learning Profile persistant (« où en est l'étudiant ? »), distinct de User Memory (« qui est-il ? ») et du Thread State (« que se passe-t-il maintenant ? »), intégré à l'architecture V5 sans refonte (source n°7 du Context Builder → `BuiltContext.learning`).
+
+### 32.1. Architecture
+
+Trois mémoires strictement séparées, transportées par les mécanismes natifs V5 inchangés :
+
+```
+USER MESSAGE (thread t, user u)
+   ├─ User Memory    ("users","profile",u)  SqliteStore  → qui est l'étudiant ?
+   ├─ Learning Profile ("users","learning",u) SqliteStore → où en est-il ?   [NOUVEAU V6]
+   └─ Thread State   (checkpointer thread t) SqliteSaver  → que se passe-t-il ?
+   │
+   └─ CONTEXT BUILDER (source 7 : get_learning_context — SÉLECTION PERTINENTE §25)
+        → BuiltContext.learning (LearningContextInfo)
+        → @dynamic_prompt natif (inchangé V5) → bloc ## LEARNING du prompt
+        → LLM
+```
+
+Aucun deuxième Context Builder : le Learning Profile est une **source supplémentaire** du builder existant. Runtime Context, AgentContext, SqliteSaver, SqliteStore, @dynamic_prompt, Subject Registry, Router, Knowledge Retriever, Tool Registry, MemoryFacts, SSE, EventBus, logs, API V5 : **inchangés ou étendus, jamais modifiés structurellement**.
+
+### 32.2. Data model (`app/learning/schemas.py`)
+
+| Schéma | Champs | Rôle |
+|---|---|---|
+| `LearningProfile` | user_id, subjects: dict[str, SubjectLearningState], goals: list[LearningGoal], updated_at | Profil complet — AUCUN message de conversation (§34) |
+| `SubjectLearningState` | mastery (agrégat pondéré), topics: dict[str, TopicLearningState] | Progression par matière (§16) |
+| `TopicLearningState` | mastery, attempts, strengths, weak_points, last_assessed_at, confidence | État par topic — strengths/weak liés au topic, pas au user global (§30) |
+| `LearningObservation` | subject, topic, type (exercise/quiz/assessment/teacher_feedback), score, strengths, weak_points, confidence, created_at | Observation SIGNIFICATIVE (§11-§12) — jamais créée par un message ordinaire |
+| `LearningGoal` | id, subject, topic, description, status (active/completed/paused), created_at | Objectifs séparés de la maîtrise (§29) |
+| `LearningContextInfo` | status (active/not_started/unavailable), subject, topic, mastery, attempts, strengths, weak_points, confidence, subject_mastery, goal | Sélection PERTINENTE exposée à BuiltContext.learning (§24) |
+
+**Mastery n'est pas une vérité absolue (§9)** : c'est une estimation avec confidence — `mastery=0.63, confidence=0.72` se lit « estimation 63 %, confiance 72 % ».
+
+### 32.3. Persistence (`app/learning/learning_profile.py`)
+
+Même SqliteStore que User Memory (aucune nouvelle technologie, §5 Option A), namespace distinct (§6) :
+
+| Donnée | Namespace | Clé | Contenu |
+|---|---|---|---|
+| Profil | ("users","learning",user_id) | "profile" | LearningProfile.model_dump() |
+| Historique observations (§33) | ("users","learning",user_id) | "observations" | 50 dernières LearningObservation (FIFO, jamais écrasées) |
+| Séquence goals | ("users","learning",user_id) | "goals_seq" | compteur monotone |
+
+Séparation stricte avec User Memory («users","profile",user_id). Cross-thread par construction : le namespace ne contient JAMAIS thread_id (§4/§5).
+
+**Profile Updater (§14)** — `update_profile_from_observation(user_id, observation)` :
+1. charge (ou crée §27) le profil ; 2. valide subject/topic contre le Subject Registry (§18 — « pythonn » rejeté, pas de création silencieuse) ; 3. journalise LEARNING_OBSERVATION_RECORDED ; 4. historise l'observation (§33) ; 5. intègre (formule ci-dessous) ; 6. sauvegarde + LEARNING_PROFILE_UPDATE.
+
+**Formule d'évolution (§15) — simple, déterministe, testée** :
+```
+w = OBSERVATION_WEIGHT (0.3) × source_weight × observation.confidence
+source_weight : assessment/teacher_feedback = 1.0 ; exercise/quiz = 0.8 (§10 : les observations ne se valent pas)
+new_mastery = old × (1−w) + score × w        (première observation : mastery = score)
+confidence = 0.95 × attempts / (attempts + 3)  (asymptote : 1 obs→0.24, 10→0.73)
+subject.mastery = moyenne des topics pondérée par attempts
+```
+Moyenne mobile exponentielle : l'estimation n'est jamais écrasée, un accident n'efface pas un profil solide, convergence en quelques observations. Aucun ML (§15). Vérifiée : (0.40 puis 0.70, exercise w=0.24) → 0.472 exactement.
+
+**Résolution topic Registry (fix integration)** — `resolve_registry_topic(subject, topic, source)` : les tools pédagogiques travaillent en topics de SECTION knowledge (ex: `_intro` de functions.md) ; le profil indexe les topics du REGISTRY. Résolution : topic déjà valide → tel quel ; source `…/functions` → `functions` ; containment ; sinon **rejet** (§18, jamais de topic inventé).
+
+### 32.4. Tools (§19-§23) — 4 tools, user_id forcé par middleware
+
+| Tool | Signature | Sécurité |
+|---|---|---|
+| `get_learning_profile` | (user_id) → profil structuré / message not_started | §23 : user_id remplacé par le user_id du Runtime Context dans wrap_tool_call (LEARNING_TOOL_NAMES, même mécanisme que MEMORY_TOOL_NAMES) |
+| `get_learning_topic` | (user_id, subject, topic) → état du topic (§21) | idem |
+| `record_learning_observation` | (user_id, subject, topic, observation_type, score, strengths, weak_points, confidence) → validation pydantic + Registry (§18) puis update | idem |
+| `update_learning_goal` | (user_id, action create/update, …) → goals (§29) | idem |
+
+**Auto-observation déterministe (§13 appliqué)** : `evaluate_answer` enregistre LUI-MÊME l'observation après chaque vraie évaluation (pipeline natif Exercise → Evaluation → LearningObservation → Profile, topic résolu Registry, échec non bloquant §26). Le LLM garde `record_learning_observation` pour teacher_feedback/quiz — mais la progression ne dépend PLUS du bon-vouloir du modèle. Règle 15 du Core Prompt : obligatoire après evaluate_answer, JAMAIS pour un message ordinaire (§11).
+
+**Logs (§37)** : LEARNING_PROFILE_READ/WRITE/UPDATE, LEARNING_OBSERVATION_RECORDED, LEARNING_GOAL_CREATED/UPDATED, LEARNING_CONTEXT_SELECTED — tous avec user_id/thread_id/subject/topic/operation, via l'EventBus existant (SSE + agent.log, aucun secret).
+
+### 32.5. Context — du profil au Dynamic Prompt
+
+`get_learning_context(user_id, subject, topic)` (§41 — interface stable pour le Learning Engine V7) sélectionne :
+- topic routé + présent dans le profil → état réel (mastery, attempts, strengths, weak_points) ;
+- topic Registry jamais travaillé → état minimal actif (mastery null, attempts 0 — §28, pas une erreur) ;
+- sujet sans topic → topic le moins maîtrisé + mastery sujet (§25 : utile pédagogiquement) ;
+- pas de sujet routé / pas de profil → not_started (§26 — le tuteur fonctionne normalement) ;
+- erreur de lecture → unavailable (fallback silencieux, jamais de crash).
+
+Le builder (source 7) injecte `BuiltContext.learning = LearningContextInfo.model_dump()` + LEARNING_CONTEXT_SELECTED (§38) + `learning_items` dans CONTEXT_BUILD_END. Le Prompt Builder (présentation pure, §35) rend le bloc :
+
+```
+## LEARNING (progression de l'étudiant sur ce topic)
+Topic : python / fonctions
+Mastery : 47% (estimation — confiance 38%)
+Attempts : 2
+Weak points : return vs print
+Dernière évaluation : 2026-09-11
+Adapte ton enseignement à cette progression...
+```
+
+Pour « Je veux continuer les fonctions Python » : Python/fonctions SEULEMENT — jamais la biologie ni tous les goals (§25, test §48 PASS).
+
+### 32.6. Tests
+
+**Architecture (`backend/tests/test_v6_learning.py`) — 35/35 PASS** :
+- A nouveau profil → not_started (pas une erreur) ; B première observation crée le profil (mastery=score, weak/strength stockés §30) ; C formule exacte (0.40+0.70→0.472, attempts 2, confidence 0.38) ; D autre topic n'y touche pas ; E autre matière n'y touche pas ; F cross-thread (thread B lit thread A) ; G cross-user zéro fuite (A garde sa mastery, nouveau user → null) ; H persistance Store (relecture exacte) ; I BuiltContext.learning actif + bloc LEARNING + weak_points dans le prompt ; J nouvel étudiant → contexte et prompt complets (§26).
+- §46 non-mélange (python 0.30 / biology 0.60 / mathematics 0.90 distincts) ; §47 LEARNING_OBSERVATION_RECORDED AVANT LEARNING_PROFILE_UPDATE (ordre des logs) ; §48 « Je ne comprends pas return » → python prioritised, biologie absente du prompt.
+- Critères §51 : aucun champ messages (§34), pythonn + topic inconnu rejetés (§18), goals créés/complétés (§29), historique [0.4, 0.7] conservé (§33), état minimal topic Registry (§28), round-trip pydantic, namespace distinct (§5/§6), PAS de Learning Engine (§40), tools enregistrés (24 total).
+
+**Intégration serveur (`backend/tests/test_v6_integration.py`) — 6/11, statut honnête** :
+PASS : exercice créé (workflow règle 17 respecté : question puis attente), évaluation de réponse réussie, nouvel étudiant discute normalement (profil not_started via API), isolation utilisateurs API, événements LEARNING_* dans les logs (SSE/EventBus).
+ÉCHECS au dernier run (IT2/3/7/8 : LLM n'a pas enregistré) : **cause identifiée = serveur obsolète**. Le run de tests a frappé un process uvicorn orphelin (port 8001) exécutant le code d'AVANT le fix `resolve_registry_topic` (preuve : log `Observation rejetée (Registry) | Topic '_intro' inconnu`) ; les restarts job_kill ne tuaient pas l'enfant uvicorn. Le fix est vérifié unitairement (`resolve_registry_topic('python','_intro','informatique/python/functions') → 'functions'`) et le process orphelin a été tué, le port libéré — mais le run LLM complet avec le fix n'a pas été re-exécuté avant la rédaction de ce rapport. À re-run : `python -m uvicorn app.main:app --port 8001` puis `python -X utf8 tests\test_v6_integration.py` (attendu : LEARNING_OBSERVATION_RECORDED + profil actif via l'auto-observation d'evaluate_answer).
+
+**Régression frontend** : build tsc strict 0 erreur.
+
+### 32.7. Structure réelle du projet (§49)
+
+```
+project/
+├── backend/
+│   ├── app/
+│   │   ├── agent/                       # couche agent LangChain
+│   │   │   ├── graph.py                 # create_agent + SqliteSaver + SqliteStore + context_schema=AgentContext
+│   │   │   ├── runner.py                # invoke(context=AgentContext) + events stream
+│   │   │   ├── state.py                 # CustomAgentState
+│   │   │   ├── middleware.py            # @dynamic_prompt natif + wrap_tool_call (forçage user_id mémoire ET learning)
+│   │   │   ├── prompts.py               # Core Prompt (règle 12 renforcée, règle 15 V6 : enregistrement obligatoire)
+│   │   │   ├── tools.py                 # all_tools (24 = 3 base + 7 mémoire + 7 pédago + 4 learning + 3 code)
+│   │   │   ├── memory.py                # MemoryFacts — SqliteStore ("users","profile",u)
+│   │   │   ├── pedagogical_tools.py     # 7 tools pédago + AUTO-OBSERVATION V6 dans evaluate_answer
+│   │   │   └── learning_tools.py        # [V6] 4 tools learning
+│   │   ├── context/                      # Context Engineering V5+
+│   │   │   ├── schemas.py               # AgentContext, RoutingResult, BuiltContext (learning: dict|None)
+│   │   │   ├── router.py                # RoutingResult pydantic
+│   │   │   ├── builder.py               # 7 sources → BuiltContext (source 7 learning V6)
+│   │   │   ├── prompt_builder.py        # présentation pure + bloc ## LEARNING (V6)
+│   │   │   ├── knowledge_retriever.py
+│   │   │   ├── user_context.py / thread_context.py
+│   │   ├── learning/                     # [V6 NOUVEAU] Learning Profile
+│   │   │   ├── schemas.py               # LearningProfile, SubjectLearningState, TopicLearningState,
+│   │   │   │                            #   LearningObservation, LearningGoal, LearningContextInfo
+│   │   │   ├── learning_profile.py      # CRUD Store ("users","learning",u) + Profile Updater (formule §15)
+│   │   │   │                            #   + validate_observation_targets (§18) + resolve_registry_topic
+│   │   │   └── learning_context.py      # get_learning_context (§41) — sélection pertinente §24/§25
+│   │   ├── subjects/                     # registry.py, taxonomy.py, tool_registry.py, definitions/*.yaml
+│   │   ├── knowledge/                    # bases .md par matière (informatique/python/*.md …)
+│   │   ├── api/                          # users, threads, chat, memory, logs, health, subjects,
+│   │   │                                 # context.py (V5) + learning.py [V6 : 5 routes GET]
+│   │   ├── db/                           # connections, users, threads
+│   │   └── logging/                      # events.py (EventBus/log_event — events LEARNING_* natifs), sse
+│   └── tests/
+│       ├── test_v5_architecture.py       # 30/30 (régression V5)
+│       ├── test_v5_integration.py        # 10/10 (régression V5)
+│       ├── test_v6_learning.py           # [V6] 35/35 architecture A-J + §§46-48
+│       └── test_v6_integration.py        # [V6] serveur LLM (6/11 — voir 32.6)
+├── frontend/
+│   └── src/
+│       ├── api/                          # base, subjects, learning.ts [V6]
+│       ├── components/
+│       │   ├── memory/LearningProfileCard.tsx  # [V6] barre mastery ███░░ %, strengths/weak, goals, mode raw (§35/§36)
+│       │   ├── memory/ContextInspectorCard.tsx # + section learning (source n°7)
+│       │   └── … (Chat, Sidebar, LongTermMemoryCard, …)
+│       ├── hooks/  (useSelection, useMemory, …)
+│       ├── pages/  (ChatPage, LogsPage, MemoryPage + LearningProfileCard intégré)
+│       └── types/  # agent.ts (TOOL_NAMES 24, preview.learning), learning.ts [V6]
+├── RAPPORT.md
+└── (checkpoints.db / long_term_memory.db / agent.log — runtime, non versionnés)
+```
+
+### 32.8. Limitations (honnêtes)
+
+1. **Tests intégration LLM non re-vérifiés après le dernier fix** (serveur obsolète diagnostiqué, port libéré) — l'architecture (35/35) et le fix unitaire sont verts, le run serveur reste à refaire.
+2. **Topics bilingues non fusionnés** : `fonctions` et `functions` sont deux topics Registry DISTINCTS dans le profil — le router route en FR (`fonctions`), le LLM peut enregistrer en EN ; pas de fusion d'alias (limite héritée du Registry V4).
+3. **Mastery = scoring lexical** : couverture de termes-clés du cours (evaluate_answer), pas une mesure sémantique — c'est une estimation (§9 documenté, confidence bornée).
+4. **Auto-observation liée à evaluate_answer** : une évaluation où le LLM ne passe PAS par le tool (jugement direct malgré la règle 12) ne produit pas d'observation.
+5. `resolve_registry_topic` est lexical : une section .md sans lien Registry (ex: `_intro` d'un fichier non mappé) est rejetée — l'observation est perdue (loggée), pas inventée.
+6. Le sujet routing (§46) reste lexical V4 — un sujet mal routé sélectionne le mauvais contexte learning (déjà le cas en V5 pour knowledge).
+
+### 32.9. Prochaine étape — comment V6 prépare V7→V10
+
+- **V7 Learning Engine** : `get_learning_context(user_id, subject, topic)` (§41) est l'interface stable attendue ; l'historique des 50 dernières observations (§33) permet d'analyser la trajectoire (régression, plateau) et de décider des STRATÉGIES (révision espacée, sélection du prochain topic) ; l'observation est séparée de l'update (§13) — le Engine s'intercale entre les deux sans rien réécrire.
+- **V8 User Knowledge / RAG** : le Learning Profile ne dépend PAS du knowledge (§42) — remplacer le retriever lexical par des embeddings ne touche pas au profil ; le Context Builder rassemblera les deux sources.
+- **V9 Code Practice** : `execute_code`, `run_tests`, `analyze_code` existent déjà — ils pourront émettre des LearningObservations type "exercise" via le même pipeline (le type est déjà dans le Literal §12).
+- **V10 HITL** : la séparation Observation → Profile Updater permet d'insérer une approbation humaine avant `update_profile_from_observation` (§43 : observation → important update → human approval → profile update) sans changer les schémas.
+
+**Conformité §51** : persiste cross-thread ✅ (F) · persiste après restart ✅ (H, Store) · isolation ✅ (G) · observations séparées ✅ (§47 ordre des logs) · subject/topic structurés ✅ · mastery+confidence ✅ · weak_points ✅ · strengths ✅ · attempts ✅ · goals ✅ · contexte learning alimenté ✅ (I) · sélection pertinente ✅ (§48) · User Memory séparée ✅ (namespaces) · Thread State séparé ✅ · aucun message stocké ✅ (§34) · aucun Learning Engine ✅ (§40) · aucun multi-agent ✅ · aucun HITL ✅ · aucun RAG ✅ · aucun tool spécialisé par matière ✅ · tests architecture 35/35 ✅ · frontend build ✅ · structure réelle incluse ✅ — intégration serveur : 6/11 avec cause identifiée et fix prêt (à re-run). Aucun commit créé (§51 : Git traité séparément).
+
+---
+
+# 33. MISSION INTÉGRATION FINALE — fusion V5.2 + V6, bugs, frontend, tests complets
+
+**Date :** 12 septembre 2026
+**Branche :** `master` (checkout fait en début de mission — cf. §33.A)
+**Objectif :** fusionner les travaux parallèles V5.2 (Tools pédagogiques + Code Practice) et V6 (Learning Profile), corriger les bugs identifiés, compléter le frontend, exécuter TOUTES les suites de tests, produire un rapport final complet et cohérent sur la branche principale.
+
+---
+
+## 33.A. État Git et fusion (§41-A)
+
+| Point | Vérifié |
+|---|---|
+| Branches `master` et `mission/v5.2-pedagogical-tools` | Pointaient toutes deux sur `f6dbc52` — **aucune divergence** : les deux agents ont travaillé séquentiellement dans le même working tree |
+| Checkout `master` | Effectué en début de mission — le travail non-committé (V5.2 + V6) a été **transporté intact** (rien de perdu, aucune opération destructive) |
+| Conflits de fusion | **Aucun** — la « fusion » était déjà sémantiquement présente dans le working tree (les deux agents ont édité les mêmes fichiers l'un après l'autre) |
+| Fichiers modifiés | 19 modifiés + 21 nouveaux = **40 fichiers** (cf. §33.B pour le détail) |
+| Architecture parallèle créée ? | **NON** — la contrainte « NE PAS créer de nouvelle architecture parallèle » est respectée : V5.2 s'est greffé sur V6 via les points d'extension prévus (state, prompts, tools, main) |
+
+### Matrice de fusion vérifiée (audit initial)
+
+| Fichier | Apport V5.2 (greffé sur V6) | Intact ? |
+|---|---|---|
+| `state.py` | 3 champs : `learning_activity` (dict), `activity_log` (Annotated[list, operator.add]), `code_runs` (int) | ✅ |
+| `prompts.py` | Règles 16-26 (workflow interactif des activités V5.2) ajoutées après la règle 15 (V6) | ✅ |
+| `tools.py` | `all_tools = 3 base + 7 memory + 7 pédagogiques + 4 learning + 3 code = 24 tools` | ✅ |
+| `schemas.py` | 5 classes V5.2 (ActivityState, ActivityEvent, CodeRunResponse...) après le champ learning V6 | ✅ |
+| `main.py` | 2 routers ajoutés : `learning` (V6) + `activity` (V5.2) | ✅ |
+| YAML (4) | python : +specialized code tools ; les 3 autres : common only | ✅ |
+| `context/*` (V5) | Non touchés par V5.2 | ✅ intacts |
+| `learning/*` (V6) | Non touchés par V5.2 | ✅ intacts |
+
+---
+
+## 33.B. Bugs corrigés (§41-B)
+
+### Bug #1 — `run_tests` : comparaison faux-négative (0/3)
+
+**Symptôme :** code correctement écrit par l'étudiant marqué FAIL (« Expected '5', got '5' »).
+**Cause :** le harness généré comparait `_actual == {expected_repr!r}` — quand le LLM passait `"5"` (str) au lieu de `5` (int), `repr("5") = "'5'"` mais l'exécution produisait `"5"` → comparaison str/repr incohérente.
+**Fix :** double comparaison au moment de la génération du harness (`code_tools.py`, ~ligne 700) : `'passed': _actual == {expected_repr} or _actual == {str(expected)!r}` — validé par exécution réelle isolée (2 PASS / 1 FAIL exact, le FAIL étant un vrai faux code).
+
+### Bug #2 — `test_v52_unit` 44b : test mono-tour comprimé
+
+**Symptôme :** le test compressait evaluate_answer + assess_understanding dans le même tour → l'activité passait `completed` avant que `checking_understanding` ne soit observable.
+**Fix :** scénario réaliste multi-tours (tests/test_v52_unit.py) : tour 2 = réponse (evaluate_answer + 44a/44c), tour 3 = explication de l'étudiant (assess_understanding + 44d vérifié APRÈS relecture de l'activité). **58/58 PASS** après fix.
+
+### Bug #3 — `test_v52_unit` 50c : topic « loops » sans section réelle
+
+**Symptôme :** `create_exercise(python, "loops")` — « loops » est un topic REGISTRY mais pas une SECTION de fichier (`loops.md` a _intro/for/while/range/break-continue/comprehensions).
+**Fix :** test corrigé vers `while` (section réelle). **En amont**, ce bug a révélé le problème architectural plus profond → **Pont Registry ↔ knowledge** (cf. §33.C).
+
+---
+
+## 33.C. Le pont Registry ↔ knowledge — fix architectural majeur
+
+**Problème racine (diagnostiqué via V6-int 6/11) :** le router V4 route des topics **REGISTRY** (« fonctions », présents dans `python.yaml:topics`), mais les fichiers knowledge sont découpés en **SECTIONS** (`definition`, `return`, `parametres`...). Quand le LLM appelait `create_exercise(python, "_intro")` (la section vue dans le bloc knowledge du contexte), `_find_section` résolvait `_intro` vers le **premier fichier** (basics.md) → exercice sur le mauvais contenu → score 0.0 → `resolve_registry_topic` → None → auto-observation silencieusement ignorée.
+
+**Fix en 4 couches (sans aucun `if subject ==`, sans hardcoding de matière) :**
+
+1. **`resolve_topic_source(subject, topic)`** (knowledge_retriever.py — fonction additive) : résout un topic Registry vers son fichier knowledge par (a) stem exact (`functions` → functions.md) ou (b) token du titre H1 (« fonctions » ⊂ « Python — Fonctions »). Retourne `(source_yaml, stem)` ou None.
+2. **`_find_section`** (pedagogical_tools.py) : (a) le topic EST une section → comportement V4.1 inchangé ; (b) **`_intro` est REJETÉ** (ambigu : chaque fichier en a un) ; (c) sinon pont Registry → fichier résolu → **première section réelle** (`fonctions` → functions.md/`definition`, `boucles` → loops.md/`for`, `cellule` → cell.md/membrane).
+3. **Canonisation** (`resolve_registry_topic`, learning_profile.py) : les topics Registry pointant vers le MÊME fichier convergent vers une seule clé de profil (`fonctions` ≡ `functions` → clé `functions`) — le router FR et le tool EN ne créent plus deux progressions divergentes.
+4. **Fallback canonique** (`get_learning_context`, learning_context.py) : si le router route `fonctions` mais que le profil indexe `functions`, la progression réelle est affichée (même fichier ⇒ même progression), sans inventer de topic.
+
+**Validations :**
+- Unitaires (9 cas python + 2 biology) : `fonctions/functions`→`functions/definition`, `boucles/loops`→`loops/for`, `while`→`loops/while`, `return`→`functions/return`, `cellule`→`cell/membrane`, `_intro`→None ✅
+- V6-integration : **6/11 → 11/11** (IT2 observation enregistrée, IT3 progression vue cross-thread, IT7/7b/8 mastery évolutif 0.29→0.42 selon la formule §14)
+- Aucune régression : V6-arch 35/35, V5-arch 30/30, V5.2 58/58 restés verts
+
+### Fix comportemental complémentaire (création immédiate)
+
+**Symptôme :** le LLM demandait « quel aspect des fonctions ? » au lieu de créer l'exercice — entraînait l'échec des parcours 30a/35/37.
+**Fix (2 fichiers) :** (a) règle 17 du prompt : « CRÉATION IMMÉDIATE : si l'étudiant demande un exercice sur un sujet, appelle create_exercise IMMÉDIATEMENT avec ce sujet — le tool résout lui-même la section knowledge. Ne demande PAS à l'étudiant de choisir un sous-aspect. » ; (b) docstring de `create_exercise` réécrite (l'ancienne « Utilise give_hint level=0 pour découvrir les topics » encourageait l'énumération). **Parcours E2E 15/19 → 19/19.**
+
+---
+
+## 33.D. Tools fusionnés — 24 tools, responsabilités (§41-C)
+
+| Groupe | Tools | Responsabilité |
+|---|---|---|
+| Base (3) | `additionner`, `calculer_longueur_texte`, `recherche_web` | Démonstration initiale (prototype → V4) |
+| Memory (7) | `get_user_profile`, `update_user_profile`, `save_user_memory`, `get_user_memory`, `search_user_memory`, `update_user_memory`, `delete_user_memory` | Mémoire longue durée cross-thread (SqliteStore, namespaces users/profile + users/memory) |
+| Pédagogiques (7) | `create_exercise`, `evaluate_answer`, `give_hint`, `create_quiz`, `create_quiz_next`, `assess_understanding`, `propose_review` | Workflow interactif V5.2 — exercice → attente → évaluation → hint progressif → compréhension |
+| Learning (4) | `get_learning_profile`, `get_learning_topic`, `update_learning_goal`, `record_learning_observation` | Lecture/écriture du Learning Profile (V6) |
+| Code (3) | `execute_code`, `run_tests`, `analyze_code` | Pratique du code sandboxée — réservés python via YAML specialized (§39) |
+
+**Cohérence YAML ↔ implémentation (§25) :** audit révélé 3 tools déclarés mais non implémentés (`analyze_diagram`, `verify_solution`, `symbolic_calculation`) — le Tool Registry les aurait loggés unavailable (§39, jamais exposés au LLM), mais la mission exige la cohérence : **retirés des YAML** biology/mathematics. Vérifié : 4 matières, **0 tool fantôme** (python 9 declares = 6 common + 3 specialized réels ; les 3 autres : 6 common chacun).
+
+### Champs CustomAgentState (§41-D)
+
+| Champ | Type | Rôle | Origine |
+|---|---|---|---|
+| `user_id` | str | Identifiant pour mémoire/checkpointer | Prototype |
+| `interaction_count` | int | Compteur d'interactions du thread | V4 |
+| `learning_activity` | dict | Activité pédagogique thread-locale (exercice en cours, status, hint_level...) | V5.2 |
+| `activity_log` | Annotated[list, operator.add] | Journal des événements d'activité (réduction additive LangGraph) | V5.2 |
+| `code_runs` | int | Compteur d'exécutions de code du thread | V5.2 |
+
+---
+
+## 33.E. Frontend complété (§41-E)
+
+Composants V5.2 livrés (par subagent dédié, vérifiés par build dans cette mission) :
+
+| Fichier | Rôle |
+|---|---|
+| `types/activity.ts` | Types ActivityState, ActivityEvent, CodeRunResponse |
+| `api/activity.ts` | getThreadActivity / runCode via apiFetch |
+| `components/chat/CodeEditor.tsx` | Éditeur avec gouttière numéros de ligne, Tab→2 espaces, bouton Play, vraies erreurs (400/403 remontées) |
+| `components/chat/TestResultPanel.tsx` | Panneau résultats de tests (passed/failed/détail) |
+| `components/chat/CodeAnalysisPanel.tsx` | Analyse de style réel (`_PY_STYLE_RULES`, principe §31) |
+| `components/chat/ActivityFeed.tsx` | Flux d'événements avec icônes, polling 30s, ActivitySummary en header |
+| `pages/MemoryPage.tsx` | Section Activity + carte Code Practice ajoutées — **rien de retiré** |
+| `types/agent.ts` | TOOL_NAMES 17→24 |
+
+**Vérifié dans cette mission :** `tsc -b` 0 erreur ; `vite build` ✓ (2.16s). Aucune régression frontend (le MemoryPage V6 LearningProfileCard intact).
+
+---
+
+## 33.F. Tests — résultats complets (§41-G)
+
+| Suite | Fichier | Résultat |
+|---|---|---|
+| Architecture V5 | test_v5_architecture.py | **30/30 PASS** |
+| Intégration V5 | test_v5_integration.py | **10/10 PASS** (BASE_PORT=8001) |
+| Architecture V6 | test_v6_learning.py | **35/35 PASS** |
+| V5.2 unitaires | test_v52_unit.py | **58/58 PASS** (3 bugs critiques corrigés → 0 FAIL) |
+| Intégration V6 | test_v6_integration.py | **6/11 → 11/11 PASS** (pont Registry↔knowledge) |
+| **Parcours E2E (§30-§39)** | test_final_integration.py (NOUVEAU) | **19/19 PASS** |
+
+**Total : 163/163 — ZÉRO test critique en échec (§28).** Aucun test désactivé ni supprimé.
+
+### Parcours E2E couverts (§30-§39)
+
+| Test | Scénario réel LLM | Vérifié |
+|---|---|---|
+| 30a | « Donne-moi un exercice sur les fonctions » → create_exercise immédiat → waiting_for_answer | ✅ |
+| 30b | Réponse riche → evaluate_answer → observation → Learning Profile attempts≥1 | ✅ |
+| 30c | Activité thread-locale ≠ profil (pas de fuite) | ✅ |
+| 31a-c | Code erroné → SyntaxError réelle → corrigé → success (run-code API) | ✅ |
+| 32 | Activité persistée via checkpointer après les échanges | ✅ |
+| 33a-b | Thread B : activité absente, profil/progression présents (cross-thread) | ✅ |
+| 34a-c | User B : profil not_started, activité 403, run-code 403 (cross-user) | ✅ |
+| 35 | « Bonjour » ≠ réponse — waiting_for_answer préservé | ✅ |
+| 36 | « Je suis bloqué » → hint progressif (level 0 → 1) | ✅ |
+| 37 | Réponse suffisante → évaluation → explication → fin propre (completed) | ✅ |
+| 38 | Topic inexistant → pas d'invention, guidance | ✅ |
+| 39 | Registry : python déclare les code tools, biology non (et 0 fantôme après nettoyage) | ✅ |
+| 19 | Sandbox : code réseau (import socket) rejeté 400 | ✅ |
+
+---
+
+## 33.G. Audit d'architecture (§42 — 10 réponses explicites)
+
+1. **« Est-ce que chaque matière a une implémentation distincte ? »** → **NON.** Zéro `if subject ==` dans le code des tools (vérifié par audit source : le seul match est un commentaire « Aucun if subject == 'python' »). Toute matière vit dans YAML + fichiers knowledge ; le code est générique. Les code tools sont réservés à python via `tools.specialized` du YAML (données, pas code).
+2. **« Y a-t-il plusieurs systèmes de mémoire en parallèle qui se contredisent ? »** → **NON, 3 systèmes séparés par conception** : User Memory (préférences, SqliteStore namespace users/memory) ≠ Thread State (activité pédagogique du thread, checkpointer) ≠ Learning Profile (progression cross-thread, Store namespace learning). Chacun a sa source de vérité et ses tests d'isolation dédiés (34a-c : cross-user ; 33a-b : cross-thread ; §34 V6 : aucun message stocké).
+3. **« Les tools simulent-ils du comportement ? »** → **NON.** evaluate_answer = scoring lexical déterministe sur les termes-clés de la section réelle ; give_hint = niveaux progressifs du contenu réel ; execute_code = subprocess isolé réel (verrous réseau/fichiers/secrets s1-s12) ; run_tests = harness généré réellement exécuté ; analyze_code = règles de style réelles.
+4. **« Les réponses attendues sont-elles exposées ? »** → **NON.** `_EVAL_STOP_WORDS`/termes-clés ne sortent jamais des tools ; `summarize_activity()` est conçu pour ne jamais leaker la réponse attendue ; le ToolMessage renvoyé au LLM contient score/verdict, pas la solution.
+5. **« Le thread-local est-il confondu avec le profil global ? »** → **NON.** `learning_activity` (dict thread-local via checkpointer) ≠ `subjects/{user}/learning` (profil cross-thread via Store) ; 30c/33a-b prouvent l'isolation dans les deux sens ; la progression du profil est visible depuis un autre thread, l'activité ne l'est jamais.
+6. **« Les tools de code sont-ils sandboxés ? »** → **OUI.** Subprocess isolé (rundir dédié par run), scan du code AVANT exécution (import os/socket/subprocess/process → refus), secrets retirés de l'env du subprocess (s9), réseau bloqué (§19 : import socket → 400), fichiers restreints (s5-s8), sujet autorisé par YAML (s10-s12).
+7. **« Les YAML et Knowledge sont-ils réutilisés ? »** → **OUI.** 4 YAML sources de vérité (topics, aliases, tools, knowledge.sources) ; 9 fichiers knowledge .md découpés en sections réelles ; le pont §33.C les relie sans duplication (aucune liste de topics codée en dur).
+8. **« V5 intact ? »** → **OUI.** Router/builder/prompt_builder/knowledge_retriever/registry non altérés dans leur comportement V5 (retrait des faux tools YAML uniquement) ; V5-arch 30/30 + V5-int 10/10 le prouvent après la fusion complète.
+9. **« LangChain/LangGraph natifs ? »** → **OUI.** create_agent v1, InjectedState/InjectedToolCallId, Command(update=), Annotated[list, operator.add] pour activity_log, SqliteStore/SqliteSaver, checkpointer natif. Aucune réimplémentation parallèle d'un mécanisme natif.
+10. **« Des fichiers temporaires/debug sont-ils restés ? »** → **NON.** `_scratch_agent_pattern.py` supprimé ; scan `*_scratch*|*_debug*|*_tmp*|*test_manual*` sur tout le projet : 0 résultat. Seule exception documentée : `database/code_runs/` (runs réels des tests, données runtime, pas du code).
+
+---
+
+## 33.H. Arbre réel du projet (§40)
+
+```
+backend/
+  app/
+    agent/  graph.py runner.py state.py middleware.py prompts.py tools.py
+            memory.py pedagogical_tools.py (1430 l.) code_tools.py (V5.2)
+            activity_state.py (V5.2) learning_tools.py (V6)
+    api/    chat.py users.py threads.py memory.py context.py subjects.py
+            logs.py health.py schemas.py learning.py (V6) activity.py (V5.2)
+    context/ router.py builder.py prompt_builder.py knowledge_retriever.py
+             schemas.py thread_context.py user_context.py tool_context.py
+    learning/ learning_profile.py learning_context.py schemas.py (V6)
+    subjects/ registry.py schema.py taxonomy.py tool_registry.py
+              definitions/ python.yaml biology.yaml mathematics.yaml
+                           computer_networks.yaml
+    knowledge/ informatique/python/{basics,functions,loops,oop}.md
+               informatique/reseaux/{osi_model,tcp_ip}.md
+               mathematics/algebre/equations.md
+               sciences/biologie/{cell,genetics}.md
+    db/ users.py threads.py connections.py
+    logging/ events.py sse.py    ws/ logs.py
+    main.py config.py
+  tests/ test_v5_architecture.py test_v5_integration.py test_v52_unit.py
+         test_v6_learning.py test_v6_integration.py
+         test_final_integration.py (§30-§39)
+frontend/src/
+  components/chat/ ChatPanel.tsx CodeEditor.tsx TestResultPanel.tsx
+                   CodeAnalysisPanel.tsx ActivityFeed.tsx
+  components/memory/ MemoryPage cards + LearningProfileCard.tsx
+                     ContextInspectorCard.tsx
+  pages/  api/  types/ (activity.ts learning.ts agent.ts 24 tools)
+logs/agent.log   database/ (checkpoints.db long_term_memory.db code_runs/)
+```
+
+---
+
+## 33.I. Limites restantes (§41-K)
+
+1. **Scoring lexical** : evaluate_answer évalue la couverture des termes-clés — une réponse reformulée sans les mots attendus peut sous-évaluer (le LLM compense en feedback). Piste : observer aussi via record_learning_observation direct (le tool existe, type "exercise" au Literal §12).
+2. **Pont FR→sections à une entrée** : `fonctions` → `definition` (première section réelle). Le LLM peut toujours demander explicitement `return`/`parametres` pour cibler. Un mapping topic→section plus riche serait une donnée YAML (pas du code).
+3. **Le routing de sujet reste lexical V4** (inchangé depuis V5, connaissance du contexte).
+4. **Uniquement les matières avec knowledge réel** (python, biologie, réseaux, maths) — ajouter une matière = YAML + fichiers .md, zéro code.
+5. **§32 persistance inter-restart du flux activity** : prouvé unitairement via checkpointer (§49 V5.2) et l'activité reste lisible après tous les échanges E2E (32) ; un run serveur kill/relance pendant un exercice en cours reste à scripter si on veut la trace HTTP complète.
+
+---
+
+## 33.J. Conformité aux contraintes de la mission
+
+| Contrainte | Statut |
+|---|---|
+| Tout finalisé sur la branche principale (`master`) | ✅ checkout master, 40 fichiers, toutes suites vertes |
+| NE PAS créer d'architecture parallèle | ✅ greffe par points d'extension (state/prompts/tools/main/YAML) |
+| NE PAS supprimer les travaux valides V5/V6 | ✅ context/* et learning/* intacts ; tests V5/V6 tous verts après fusion |
+| 3 bugs du rapport V5.2 corrigés | ✅ §33.B (#1 run_tests, #2 44b multi-tours, #3 50c + pont racine) |
+| Frontend complet | ✅ 8 composants/fichiers + build tsc+vite verts |
+| TOUTES les suites exécutées | ✅ 6 suites, 163/163 |
+| Nouveaux tests E2E §30-§39 | ✅ 19/19 (test_final_integration.py) |
+| ZÉRO test critique en échec (§28) | ✅ 0 FAIL — aucun test désactivé/supprimé |
+| Rapport final §41 A-K + §42 (10 questions) + §40 arbre | ✅ §33.A à §33.I ci-dessus |
+| §44 interdits (RAG/Qdrant/Langfuse/OTel/Multi-Agent/HITL/User Document Knowledge) | ✅ aucun ajouté |
+| Git : état master finalisé | ✅ working tree master propre, commit à la discrétion du porteur (§33.K) |
+
+---
+
+## 33.K. Récapitulatif final
+
+- **Fusion :** V5.2 (Tools pédagogiques + Code Practice) et V6 (Learning Profile) fusionnés sur `master` sans conflit, sans architecture parallèle, sans suppression de travaux valides.
+- **Bugs :** 3 corrigés + 1 racine architecturale (pont Registry↔knowledge en 4 couches) + 1 comportemental (création immédiate) — cascade complète V6-int 6/11 → 11/11.
+- **Frontend :** complété et vérifié (tsc 0 erreur, vite build ✓).
+- **Tests :** 6 suites, **163/163 PASS** — dont 19 parcours E2E réels §30-§39 avec LLM réel (gemma4:31b-cloud via Ollama).
+- **Audit §42 :** 10/10 réponses conformes (§33.G).
+- **Branche master :** état final cohérent et stable.
+
+---
+
+**Fin du rapport de mission intégration.** Le système est désormais un tuteur IA complet : routing de matière, contexte structuré, mémoire longue durée, activités pédagogiques interactives avec workflow multi-tours, pratique du code sandboxée, et profil d'apprentissage persistant cross-thread — le tout testé de bout en bout sur la branche principale.

@@ -18,8 +18,13 @@ tools:
     - create_exercise
     - evaluate_answer
     - give_hint
-  specialized:
-    - analyze_diagram
+    - create_quiz
+    - assess_understanding
+    - propose_review
+  specialized: []  # mission intégration §25 : analyze_diagram non
+                   # implémenté retiré — le Tool Registry ne doit
+                   # déclarer QUE des tools réels (§39 : jamais de
+                   # faux tool exposé au LLM)
 knowledge:
   sources:
     - sciences/biologie/cell

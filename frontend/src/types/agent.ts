@@ -1,4 +1,7 @@
 // Types partagés — Agent Control Center
+import type { LearningContextData } from './learning';
+
+export type { LearningContextData };
 
 export interface User {
   user_id: string;
@@ -99,23 +102,6 @@ export interface ChatResponse {
   thread_id: string;
   interaction_count: number;
 }
-
-export const TOOL_NAMES = [
-  'additionner',
-  'calculer_longueur_texte',
-  'recherche_web',
-  'get_user_profile',
-  'update_user_profile',
-  'get_user_memory',
-  'save_user_memory',
-  'update_user_memory',
-  'delete_user_memory',
-  'search_user_memory',
-  // V4.1 — pédagogiques communs (implémentations réelles)
-  'create_exercise',
-  'evaluate_answer',
-  'give_hint',
-] as const;
 
 // ---- Mémoire longue durée ----
 
@@ -240,6 +226,39 @@ export interface ContextPreview {
     message_count: number | null;
     text: string;
   };
+  learning?: LearningContextData | null; // V6
   prompt_preview: string;
   stats: Record<string, number>;
 }
+
+// ---- V6 + V5.2 — Tools disponibles (24 avec activity/code) ----
+export const TOOL_NAMES = [
+  'additionner',
+  'calculer_longueur_texte',
+  'recherche_web',
+  'get_user_profile',
+  'update_user_profile',
+  'get_user_memory',
+  'save_user_memory',
+  'update_user_memory',
+  'delete_user_memory',
+  'search_user_memory',
+  // V4.1 — pédagogiques communs (implémentations réelles)
+  'create_exercise',
+  'evaluate_answer',
+  'give_hint',
+  // V6 — Learning Profile
+  'get_learning_profile',
+  'get_learning_topic',
+  'record_learning_observation',
+  'update_learning_goal',
+  // V5.2 — activités pédagogiques interactives (quiz, compréhension)
+  'create_quiz',
+  'create_quiz_next',
+  'assess_understanding',
+  'propose_review',
+  // V5.2 — pratique du code (sandbox isolée, §24-§30)
+  'execute_code',
+  'run_tests',
+  'analyze_code',
+] as const;

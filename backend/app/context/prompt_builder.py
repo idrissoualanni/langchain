@@ -1,12 +1,3 @@
-# Prompt Builder V5 — PRÉSENTATION uniquement (§35).
-#
-# Reçoit : BuiltContext (pydantic structuré, déjà sélectionné).
-# Produit : le prompt final (str).
-#
-# Il ne fait AUCUNE requête, AUCUN routing, AUCUNE recherche
-# knowledge, AUCUN appel de tool — tout vient du Context Builder.
-# Il ne met JAMAIS d'identifiant technique (user_id/thread_id)
-# dans le prompt (§36) — seulement des données utiles.
 from app.context.schemas import BuiltContext
 from app.logging.events import log_event
 
@@ -112,10 +103,80 @@ def build_system_prompt(
     if context.thread.text:
         parts.append("## Contexte courant\n\n" + context.thread.text)
 
-    # --- LEARNING (réservé V6+ — toujours absent aujourd'hui) ---
-    if context.learning:
+    # --- LEARNING (V6 §24/§25 — progression du topic courant) ---
+    # Format voulu par le brief : Mastery / Weak point / Attempts,
+    # uniquement pour le subject/topic de la question — jamais
+    # toute la progression (pas de biologie pour du Python).
+    learning = context.learning
+    if isinstance(learning, dict) and learning.get("status") == "active":
+        lines = [
+            "## LEARNING (progression de l'étudiant sur ce topic)"
+        ]
+        topic_label = (
+            f"{learning.get('subject') or '?'} / "
+            f"{learning.get('topic') or '?'}"
+        )
+        lines.append(f"Topic : {topic_label}")
+
+        mastery = learning.get("mastery")
+        if mastery is not None:
+            pct = round(mastery * 100)
+            lines.append(f"Mastery : {pct}%")
+            conf = learning.get("confidence")
+            if conf is not None:
+                lines.append(
+                    f"(estimation — confiance {round(conf * 100)}%)"
+                )
+        else:
+            lines.append(
+                "Mastery : pas encore évalué (topic jamais travaillé)"
+            )
+
+        attempts = learning.get("attempts") or 0
+        lines.append(f"Attempts : {attempts}")
+
+        strengths = learning.get("strengths") or []
+        if strengths:
+            lines.append(
+                "Strengths : " + " ; ".join(strengths[:3])
+            )
+        weak_points = learning.get("weak_points") or []
+        if weak_points:
+            lines.append(
+                "Weak points : " + " ; ".join(weak_points[:3])
+            )
+
+        if learning.get("last_assessed_at"):
+            lines.append(
+                f"Dernière évaluation : "
+                f"{learning['last_assessed_at'][:10]}"
+            )
+
+        goal = learning.get("goal")
+        if goal and goal.get("status") == "active":
+            lines.append(
+                f"Objectif actif : {goal.get('description', '')}"
+            )
+
+        lines.append(
+            "Adapte ton enseignement à cette progression : "
+            "consolide les weak points, appuie-toi sur les strengths."
+        )
+        parts.append("\n".join(lines))
+
+    elif (
+        isinstance(learning, dict)
+        and learning.get("status") == "not_started"
+        and routing.status == "supported"
+        and subject
+    ):
+        # §26 : absence de progression = premier contact, pas
+        # une erreur — le tuteur adapte (évaluer avant d'approfondir).
         parts.append(
-            "## LEARNING CONTEXT\n\n" + str(context.learning)
+            "## LEARNING\n\nPas encore de progression suivie sur "
+            "cette matière — premier contact probable. Commence "
+            "par évaluer le niveau avec un exercice simple avant "
+            "d'approfondir."
         )
 
     prompt = "\n\n".join(p for p in parts if p.strip())
@@ -136,6 +197,11 @@ def build_system_prompt(
             "subject": routing.subject,
             "knowledge_items": len(context.knowledge.items),
             "memories_used": len(context.relevant_memories),
+            "learning_status": (
+                context.learning.get("status")
+                if isinstance(context.learning, dict)
+                else None
+            ),
         },
     )
     return prompt

@@ -65,6 +65,47 @@ def _available_sources(subject_id: str) -> list[Path]:
     return files
 
 
+def resolve_topic_source(
+    subject_id: str, topic: str
+) -> tuple[str, str] | None:
+    """PONT Registry ↔ knowledge (mission intégration §10) :
+
+    Résout un topic REGISTRY (ex: « fonctions ») vers son fichier
+    knowledge réel (ex: informatique/python/functions → « Fonctions »).
+    Stratégie, dans l'ordre, SANS hardcoding de matière :
+      1. stem exact du fichier (functions → functions.md) ;
+      2. topic normalisé contenu dans le titre H1 du fichier
+         (« fonctions » ⊂ « Python — Fonctions »).
+    Retour (source_yaml, section_de_départ) ou None — jamais
+    inventé. Utilisé par les tools pédagogiques pour faire le pont
+    entre les topics du Registry (routing V4) et les sections
+    réelles des fichiers knowledge.
+    """
+    cfg = get_subject(subject_id)
+    if cfg is None or not topic:
+        return None
+    norm = _strip_accents(topic.lower())
+    for src in cfg.knowledge.get("sources", []):
+        p = KNOWLEDGE_DIR / f"{src}.md"
+        if not p.exists():
+            continue
+        try:
+            content = p.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        # 1. stem exact
+        stem = src.rsplit("/", 1)[-1]
+        if _strip_accents(stem.lower()) == norm:
+            return src, stem
+        # 2. token du titre H1
+        for line in content.splitlines():
+            if line.startswith("# "):
+                if norm in _strip_accents(line[2:].lower()):
+                    return src, stem
+                break
+    return None
+
+
 def _split_sections(content: str) -> list[tuple[str, str]]:
     """Découpe un .md en sections (## topic). Retour [(topic, contenu)]."""
     sections = []

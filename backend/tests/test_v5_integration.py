@@ -8,7 +8,12 @@ import uuid
 
 sys.path.insert(0, ".")
 
-BASE = "http://127.0.0.1:8000"
+import os
+
+# Port configurable (8001 par défaut : port de test utilisé
+# pendant l'intégration V6 pour ne pas écraser le serveur de
+# dev). BASE_PORT = 8000 restaure l'ancien comportement.
+BASE = f"http://127.0.0.1:{os.environ.get('BASE_PORT', '8001')}"
 
 results = []
 

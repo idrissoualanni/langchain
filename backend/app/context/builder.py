@@ -1,4 +1,4 @@
-# Context Builder V5 — assemble le contexte métier en objet STRUCTURÉ.
+# Context Builder V5+V6 — assemble le contexte métier en objet STRUCTURÉ.
 #
 # Rôle (§10/§71) : collecter + sélectionner + prioriser + structurer.
 # NE REMPLACE PAS les mécanismes LangChain : il les CONSOMME.
@@ -8,6 +8,8 @@
 #   - Tools       : app.subjects.tool_registry (resolve_tools)
 #   - User memory : app.agent.memory (SqliteStore, namespace user)
 #   - Thread      : app.context.thread_context (léger, §32)
+#   - Learning    : app.learning.learning_context (V6, §24 —
+#                   sélection PERTINENTE, jamais tout le profil)
 #
 # Sortie : BuiltContext (pydantic, §30) — consommé par le
 # Prompt Builder et par l'API preview. Plus de dict brut.
@@ -31,6 +33,8 @@ from app.context.schemas import (
 )
 from app.context.thread_context import build_thread_context
 from app.context.user_context import build_user_context
+from app.learning.learning_context import get_learning_context
+from app.learning.schemas import LearningContextInfo
 from app.logging.events import log_event
 from app.subjects.registry import get_subject
 from app.subjects.tool_registry import resolve_tools_for_subject
@@ -274,6 +278,17 @@ def build_context(
         text=thread_ctx_raw.get("text", ""),
     )
 
+    # --- 7. LEARNING PROFILE (V6 §24 — sélection pertinente) ---
+    # Jamais tout le profil : get_learning_context ne remonte que
+    # l'état du subject/topic routé (§25). Absence = not_started
+    # (§26), jamais une erreur.
+    learning: LearningContextInfo = get_learning_context(
+        user_id=user_id,
+        subject=routing.subject,
+        topic=routing.topic,
+        thread_id=thread_id,
+    )
+
     stats = ContextStats(
         memories_used=len(relevant),
         knowledge_items=len(knowledge.items),
@@ -292,7 +307,7 @@ def build_context(
         tools=tools,
         user=user,
         thread=thread,
-        learning=None,
+        learning=learning.model_dump(),
         relevant_memories=relevant,
         stats=stats,
     )
@@ -303,7 +318,8 @@ def build_context(
             f"Context built | user={user_id} | "
             f"subject={routing.subject} | status={routing.status} | "
             f"memories={stats.memories_used} | "
-            f"knowledge={stats.knowledge_items}"
+            f"knowledge={stats.knowledge_items} | "
+            f"learning={learning.status}"
         ),
         user_id=user_id,
         thread_id=thread_id,
@@ -314,6 +330,11 @@ def build_context(
             "routing_status": routing.status,
             "memory_items": stats.memories_used,
             "knowledge_items": stats.knowledge_items,
+            "learning_items": (
+                1 if learning.status == "active" else 0
+            ),
+            "learning_status": learning.status,
+            "learning_mastery": learning.mastery,
             "tools": len(tools.available),
             "context_size": stats.context_size,
             "user_memory_selected": [

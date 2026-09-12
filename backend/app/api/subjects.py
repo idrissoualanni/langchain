@@ -114,6 +114,7 @@ def build_context_preview(
         tools=ctx["tools"],
         user=ctx["user"],
         thread=ctx["thread"],
+        learning=ctx.get("learning"),
         prompt_preview=prompt,
         stats=ctx["stats"],
     )

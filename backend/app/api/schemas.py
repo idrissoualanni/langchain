@@ -280,5 +280,71 @@ class ContextPreviewResponse(BaseModel):
     tools: dict
     user: dict
     thread: dict
+    learning: dict | None = None  # V6 : LearningContextInfo ou null
     prompt_preview: str
     stats: dict
+
+
+# ------------------------------------------------------------------
+# V5.2 — Activité pédagogique & pratique du code
+# ------------------------------------------------------------------
+
+
+class ActivitySummary(BaseModel):
+    """Vue de l'activité en cours (sans fuiter les réponses)."""
+    activity_id: str = ""
+    activity_type: str | None = None
+    subject: str | None = None
+    topic: str | None = None
+    status: str = "idle"
+    hint_level: int = 0
+    attempts: int = 0
+    awaiting_answer: bool = False
+    expected_response_type: str = ""
+    question_index: int = 0
+    total_questions: int = 0
+    current_index: int = 0
+    score: float | None = None
+
+
+class ActivityLogEntryOut(BaseModel):
+    timestamp: str = ""
+    event: str = ""
+    status: str = ""
+    detail: str = ""
+    hint_level: int = 0
+    activity_type: str = ""
+
+
+class ThreadActivityResponse(BaseModel):
+    thread_id: str
+    user_id: str
+    activity: ActivitySummary
+    activity_log: list[ActivityLogEntryOut]
+    interaction_count: int = 0
+
+
+class CodeRunRequest(BaseModel):
+    """POST /api/threads/{id}/run-code — Code Editor backend."""
+    user_id: str
+    code: str = Field(..., min_length=1, max_length=8000)
+
+    @field_validator("user_id")
+    @classmethod
+    def valid_user_id(cls, v: str) -> str:
+        return _valid_uuid(v, "user_id")
+
+    @field_validator("code")
+    @classmethod
+    def code_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Le code ne peut pas être vide")
+        return v
+
+
+class CodeRunResponse(BaseModel):
+    status: str
+    stdout: str
+    stderr: str
+    exit_code: int
+    duration_ms: int

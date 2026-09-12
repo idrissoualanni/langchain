@@ -3,12 +3,22 @@
 // affiche le contexte actif en lecture seule.
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Braces, Clock, Database } from 'lucide-react';
+import {
+  Activity as ActivityIcon,
+  Braces,
+  Clock,
+  Database,
+  Terminal,
+} from 'lucide-react';
 import { useSelection } from '../hooks/useSelection';
 import { useMemory } from '../hooks/useMemory';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { LongTermMemoryCard } from '../components/memory/LongTermMemoryCard';
 import { ContextInspectorCard } from '../components/memory/ContextInspectorCard';
+import { LearningProfileCard } from '../components/memory/LearningProfileCard';
+import { ActivityFeed } from '../components/chat/ActivityFeed';
+import { CodeEditor } from '../components/chat/CodeEditor';
+import { CodeAnalysisPanel } from '../components/chat/CodeAnalysisPanel';
 
 export function MemoryPage() {
   const { currentUser, currentThread } = useSelection();
@@ -113,6 +123,24 @@ export function MemoryPage() {
             userId={currentUser?.user_id ?? null}
             threadId={null}
           />
+          {/* Activity Feed V5.2 — fil d'activité du thread (état vide
+              sans thread : l'activité est thread-scoped §50) */}
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-[13px]">
+                <ActivityIcon size={13} className="text-[#6c63ff]" strokeWidth={1.8} />
+                Activity
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ActivityFeed
+                userId={currentUser?.user_id ?? null}
+                threadId={null}
+              />
+            </CardContent>
+          </Card>
+          {/* Learning Profile V6 — progression cross-thread (§35/§36) */}
+          <LearningProfileCard userId={currentUser?.user_id ?? null} />
           <Card className="p-10 text-center">
             <Database size={32} className="mx-auto mb-3 text-[#94a3b8]/30" />
             <div className="text-sm text-[#94a3b8]">
@@ -140,6 +168,50 @@ export function MemoryPage() {
             userId={currentUser?.user_id ?? null}
             threadId={currentThread.thread_id}
           />
+
+          {/* Activity Feed V5.2 — événements pédagogiques du thread (§42) */}
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-[13px]">
+                <ActivityIcon size={13} className="text-[#6c63ff]" strokeWidth={1.8} />
+                Activity
+              </CardTitle>
+              <span className="font-mono text-[10px] text-[#94a3b8]/60">
+                thread-local · 30s auto-refresh
+              </span>
+            </CardHeader>
+            <CardContent>
+              <ActivityFeed
+                userId={currentUser?.user_id ?? null}
+                threadId={currentThread.thread_id}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Learning Profile V6 — progression cross-thread (§35/§36) */}
+          <LearningProfileCard userId={currentUser?.user_id ?? null} />
+
+          {/* Code Practice V5.2 — éditeur + analyse (§24-§31) */}
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-[13px]">
+                <Terminal size={13} className="text-[#6c63ff]" strokeWidth={1.8} />
+                Code Practice
+              </CardTitle>
+              <span className="font-mono text-[10px] text-[#94a3b8]/60">
+                sandbox isolée · python
+              </span>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <CodeEditor
+                  userId={currentUser?.user_id ?? null}
+                  threadId={currentThread.thread_id}
+                />
+                <CodeAnalysisPanel analysis={null} />
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Identifiants + compteurs */}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">

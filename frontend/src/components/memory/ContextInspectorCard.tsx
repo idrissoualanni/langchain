@@ -105,6 +105,7 @@ export function ContextInspectorCard({
   const [openKnowledge, setOpenKnowledge] = useState(true);
   const [openTools, setOpenTools] = useState(false);
   const [openPrompt, setOpenPrompt] = useState(false);
+  const [openLearning, setOpenLearning] = useState(false);
 
   const runPreview = async () => {
     if (!userId || !query.trim()) return;
@@ -370,6 +371,67 @@ export function ContextInspectorCard({
                 {preview.thread.text || '— vide —'}
               </pre>
             </Section>
+
+            {/* V6 — Learning context sélectionné (source n°7) */}
+            {preview.learning && (
+              <Section
+                title="learning"
+                badge={
+                  preview.learning.status === 'active'
+                    ? `${preview.learning.subject}/${preview.learning.topic}`
+                    : preview.learning.status
+                }
+                open={openLearning}
+                onToggle={() => setOpenLearning(!openLearning)}
+              >
+                {preview.learning.status === 'active' ? (
+                  <div className="space-y-1 font-mono text-[10.5px]">
+                    <div className="text-[#f5f7fa]/85">
+                      mastery :{' '}
+                      {preview.learning.mastery === null
+                        ? '— (jamais évalué)'
+                        : `${Math.round(preview.learning.mastery * 100)}%`}
+                      {preview.learning.confidence !== null && (
+                        <span className="text-[#94a3b8]">
+                          {' '}
+                          (conf.{' '}
+                          {Math.round(
+                            preview.learning.confidence * 100
+                          )}
+                          %)
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[#94a3b8]">
+                      attempts : {preview.learning.attempts}
+                    </div>
+                    {preview.learning.weak_points.length > 0 && (
+                      <div className="text-[#f59e0b]">
+                        weak :{' '}
+                        {preview.learning.weak_points.join(', ')}
+                      </div>
+                    )}
+                    {preview.learning.strengths.length > 0 && (
+                      <div className="text-[#22c55e]">
+                        strengths :{' '}
+                        {preview.learning.strengths.join(', ')}
+                      </div>
+                    )}
+                    {preview.learning.goal && (
+                      <div className="text-[#6c63ff]">
+                        goal : {preview.learning.goal.description}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="font-mono text-[10.5px] text-[#94a3b8]/60">
+                    {preview.learning.status === 'not_started'
+                      ? 'Pas encore de progression suivie (cas normal).'
+                      : 'Indisponible (erreur de lecture — fallback silencieux).'}
+                  </div>
+                )}
+              </Section>
+            )}
 
             <Section
               title="prompt"

@@ -312,6 +312,19 @@ memory_tools = [
 # branchées sur la base knowledge — pas des simulations)
 # ------------------------------------------------------------------
 
+from app.agent.learning_tools import learning_tools  # noqa: E402
 from app.agent.pedagogical_tools import pedagogical_tools  # noqa: E402
 
-all_tools = tools + memory_tools + pedagogical_tools
+# V5.2 — capability tools de pratique du code (execute_code /
+# run_tests / analyze_code). Disponibles UNIQUEMENT si le
+# SubjectConfig les déclare (garde interne, §37) — le modèle les
+# voit, mais chaque appel vérifie l'autorisation du subject.
+from app.agent.code_tools import code_tools  # noqa: E402
+
+all_tools = (
+    tools
+    + memory_tools
+    + pedagogical_tools
+    + learning_tools
+    + code_tools
+)

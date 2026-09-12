@@ -33,6 +33,16 @@ MEMORY_TOOL_NAMES = {
     "search_user_memory",
 }
 
+# Tools Learning Profile V6 (§23) : user_id forcé depuis le
+# Runtime Context — le modèle ne peut pas accéder au profil
+# d'apprentissage d'un autre étudiant.
+LEARNING_TOOL_NAMES = {
+    "get_learning_profile",
+    "get_learning_topic",
+    "record_learning_observation",
+    "update_learning_goal",
+}
+
 
 def _snapshot(value, limit: int = 500) -> str:
     """Sérialise args/output de tool de façon robuste (JSON ou str)."""
@@ -157,8 +167,11 @@ class ToolEventMiddleware(AgentMiddleware):
             getattr(request, "runtime", None)
         )
 
-        # --- Sécurité mémoire : forcer le user_id réel ---
-        if name in MEMORY_TOOL_NAMES and user_id:
+        # --- Sécurité mémoire + learning (§23) : forcer le
+        # user_id réel du Runtime Context ---
+        if (
+            name in MEMORY_TOOL_NAMES or name in LEARNING_TOOL_NAMES
+        ) and user_id:
             forced_args = {**args, "user_id": user_id}
             call = {**call, "args": forced_args}
             request = request.override(tool_call=call)

@@ -18,9 +18,13 @@ tools:
     - create_exercise
     - evaluate_answer
     - give_hint
-  specialized:
-    - verify_solution
-    - symbolic_calculation
+    - create_quiz
+    - assess_understanding
+    - propose_review
+  specialized: []  # mission intégration §25 : verify_solution /
+                   # symbolic_calculation non implémentés retirés —
+                   # le Tool Registry ne doit déclarer QUE des
+                   # tools réels (§39 : jamais de faux tool au LLM)
 knowledge:
   sources:
     - mathematics/algebre/equations

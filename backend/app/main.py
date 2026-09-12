@@ -7,9 +7,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.agent.graph import get_agent
 from app.api import (
+    activity,
     chat,
     context,
     health,
+    learning,
     logs,
     memory,
     subjects,
@@ -82,6 +84,8 @@ app.include_router(logs.router)
 app.include_router(health.router)
 app.include_router(subjects.router)
 app.include_router(context.router)
+app.include_router(learning.router)
+app.include_router(activity.router)
 
 # SSE — événements agent temps réel
 app.add_api_route(
