@@ -277,6 +277,7 @@ class ContextPreviewResponse(BaseModel):
     router: dict
     subject: dict | None
     knowledge: dict
+    web: dict | None = None  # V6.5 §29 : SearchWebResponse web fallback
     tools: dict
     user: dict
     thread: dict

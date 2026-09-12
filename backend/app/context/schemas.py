@@ -91,28 +91,117 @@ class RoutingResult(BaseModel):
 # ------------------------------------------------------------------
 
 
-class KnowledgeResult(BaseModel):
-    """Une section knowledge pertinente récupérée pour le run."""
+class SearchResult(BaseModel):
+    """Résultat de recherche UNIFIÉ V6.5 (§3 Search Contract).
 
-    source: str = Field(
-        description="Chemin source (ex: python/functions)",
+    Toute source (knowledge local, web) produit ce format — le
+    Context Builder ne consomme QUE ça. Jamais de chaîne
+    concaténée brute.
+    """
+
+    title: str = Field(
+        default="",
+        description="Titre lisible (ex: « Python — Fonctions »)",
     )
-    topic: str = Field(
-        description="Topic de la section (ex: return)",
+    source: str = Field(
+        description="Chemin/origine (ex: python/functions, "
+        "docs.python.org)",
+    )
+    url: str | None = Field(
+        default=None,
+        description="URL si source web, None si knowledge local",
     )
     content: str = Field(
-        description="Contenu de la section du cours",
+        description="Contenu exploitable de la source",
+    )
+    snippet: str | None = Field(
+        default=None,
+        description="Extrait court (web) — None si non pertinent",
     )
     relevance: float = Field(
         default=0.0,
         ge=0.0,
         le=1.0,
-        description="Score de pertinence [0..1]",
+        description="Score de pertinence [0..1] (formule §42-C)",
+    )
+    source_type: Literal[
+        "local_knowledge",
+        "web",
+        "user_document",
+        "other",
+    ] = Field(
+        default="local_knowledge",
+        description="Type de source — JAMAIS inventé (§26)",
+    )
+    metadata: dict = Field(
+        default_factory=dict,
+        description="Métadonnées internes (topic, section...)",
     )
 
 
+class SearchResponse(BaseModel):
+    """Réponse de recherche unifiée V6.5 (§3).
+
+    status :
+      found        → ≥1 résultat ≥ seuil
+      insufficient → sources parcourues, rien de pertinent
+      unavailable  → source indisponible (pas de config / pas
+                     de clé / service absent)
+      error        → échec technique (exception, réseau)
+    """
+
+    status: Literal[
+        "found",
+        "insufficient",
+        "unavailable",
+        "error",
+    ] = Field(default="unavailable")
+    query: str = Field(
+        default="",
+        description="Requête NORMALISÉE réellement cherchée",
+    )
+    results: list[SearchResult] = Field(default_factory=list)
+
+
+class KnowledgeResult(SearchResult):
+    """Une section knowledge pertinente récupérée pour le run.
+
+    Hérite SearchResult (source_type=local_knowledge) + garde
+    topic en champ dédié pour le pont Registry↔knowledge.
+    """
+
+    topic: str = Field(
+        default="",
+        description="Topic de la section (ex: return) — champ "
+        "pratique redondant avec metadata['section']",
+    )
+
+    @classmethod
+    def from_search(
+        cls, r: SearchResult, topic: str
+    ) -> "KnowledgeResult":
+        """Conversion SearchResult → KnowledgeResult."""
+        return cls(
+            title=r.title,
+            source=r.source,
+            url=r.url,
+            content=r.content,
+            snippet=r.snippet,
+            relevance=r.relevance,
+            source_type=r.source_type,
+            metadata=r.metadata,
+            topic=topic,
+        )
+
+
 class KnowledgeSearchResult(BaseModel):
-    """Résultat complet d'une recherche knowledge (§38)."""
+    """Résultat complet d'une recherche knowledge (§38).
+
+    Compatibilité V5 : garde status 3-valeurs + items — le
+    pipeline V6.5 consomme SearchResponse, le BuiltContext
+    expose cette vue. status "error" est replié en
+    "insufficient" ici (l'erreur est loggée SEARCH_ERROR).
+    """
 
     status: Literal["found", "insufficient", "unavailable"] = (
         Field(
@@ -215,6 +304,14 @@ class BuiltContext(BaseModel):
     knowledge: KnowledgeSearchResult = Field(
         default_factory=KnowledgeSearchResult
     )
+    web: "SearchResponse" = Field(
+        default_factory=lambda: SearchResponse(
+            status="unavailable"
+        ),
+        description="Recherche web V6.5 (§24) — remplie uniquement "
+        "si knowledge insuffisant ET matière supportée. "
+        "status=unavailable sinon (aucune tentative).",
+    )
     tools: ResolvedTools = Field(default_factory=ResolvedTools)
     user: UserContextInfo = Field(
         default_factory=UserContextInfo
@@ -235,6 +332,8 @@ class BuiltContext(BaseModel):
 __all__ = [
     "AgentContext",
     "RoutingResult",
+    "SearchResult",
+    "SearchResponse",
     "KnowledgeResult",
     "KnowledgeSearchResult",
     "ResolvedTools",

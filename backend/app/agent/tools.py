@@ -1,8 +1,6 @@
 # Tools de l'agent — repris de ap.py, log_event structuré au lieu de logger brut
 from langchain_core.tools import tool
 
-import ollama
-
 from app.agent.memory import (
     delete_fact,
     list_facts,
@@ -12,7 +10,6 @@ from app.agent.memory import (
     update_fact,
     write_profile,
 )
-from app.config import OLLAMA_API_KEY, OLLAMA_HOST
 from app.logging.events import log_event
 
 
@@ -68,7 +65,11 @@ def recherche_web(
     query: str,
     max_results: int = 3,
 ) -> str:
-    """Effectue une recherche web avec Ollama."""
+    """Effectue une recherche web structurée (V6.5) et renvoie
+    les résultats pertinents : titre, URL, extrait et score de
+    pertinence pour chacun — jamais une chaîne concaténée brute.
+    Indique clairement si la recherche est indisponible ou
+    sans résultat pertinent."""
 
     log_event(
         "TOOL_CALL",
@@ -76,53 +77,49 @@ def recherche_web(
         tool_name="recherche_web",
     )
 
-    if not OLLAMA_API_KEY:
-        log_event(
-            "WEB_SEARCH_UNAVAILABLE",
-            level="WARNING",
-            message="OLLAMA_API_KEY absente — recherche web indisponible",
-            tool_name="recherche_web",
-        )
+    from app.context.web_search import web_search
+
+    response = web_search(
+        user_query=query,
+        subject=None,
+        topic=None,
+        language="fr",
+        top_k=max_results,
+    )
+
+    log_event(
+        "TOOL_RESULT",
+        message=(
+            f"recherche_web status={response.status} "
+            f"results={len(response.results)}"
+        ),
+        tool_name="recherche_web",
+    )
+
+    if response.status == "unavailable":
         return (
-            "Recherche web indisponible : "
-            "OLLAMA_API_KEY non configurée."
+            "Recherche web indisponible (service ou clé absente). "
+            "Réponds avec tes connaissances générales et signale-le."
         )
-
-    try:
-        client = ollama.Client(
-            host=OLLAMA_HOST,
-            headers={"Authorization": f"Bearer {OLLAMA_API_KEY}"},
-        )
-        results = client.web_search(query=query, max_results=max_results)
-
-        output = []
-
-        for result in results.results:
-            output.append(
-                f"{result.title} — "
-                f"{result.url}\n"
-                f"{result.content[:500]}"
-            )
-
-        log_event(
-            "TOOL_RESULT",
-            message=f"recherche_web results={len(output)}",
-            tool_name="recherche_web",
-        )
-
-        return "\n\n".join(output)
-
-    except Exception as exc:
-        # Le message d'erreur retourne au LLM (ToolMessage) — l'agent peut poursuivre
-        log_event(
-            "TOOL_ERROR",
-            level="ERROR",
-            message=f"recherche_web error: {exc}",
-            tool_name="recherche_web",
-        )
+    if response.status == "error":
         return (
-            f"Erreur recherche web : {exc}"
+            "Erreur de recherche web. Réponds avec tes "
+            "connaissances générales et signale-le."
         )
+    if not response.results:
+        return (
+            "Recherche web : aucun résultat pertinent trouvé. "
+            "Réponds avec tes connaissances générales et signale-le."
+        )
+
+    lines = []
+    for i, r in enumerate(response.results, 1):
+        lines.append(
+            f"[{i}] {r.title}\n    URL : {r.url}\n"
+            f"    Pertinence : {r.relevance:.2f}\n"
+            f"    {r.snippet or r.content[:200]}"
+        )
+    return "\n\n".join(lines)
 
 
 tools = [

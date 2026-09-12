@@ -27,12 +27,14 @@ from app.context.schemas import (
     KnowledgeSearchResult,
     ResolvedTools,
     RoutingResult,
+    SearchResponse,
     SubjectContextInfo,
     ThreadContextInfo,
     UserContextInfo,
 )
 from app.context.thread_context import build_thread_context
 from app.context.user_context import build_user_context
+from app.context.web_search import web_search
 from app.learning.learning_context import get_learning_context
 from app.learning.schemas import LearningContextInfo
 from app.logging.events import log_event
@@ -230,6 +232,113 @@ def build_context(
                 },
             )
 
+    # --- 3b. PIPELINE DE FALLBACK V6.5 (§24-§26) ---
+    # knowledge insuffisant (parcouru, rien de pertinent) ET
+    # matière SUPPORTÉE (§16 : subject_supported ≠ knowledge_found)
+    # → tentative WEB. Aucune tentative pour unsupported/unknown :
+    # pas de matière = pas d'ancrage de recherche (§36 noise).
+    # §26 : knowledge_unavailable n'est JAMAIS transformé en
+    # knowledge_found — le statut original est conservé, le web
+    # est une SOURCE SÉPARÉE (BuiltContext.web).
+    web_response = SearchResponse(status="unavailable")
+    if (
+        cfg
+        and not knowledge.items
+        and knowledge.status == "insufficient"
+    ):
+        log_event(
+            "SEARCH_START",
+            message=(
+                f"Search fallback pipeline | subject={cfg.id} | "
+                f"local=insufficient → web"
+            ),
+            user_id=user_id,
+            thread_id=thread_id,
+            extra={
+                "operation": "search_pipeline",
+                "subject": cfg.id,
+                "topic": routing.topic or "",
+                "query": (query or "")[:100],
+                "stage": "web_fallback",
+            },
+        )
+        web_response = web_search(
+            user_query=query,
+            subject=cfg.id,
+            topic=routing.topic,
+            language="fr",
+            top_k=3,
+            user_id=user_id,
+            thread_id=thread_id,
+        )
+        log_event(
+            "SEARCH_END",
+            message=(
+                f"Search pipeline end | subject={cfg.id} | "
+                f"web={web_response.status} | "
+                f"results={len(web_response.results)}"
+            ),
+            user_id=user_id,
+            thread_id=thread_id,
+            extra={
+                "operation": "search_pipeline",
+                "subject": cfg.id,
+                "topic": routing.topic or "",
+                "query": (query or "")[:100],
+                "status": web_response.status,
+                "result_count": len(web_response.results),
+                "best_relevance": (
+                    web_response.results[0].relevance
+                    if web_response.results
+                    else None
+                ),
+            },
+        )
+        # §28 : événement résultat/no-result dédié
+        if web_response.results:
+            log_event(
+                "SEARCH_RESULT",
+                message=(
+                    f"Search results | count="
+                    f"{len(web_response.results)} | best="
+                    f"{web_response.results[0].relevance}"
+                ),
+                user_id=user_id,
+                thread_id=thread_id,
+                extra={
+                    "operation": "search_pipeline",
+                    "subject": cfg.id,
+                    "topic": routing.topic or "",
+                    "query": (query or "")[:100],
+                    "result_count": len(web_response.results),
+                    "best_relevance": (
+                        web_response.results[0].relevance
+                    ),
+                    "sources": [
+                        r.source for r in web_response.results
+                    ][:5],
+                },
+            )
+        else:
+            log_event(
+                "SEARCH_NO_RESULT",
+                level="WARNING",
+                message=(
+                    f"Search no result | web="
+                    f"{web_response.status} → General Tutor"
+                ),
+                user_id=user_id,
+                thread_id=thread_id,
+                extra={
+                    "operation": "search_pipeline",
+                    "subject": cfg.id,
+                    "topic": routing.topic or "",
+                    "query": (query or "")[:100],
+                    "status": web_response.status,
+                    "result_count": 0,
+                },
+            )
+
     # --- 4. TOOLS (resolve_tools — §28/§39) ---
     available_tools, unavailable_tools = resolve_tools_for_subject(
         routing.subject
@@ -304,6 +413,7 @@ def build_context(
         routing=routing,
         subject=subject_info,
         knowledge=knowledge,
+        web=web_response,
         tools=tools,
         user=user,
         thread=thread,

@@ -1141,3 +1141,194 @@ logs/agent.log   database/ (checkpoints.db long_term_memory.db code_runs/)
 ---
 
 **Fin du rapport de mission intégration.** Le système est désormais un tuteur IA complet : routing de matière, contexte structuré, mémoire longue durée, activités pédagogiques interactives avec workflow multi-tours, pratique du code sandboxée, et profil d'apprentissage persistant cross-thread — le tout testé de bout en bout sur la branche principale.
+
+---
+
+# 34. MISSION V6.5 — SEARCH, RETRIEVAL & FALLBACK QUALITY
+
+**Date :** 12 septembre 2026
+**Branche :** `master`
+**Objectif :** améliorer ROUTING + KNOWLEDGE RETRIEVAL + WEB SEARCH + FALLBACK — paraphrases, questions vagues, knowledge insuffisant, sujets inconnus, recherches web, absence de résultats, résultats peu pertinents. SANS RAG vectoriel, SANS Qdrant, SANS nouveau modèle obligatoire (§40/§41 respectés).
+
+---
+
+## 34.A. Architecture de recherche (§42-A)
+
+```
+USER QUERY
+    ↓ normalize_query (§8 : accents/casse/ponctuation/whitespace)
+ROUTER déterministe (Registry YAML : aliases + topics)
+    ↓ variantes morphologiques (fonction ≈ fonctions, §8)
+    ↓ aliases multi-mots par COUVERTURE de tokens (ordre libre)
+    ↓ confidence graduée : 0.95/0.85 (phrase exacte) · 0.80 (tokens, paraphrase) · 0.55 (topic seul)
+    ↓ status : supported / ambiguous (candidates) / unsupported / unknown / multi_domain
+SUBJECT/TOPIC
+    ↓
+LOCAL KNOWLEDGE (search_knowledge §4)
+    formule composite §42-C → tri → seuil 0.3 → top_k
+    ↓
+résultat suffisant ? (items ≥ 1)
+ ┌───────────┴───────────┐
+ oui                     non (insufficient + matière supportée §16)
+ ↓                       ↓
+CONTEXT              WEB SEARCH (web_search §17)
+                         plan §18 → Ollama web_search → normalisation §20
+                         ranking §21 → seuil 0.15 → top_k §22
+                         ↓
+                    suffisant ?
+                    ┌────┴────┐
+                   oui       non / error / unavailable
+                   ↓           ↓
+                CONTEXT    GENERAL TUTOR (§25, transparent)
+```
+
+Jamais de recherche web pour `unknown` (§36 noise) ni `unsupported` (§15 : pas d'ancrage de matière, pas de SubjectConfig fabriqué).
+
+---
+
+## 34.B. Schéma de recherche (§42-B)
+
+`SearchResult` (context/schemas.py) — unifié pour TOUTES les sources :
+
+| Champ | Type | Rôle |
+|---|---|---|
+| `title` | str | Titre lisible (« Python — Fonctions », titre web) |
+| `source` | str | python/functions, docs.python.org |
+| `url` | str\|None | None si local |
+| `content` | str | Contenu exploitable |
+| `snippet` | str\|None | Extrait court (web) |
+| `relevance` | float [0..1] | Formule §42-C |
+| `source_type` | Literal | local_knowledge / web / user_document / other — **Literal protégé, jamais inventé** (test 3b) |
+| `metadata` | dict | Internes (section, source_quality) — **jamais dans le prompt** (§27, testé) |
+
+`SearchResponse` : `status: Literal[found, insufficient, unavailable, error]` + `query` (normalisée) + `results: list[SearchResult]`. « found = [] » n'existe plus (§23 : chaque échec a son statut, tests 33a/33b).
+
+`KnowledgeResult` hérite `SearchResult` (source_type=local_knowledge + champ topic pratique) — pas de duplication. `BuiltContext.web : SearchResponse` (default status=unavailable = aucune tentative). `KnowledgeSearchResult` compat V5 conservée.
+
+---
+
+## 34.C. Formules de ranking (§42-C) — documentées et testées
+
+**Knowledge local (knowledge_retriever.py)** :
+
+```
+relevance = 0.30 × topic_score      (section exacte 1.0 / variante morphologique 0.5)
+          + 0.25 × title_score      (couverture tokens requête par le titre H1 du fichier)
+          + 0.20 × phrase_score     (requête entière 1.0 / sous-phrase ≥2 mots 0.4+0.15×taille)
+          + 0.15 × content_score    (containment tokens, stop-words retirés)
+          + 0.10 × subject_score    (matière ou alias §9 explicite dans la requête)
+```
+
+Le topic reste dominant (0.30) : « c'est quoi return » → section `return` avant `definition` (test 34c). Pont Registry↔knowledge V6 **INTACT** (§5 : fonctions→functions.md, boucles→loops.md, cellule→cell.md — retestés).
+
+**Web (web_search.py)** :
+
+```
+web_relevance = 0.35 × coverage   (tokens requête web couverts par titre+contenu)
+              + 0.20 × title     (tokens dans le titre)
+              + 0.15 × topic     (topic du routing matche)
+              + 0.20 × source_quality  (docs.python.org 1.0, MDN/w3/IETF 0.9, Wikipedia 0.7, Khan/OC 0.6, inconnu 0.0)
+              + 0.10 × content   (tokens dans le contenu)
+```
+
+Coverage domine (0.35) : un résultat hors-sujet reste hors-sujet même officiel. Source quality départage à coverage égal ; domaine inconnu = 0, **aucune source officielle fabriquée** (§19, test 19). Seuil web 0.15, top_k 3 par défaut.
+
+**Variantes morphologiques (query_norm.py, §8)** : accents NFD, lowercase, ponctuation→espace, whitespace collapsé, singulier contrôlé (s/es finaux, mots ≥4 lettres). Générique par règles de suffixe — **zéro `if subject ==`**, aucune liste de matières.
+
+---
+
+## 34.D. Matrice de fallback (§42-D)
+
+| Situation | Action | Testé |
+|---|---|---|
+| supported + knowledge found | contexte local (web non tenté) | 37a, v5/v6-int |
+| supported + insufficient | web search (matière supportée §16) | 32a-c (asyncio réel → 0.76 docs.python.org) |
+| web found | contexte web + knowledge note | §27 (RECHERCHE WEB dans prompt) |
+| web insufficient/unavailable/error | General Tutor transparent | 33a/33b + prompt note |
+| ambiguous | clarification (candidates, aucun choix inventé) | 31 |
+| unknown | General Tutor / clarification, **zéro recherche web** | 36a-c |
+| unsupported | General Tutor (aucune config/knowledge/tool fabriqué) | S50 v5-arch |
+| search error | fallback, agent continue, WEB_SEARCH_ERROR loggé | 33b |
+
+---
+
+## 34.E. Tests — résultats exacts (§42-E)
+
+| Suite | Résultat |
+|---|---|
+| test_v5_architecture.py | **30/30 PASS** |
+| test_v6_learning.py | **35/35 PASS** |
+| test_v52_unit.py | **58/58 PASS** |
+| **test_v65_search.py (NOUVEAU)** | **23/23 PASS** |
+| test_v5_integration.py | **10/10 PASS** |
+| test_v6_integration.py | **11/11 PASS** |
+| test_final_integration.py | **19/19 PASS** |
+
+**Total : 186/186 PASS (163 régression + 23 nouvelles), zéro échec critique (§39 > 163/163 requis).**
+
+Nouveaux tests §30-§38 : 30a paraphrase ordinateurs→computer_networks 0.80 · 30b variantes morphologiques · 31 ambiguïté réseaux conservée · 32a-b knowledge absent→web (insufficient détecté, tentative effectuée) · 33a clé absente→unavailable · 33b exception→error sans crash · 34a-c ranking pertinent>non-pertinent (web + knowledge) · 35 top_k 10→3 · 36a-c noise zéro recherche · 37a-b sources séparées (local≠web≠memory) · 38a-b routing indépendant du Learning Profile · 3a-b Literal protégés · 19 source quality sans invention.
+
+---
+
+## 34.F. Observabilité (§28)
+
+Événements émis : `SEARCH_START` / `SEARCH_END` / `SEARCH_RESULT` / `SEARCH_NO_RESULT` (pipeline) · `WEB_SEARCH_START` / `WEB_SEARCH_END` / `WEB_SEARCH_ERROR` / `WEB_SEARCH_UNAVAILABLE` (web) · `KNOWLEDGE_SEARCH` / `KNOWLEDGE_SELECTED` / `KNOWLEDGE_UNAVAILABLE` (local, V5). Chacun porte user_id/thread_id/query/subject/topic/result_count/status (+best_relevance quand applicable). Grep anti-secrets : **aucune clé/token/credential loggée**.
+
+---
+
+## 34.G. Frontend (§29)
+
+- `types/agent.ts` : `SearchResultItem` + `SearchWebResponse` + `ContextPreview.web?`
+- `ContextInspectorCard.tsx` : section **search · web** (badge `status · N`, query affichée, best %, URLs, snippets) — masquée si aucune tentative (unavailable) ; en échec affiche « Web search {status} → fallback: General Tutor ». Aucun détail interne (source_quality) exposé.
+- `api/schemas.py` : `ContextPreviewResponse.web` exposé.
+- Gates : `tsc -b` 0 erreur, `vite build` ✓.
+
+---
+
+## 34.H. Hardcodes et heuristiques nouvelles (§42-G)
+
+| Heuristique | Localisation | Générique ? |
+|---|---|---|
+| Pondérations ranking (0.30/0.25/0.20/0.15/0.10, web 0.35/0.20/0.15/0.20/0.10) | constantes nommées documentées | oui — aucune matière |
+| Variantes morphologiques (s/es/x) | query_norm.py, règles de suffixe | oui |
+| Aliases enrichis (ordinateurs communiquent, closures, decorateurs, generateurs) | YAML matières (source déclarative §9) | oui — données, pas code |
+| Domaines éditoriaux (docs.python.org 1.0…) | web_search.py `_OFFICIAL_DOMAINS` | **documenté** : liste de domaines éditoriaux transverses, pas de matière ; extensible en données si besoin |
+| Seuils 0.3 (local) / 0.15 (web) | constantes nommées | oui |
+
+Zéro `if subject ==` dans le code (re-vérifié).
+
+## 34.I. Limitations honnêtes (§42-H)
+
+1. **Tout reste lexical** (§40 : pas d'embeddings) — la pertinence est un matching de tokens/variantes, pas sémantique. Une paraphrase sans aucun mot-racine commun (ex. « fermetures » pour closures) reste invisible au router tant qu'aucun alias YAML ne la couvre.
+2. **La reconnaissance de paraphrase dépend des aliases YAML** — « Comment communiquent les ordinateurs » est reconnu parce que l'alias est déclaré ; ce n'est pas de la compréhension. Étendre la couverture = enrichir le YAML (voulu, source déclarative).
+3. **Le singulier morphologique est heuristique** — mots ≥4 lettres, s/es finaux ; « cours » (déjà singulier) n'est pas touché (règle x désactivée), mais des faux-positifs restent possibles sur de rares pluriels irréguliers.
+4. **Web search dépend du service Ollama cloud** — quand il échoue, le statut est propre (unavailable/error) et le General Tutor prend le relais, mais aucune recherche alternative n'existe (§41 : pas de nouveau provider).
+5. **Topic exact vs ambigu dans une requête multi-topics** — « le return des fonctions » route sur le premier topic YAML matché (fonctions) ; acceptable (le sujet est couvert), un désambiguïsateur pondéré serait une évolution.
+6. **Le semantic fallback du router (§11-§12)** est ici purement lexical (variantes + couverture tokens) — conforme à la mission (« peut rester simple »), mais ce n'est pas du sémantique au sens embeddings.
+
+---
+
+## 34.J. Definition of Done (§43) — vérifiée
+
+| Critère | Statut |
+|---|---|
+| ✅ SearchResult structuré | §34.B, Literal protégé (test 3b) |
+| ✅ SearchResponse structuré | status 4 valeurs (test 3a) |
+| ✅ local knowledge ranking amélioré | formule composite §34.C (test 34c) |
+| ✅ web search structuré | web_search.py + recherche_web reconnecté |
+| ✅ fallback search fonctionnel | pipeline §34.A (asyncio réel found 0.76) |
+| ✅ unknown/ambiguous/unsupported propres | 31/36a-c/S50 |
+| ✅ relevance score | documenté + testé |
+| ✅ top_k | test 35 (10→3) |
+| ✅ observabilité | §34.F |
+| ✅ frontend inspector | §34.G |
+| ✅ paraphrase test | 30a/30b |
+| ✅ web failure test | 33a/33b |
+| ✅ no invention | §26 (knowledge jamais found, domaines 0, unknown sans matière) |
+| ✅ 163/163 régression | 186/186 (163 + 23) |
+| ✅ aucun RAG vectoriel | zéro embedding/vector DB |
+| ✅ aucun nouveau provider obligatoire | Ollama existant uniquement |
+
+---
+
+**Fin du rapport V6.5.** Le socle 163/163 est intact, enrichi de 23 tests search/retrieval/fallback : le router reconnaît les paraphrases déclarées avec confiance graduée, le knowledge local est classé par formule composite documentée, la recherche web est structurée (plan → normalisation → ranking → top_k → statut), et le pipeline local→web→General Tutor est fonctionnel, observable et testé de bout en bout — sans une ligne de RAG vectoriel ni de nouveau provider.

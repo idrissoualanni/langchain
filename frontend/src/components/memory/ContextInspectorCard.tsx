@@ -35,6 +35,13 @@ const KNOWLEDGE_TONES: Record<string, string> = {
   unavailable: 'text-[#94a3b8]',
 };
 
+const SEARCH_TONES: Record<string, string> = {
+  found: 'text-[#22c55e]',
+  insufficient: 'text-[#f59e0b]',
+  unavailable: 'text-[#94a3b8]',
+  error: 'text-[#ef4444]',
+};
+
 function Section({
   title,
   open,
@@ -103,6 +110,7 @@ export function ContextInspectorCard({
   const [openThread, setOpenThread] = useState(false);
   const [openSubject, setOpenSubject] = useState(false);
   const [openKnowledge, setOpenKnowledge] = useState(true);
+  const [openSearch, setOpenSearch] = useState(false);
   const [openTools, setOpenTools] = useState(false);
   const [openPrompt, setOpenPrompt] = useState(false);
   const [openLearning, setOpenLearning] = useState(false);
@@ -330,6 +338,68 @@ export function ContextInspectorCard({
                 ))}
               </div>
             </Section>
+
+            {/* V6.5 §29 — Search Inspector (web fallback) */}
+            {preview.web && preview.web.status !== 'unavailable' && (
+              <Section
+                title="search · web"
+                badge={
+                  preview.web.status +
+                  (preview.web.results.length
+                    ? ` · ${preview.web.results.length}`
+                    : '')
+                }
+                open={openSearch}
+                onToggle={() => setOpenSearch(!openSearch)}
+              >
+                <div className="space-y-2">
+                  <div
+                    className={`font-mono text-[10.5px] ${
+                      SEARCH_TONES[preview.web.status] ?? 'text-[#94a3b8]'
+                    }`}
+                  >
+                    web : {preview.web.status} · query :{' '}
+                    <span className="text-[#f5f7fa]/70">
+                      {preview.web.query}
+                    </span>
+                  </div>
+                  {preview.web.results.map((r, i) => (
+                    <div
+                      key={i}
+                      className="rounded-lg border border-[#26323d] bg-[#0b0f14] p-2.5"
+                    >
+                      <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
+                        <span className="min-w-0 truncate text-[#6c63ff]">
+                          {r.title || r.source}
+                        </span>
+                        <span className="shrink-0 text-[#94a3b8]">
+                          best {(r.relevance * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      {r.url && (
+                        <div className="mt-1 truncate font-mono text-[9.5px] text-[#94a3b8]/70">
+                          {r.url}
+                        </div>
+                      )}
+                      {r.snippet && (
+                        <div className="mt-1.5 line-clamp-3 text-[11px] leading-relaxed text-[#f5f7fa]/75">
+                          {r.snippet}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {preview.web.results.length === 0 && (
+                    <div className="rounded-lg border border-[#f59e0b]/30 bg-[#f59e0b]/10 px-2.5 py-2 font-mono text-[10.5px] text-[#f59e0b]">
+                      Web search {preview.web.status}
+                      <span className="text-[#94a3b8]">
+                        {' '}
+                        → fallback: General Tutor
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </Section>
+            )}
 
             <Section
               title="tools"

@@ -41,6 +41,9 @@ aliases:
   - tcp ip
   - protocole
   - dns
+  - communication entre ordinateurs
+  - communiquer entre ordinateurs
+  - ordinateurs communiquent
 model:
   provider: ollama
   name: qwen2.5

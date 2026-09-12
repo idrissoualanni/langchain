@@ -196,6 +196,25 @@ export interface KnowledgeContext {
   searched_sources: number;
 }
 
+// ---- V6.5 : Search unifié (§3 Search Contract) ----
+
+export interface SearchResultItem {
+  title: string;
+  source: string;
+  url: string | null;
+  content: string;
+  snippet: string | null;
+  relevance: number;
+  source_type: 'local_knowledge' | 'web' | 'user_document' | 'other';
+  metadata: Record<string, unknown>;
+}
+
+export interface SearchWebResponse {
+  status: 'found' | 'insufficient' | 'unavailable' | 'error';
+  query: string;
+  results: SearchResultItem[];
+}
+
 // ---- V5 : ToolsContext = ResolvedTools (resolve_tools §28/§39) ----
 
 export interface ToolsContext {
@@ -219,6 +238,7 @@ export interface ContextPreview {
   router: RouterInfo;
   subject: SubjectContextInfo | null;
   knowledge: KnowledgeContext;
+  web?: SearchWebResponse; // V6.5 §29 — search inspector
   tools: ToolsContext;
   user: { text: string; facts_count: number };
   thread: {

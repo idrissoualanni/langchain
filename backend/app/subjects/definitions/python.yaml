@@ -53,6 +53,9 @@ topics:
 aliases:
   - python
   - langage python
+  - closures
+  - decorateurs
+  - generateurs
 model:
   provider: ollama
   name: qwen2.5

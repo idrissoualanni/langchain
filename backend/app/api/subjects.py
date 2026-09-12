@@ -111,6 +111,7 @@ def build_context_preview(
         router=ctx["routing"],
         subject=ctx["subject"],
         knowledge=ctx["knowledge"],
+        web=ctx.get("web"),
         tools=ctx["tools"],
         user=ctx["user"],
         thread=ctx["thread"],

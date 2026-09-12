@@ -92,6 +92,43 @@ def build_system_prompt(
             "recherche_web si pertinent."
         )
 
+    # --- WEB (V6.5 §24/§27) — résultats structurés de la
+    #     recherche web de fallback. Source + contenu uniquement,
+    #     PAS les métadonnées internes (source_quality...). ---
+    if context.web and context.web.results:
+        lines = [
+            "## RECHERCHE WEB (fallback — le knowledge local "
+            "n'avait rien de pertinent)"
+        ]
+        for r in context.web.results:
+            label = r.source or (r.url or "source web")
+            lines.append("")
+            lines.append(f"### {r.title or label}")
+            lines.append(f"Source : {r.url or label}")
+            lines.append(r.snippet or r.content[:600])
+        lines.append(
+            "\nUtilise ces sources web avec précaution : cite-les "
+            "naturellement quand tu t'en appuies, n'invente pas "
+            "de contenu qu'elles ne contiennent pas."
+        )
+        parts.append("\n".join(lines))
+    elif (
+        subject
+        and context.knowledge.status == "insufficient"
+        and context.web
+        and context.web.status in ("insufficient", "unavailable", "error")
+    ):
+        # §25 : web échoué/insuffisant → General Tutor TRANSPARENT
+        parts.append(
+            "## NOTE DU SYSTÈME\n\n"
+            "Recherche web indisponible ou sans résultat pertinent "
+            "(statut : "
+            + context.web.status
+            + "). Enseigne en tuteur général : réponds avec tes "
+            "propres connaissances et signale honnêtement que ce "
+            "contenu ne provient d'aucune base vérifiée."
+        )
+
     # --- USER CONTEXT (mémoire sélectionnée — données utiles, §36) ---
     if context.user.text:
         parts.append(
