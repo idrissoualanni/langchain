@@ -24,6 +24,9 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   toolName?: string;
+  /** V6.7 : réponse structurée (AgentResponse) — le
+   * ResponseRenderer l'utilise au lieu de parser le texte. */
+  agentResponse?: import('./agentResponse').AgentResponse;
 }
 
 export type ToolStatus = 'idle' | 'running' | 'success' | 'error';
@@ -53,6 +56,8 @@ export interface AgentEvent {
   duration_ms?: number;
   checkpoint_id?: string;
   response?: string;
+  /** V6.7 : AgentResponse structurée sur ASSISTANT_MESSAGE */
+  agent_response?: import('./agentResponse').AgentResponse;
   interaction_count?: number;
 }
 
@@ -94,6 +99,10 @@ export interface Checkpoint {
   message_count: number;
   interaction_count: number;
   summary: string;
+  /** V6.8 audit §62 : nature du checkpoint — remplace le
+   * parsing du summary (user_message/tool_call/tool_result/
+   * assistant/state/message). */
+  kind: 'user_message' | 'tool_call' | 'tool_result' | 'assistant' | 'state' | 'message';
 }
 
 export interface ChatResponse {
@@ -234,11 +243,37 @@ export interface SubjectContextInfo {
   capabilities: string[];
 }
 
+// ---- V6.8 — Budget contexte (Inspector/dev §54, jamais étudiant) ----
+export interface ContextBudgetInfo {
+  estimated_input_tokens: number | null;
+  context_window: number | null;
+  reserved_output_tokens: number;
+  available_input_tokens: number | null;
+  budget_status: 'ok' | 'near_limit' | 'compressed' | 'exceeded' | 'unknown';
+  sources_used: number;
+  sources_dropped: number;
+}
+
+// ---- V6.6 — Décision de fallback (Inspector/dev §54) ----
+export interface FallbackInfo {
+  action:
+    | 'use_local_knowledge'
+    | 'use_web_search'
+    | 'ask_clarification'
+    | 'use_general_tutor'
+    | 'continue_without_external_search';
+  reason: string;
+  source_status: string;
+  confidence: number;
+  candidates: string[];
+}
+
 export interface ContextPreview {
   router: RouterInfo;
   subject: SubjectContextInfo | null;
   knowledge: KnowledgeContext;
   web?: SearchWebResponse; // V6.5 §29 — search inspector
+  fallback?: FallbackInfo; // V6.6 — décision fallback
   tools: ToolsContext;
   user: { text: string; facts_count: number };
   thread: {
@@ -247,6 +282,7 @@ export interface ContextPreview {
     text: string;
   };
   learning?: LearningContextData | null; // V6
+  budget?: ContextBudgetInfo; // V6.8 — budget
   prompt_preview: string;
   stats: Record<string, number>;
 }

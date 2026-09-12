@@ -25,12 +25,16 @@ import { TestResultPanel } from './TestResultPanel';
 interface CodeEditorProps {
   userId: string | null;
   threadId: string | null;
+  /** V6.7 : code de départ d'une activité de code (starter_code).
+   * Fourni par le SYSTÈME (activité), pas par le tuteur — la règle
+   * §31 (le tuteur n'écrit jamais le code) reste intacte. */
+  initialCode?: string;
 }
 
 const DEFAULT_CODE = '# Écrivez votre code Python ici\n# puis cliquez sur Exécuter pour le lancer dans la sandbox.\n';
 
-export function CodeEditor({ userId, threadId }: CodeEditorProps) {
-  const [code, setCode] = useState<string>(DEFAULT_CODE);
+export function CodeEditor({ userId, threadId, initialCode }: CodeEditorProps) {
+  const [code, setCode] = useState<string>(initialCode ?? DEFAULT_CODE);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<CodeRunResult | null>(null);
   const [error, setError] = useState<string | null>(null);

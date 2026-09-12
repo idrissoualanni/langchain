@@ -33,6 +33,7 @@ export function ChatInput({ onSend, disabled, running }: ChatInputProps) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
+          data-chat-input=""
           placeholder={
             disabled
               ? '// sélectionnez un utilisateur et un thread'

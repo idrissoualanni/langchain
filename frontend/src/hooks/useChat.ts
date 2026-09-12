@@ -172,6 +172,8 @@ export function useChat(
                 role: 'assistant',
                 content: event.response!,
                 timestamp: event.timestamp,
+                // V6.7 : réponse structurée (si backend l'émet)
+                agentResponse: event.agent_response,
               },
             ]);
           }

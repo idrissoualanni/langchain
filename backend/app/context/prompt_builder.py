@@ -1,3 +1,4 @@
+from app.context.fallback import fallback_note_for_prompt
 from app.context.schemas import BuiltContext
 from app.logging.events import log_event
 
@@ -42,7 +43,10 @@ def build_system_prompt(
             )
         parts.append("\n".join(lines))
 
-    # --- NOTES ROUTING (fallbacks = situations normales, §37) ---
+    # --- NOTES ROUTING + FALLBACK (V6.6 §8) — source
+    #     centralisée : fallback_note_for_prompt. Les situations
+    #     de fallback sont NORMALES (§37 V5) : la note explique
+    #     la RAISON au modèle sans détail technique interne. ---
     routing = context.routing
     if routing.status == "unsupported":
         parts.append(
@@ -67,6 +71,17 @@ def build_system_prompt(
             f"Question multi-domaines ({subs}). Peux-tu clarifier le "
             "domaine principal visé par l'étudiant ?"
         )
+    # V6.6 : note de décision de fallback (matrice §6) —
+    # transparente pour le LLM, jamais exposée brute au frontend
+    # étudiant (§32).
+    if context.fallback:
+        note = fallback_note_for_prompt(context.fallback)
+        if note:
+            parts.append(
+                "## " + note
+                if note.startswith("NOTE DU SYSTÈME")
+                else note
+            )
 
     # --- KNOWLEDGE (quoi enseigner — sections pertinentes) ---
     if context.knowledge.items:

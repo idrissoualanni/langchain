@@ -18,7 +18,20 @@ from app.agent.memory import (
     read_profile,
     search_facts,
 )
+from app.context.budget import (
+    BudgetSection,
+    apply_budget,
+    build_budget,
+    estimate_tokens,
+)
+from app.context.fallback import (
+    decide_fallback,
+    fallback_note_for_prompt,
+)
 from app.context.knowledge_retriever import search_knowledge
+from app.context.model_capabilities import (
+    get_model_capabilities,
+)
 from app.context.router import route_subject
 from app.context.schemas import (
     BuiltContext,
@@ -339,6 +352,24 @@ def build_context(
                 },
             )
 
+    # --- 3c. FALLBACK DECISION (V6.6 §6) — matrice pure ---
+    # Consomme routing/knowledge/web et produit UNE action
+    # explicite. Testable sans LLM (decide_fallback pur).
+    fallback = decide_fallback(
+        routing_status=routing.status,
+        subject=routing.subject,
+        topic=routing.topic,
+        knowledge_status=knowledge.status,
+        web_status=web_response.status,
+        has_web_results=bool(web_response.results),
+        query=query,
+        user_id=user_id,
+        thread_id=thread_id,
+    )
+    if routing.status == "ambiguous":
+        # §10 : candidates transmis pour la clarification
+        fallback.candidates = list(routing.candidates)
+
     # --- 4. TOOLS (resolve_tools — §28/§39) ---
     available_tools, unavailable_tools = resolve_tools_for_subject(
         routing.subject
@@ -398,6 +429,110 @@ def build_context(
         thread_id=thread_id,
     )
 
+    # --- 7b. CONTEXT BUDGET (V6.8 §40-§47) ---
+    # Sections par priorité §41 : P0 (system/message/activité)
+    # ne passent PAS par le builder — intouchables par contrat
+    # (§43/§46). Ici : P1 learning, P2 knowledge/web, P3 mémoire,
+    # P4 thread.
+    caps = get_model_capabilities()
+    budget = build_budget(caps)
+
+    def _sec(key: str, prio: int, text: str, payload=None):
+        return BudgetSection(
+            key=key,
+            priority=prio,
+            tokens=estimate_tokens(text),
+            payload=payload,
+        )
+
+    budget_sections = [
+        _sec("learning", 1, str(learning.model_dump())),
+        _sec(
+            "knowledge", 2,
+            "\n".join(i.content for i in knowledge.items),
+        ),
+    ]
+    if web_response.results:
+        budget_sections.append(
+            _sec(
+                "web_search", 2,
+                "\n".join(
+                    (r.content or "") + (r.snippet or "")
+                    for r in web_response.results
+                ),
+                [r.model_dump() for r in web_response.results],
+            )
+        )
+    if user.text:
+        budget_sections.append(
+            _sec("user_memory", 3, user.text)
+        )
+    if thread.text:
+        budget_sections.append(_sec("thread", 4, thread.text))
+
+    budget_result = apply_budget(
+        budget_sections,
+        window=caps.context_window,
+        reserved=caps.reserved_output_tokens,
+    )
+
+    # Appliquer les décisions du budget au BuiltContext.
+    # P0/P1 learning n'est jamais droppé par apply_budget (P1)
+    # — la branche learning ci-dessous est une défense théorique.
+    if "thread" in budget_result.dropped_keys:
+        thread.text = ""
+    if "user_memory" in budget_result.dropped_keys:
+        user.text = ""
+        relevant = []
+    if "web_search" in budget_result.dropped_keys:
+        web_response.results = []
+    else:
+        web_kept = [
+            s for s in budget_result.kept
+            if s.key == "web_search"
+        ]
+        if (
+            web_kept
+            and web_kept[0].payload is not None
+            and len(web_kept[0].payload) != len(
+                web_response.results
+            )
+        ):
+            # top_k réduit (§44) : garder les premiers (ordre
+            # de pertinence du ranking déjà trié)
+            web_response.results = web_response.results[
+                : len(web_kept[0].payload)
+            ]
+    if "knowledge" in budget_result.dropped_keys:
+        knowledge.items = []
+
+    log_event(
+        "CONTEXT_BUDGET",
+        message=(
+            f"Context budget | status={budget_result.budget_status} "
+            f"| est={budget_result.estimated_input_tokens}tok "
+            f"| used={budget_result.sources_used} "
+            f"dropped={budget_result.sources_dropped}"
+        ),
+        user_id=user_id,
+        thread_id=thread_id,
+        extra={
+            "operation": "context_budget",
+            "budget_status": budget_result.budget_status,
+            "estimated_input_tokens": (
+                budget_result.estimated_input_tokens
+            ),
+            "context_window": caps.context_window,
+            "reserved_output_tokens": (
+                caps.reserved_output_tokens
+            ),
+            "sources_used": budget_result.sources_used,
+            "sources_dropped": budget_result.sources_dropped,
+            "dropped_keys": budget_result.dropped_keys,
+            "model": caps.model_name,
+        },
+    )
+
     stats = ContextStats(
         memories_used=len(relevant),
         knowledge_items=len(knowledge.items),
@@ -407,6 +542,17 @@ def build_context(
             + len(thread.text)
             + sum(len(i.content) for i in knowledge.items)
         ),
+        estimated_input_tokens=(
+            budget_result.estimated_input_tokens
+        ),
+        context_window=caps.context_window,
+        reserved_output_tokens=caps.reserved_output_tokens,
+        available_input_tokens=(
+            budget.available_input_tokens
+        ),
+        budget_status=budget_result.budget_status,
+        sources_used=budget_result.sources_used,
+        sources_dropped=budget_result.sources_dropped,
     )
 
     context = BuiltContext(
@@ -414,6 +560,7 @@ def build_context(
         subject=subject_info,
         knowledge=knowledge,
         web=web_response,
+        fallback=fallback,
         tools=tools,
         user=user,
         thread=thread,
@@ -429,7 +576,8 @@ def build_context(
             f"subject={routing.subject} | status={routing.status} | "
             f"memories={stats.memories_used} | "
             f"knowledge={stats.knowledge_items} | "
-            f"learning={learning.status}"
+            f"learning={learning.status} | "
+            f"fallback={fallback.action}"
         ),
         user_id=user_id,
         thread_id=thread_id,
@@ -447,6 +595,8 @@ def build_context(
             "learning_mastery": learning.mastery,
             "tools": len(tools.available),
             "context_size": stats.context_size,
+            "fallback_action": fallback.action,
+            "fallback_reason": fallback.reason[:120],
             "user_memory_selected": [
                 f.get("id") for f in relevant
             ][:12],

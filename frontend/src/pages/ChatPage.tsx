@@ -146,7 +146,35 @@ export function ChatPage({
             )}
 
             {currentThread &&
-              messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)}
+              messages.map((msg) => (
+                <MessageBubble
+                  key={msg.id}
+                  message={msg}
+                  threadId={currentThread.thread_id}
+                  userId={currentUser?.user_id ?? null}
+                  onAction={(type) => {
+                    // Actions des cartes V6.7 → message chat
+                    if (type === 'request_hint') {
+                      sendMessage("Donne-moi un indice");
+                    } else if (type === 'submit_answer') {
+                      // L'étudiant tape sa réponse dans l'input —
+                      // le bouton met le focus dessus (pas de texte
+                      // pré-rempli : c'est SA réponse).
+                      (
+                        document.querySelector(
+                          'textarea[data-chat-input], input[data-chat-input]'
+                        ) as HTMLElement | null
+                      )?.focus();
+                    }
+                  }}
+                  onOption={(option) => {
+                    // Clarification §25 : bouton → réponse directe
+                    sendMessage(
+                      `Je parle de ${option.replace(/_/g, ' ')}.`
+                    );
+                  }}
+                />
+              ))}
 
             {currentThread &&
               toolExecutions.map((exec) => (

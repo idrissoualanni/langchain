@@ -268,12 +268,14 @@ export function MemoryPage() {
                         {i < history.length - 1 && (
                           <div className="absolute left-[5px] top-6 h-full w-px bg-[#26323d]" />
                         )}
-                        {/* Losange = checkpoint */}
+                        {/* Losange = checkpoint — couleur par champ
+                            structuré `kind` (V6.8 audit §62 : plus
+                            de parsing du texte summary) */}
                         <div
                           className={`relative mt-1 h-[10px] w-[10px] shrink-0 rotate-45 border ${
-                            cp.summary.includes('Tool')
+                            cp.kind === 'tool_call' || cp.kind === 'tool_result'
                               ? 'border-[#f59e0b] bg-[#f59e0b]/25'
-                              : cp.summary.startsWith('User')
+                              : cp.kind === 'user_message'
                                 ? 'border-[#6c63ff] bg-[#6c63ff]/25'
                                 : 'border-[#22c55e] bg-[#22c55e]/25'
                           }`}

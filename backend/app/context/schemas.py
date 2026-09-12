@@ -87,6 +87,60 @@ class RoutingResult(BaseModel):
 
 
 # ------------------------------------------------------------------
+# Fallback (V6.6 §5) — décision structurée entre routing/search
+# ------------------------------------------------------------------
+
+
+class FallbackDecision(BaseModel):
+    """Décision de fallback V6.6 (§5/§6).
+
+    COUCHE DE DÉCISION — ne duplique NI RoutingResult NI
+    SearchResponse : elle consomme leurs statuts et produit
+    UNE action explicite + une raison lisible.
+
+    Actions (§6) :
+      use_local_knowledge      → le contexte de cours suffit
+      use_web_search           → les résultats web sont la source
+      ask_clarification        → ambigu/multi-domain/vague
+      use_general_tutor        → rien de fiable disponible
+      continue_without_external_search → défense (statut inattendu)
+
+    source_status : concaténation documentée des états d'origine
+    (ex: "supported/insufficient/web_error") — les états ne sont
+    JAMAIS convertis silencieusement (§7).
+    """
+
+    action: Literal[
+        "use_local_knowledge",
+        "use_web_search",
+        "ask_clarification",
+        "use_general_tutor",
+        "continue_without_external_search",
+    ] = Field(
+        description="Action de fallback décidée (matrice §6)"
+    )
+    reason: str = Field(
+        description="Raison lisible de la décision (§8 : "
+        "transparente dans le prompt LLM)"
+    )
+    source_status: str = Field(
+        default="",
+        description="États d'origine concaténés "
+        "(routing/knowledge/web) — jamais réduits à « not found »",
+    )
+    confidence: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Confiance de la décision [0..1]",
+    )
+    candidates: list[str] = Field(
+        default_factory=list,
+        description="Matières candidates si clarification",
+    )
+
+
+# ------------------------------------------------------------------
 # Knowledge (§24) — item de connaissance structuré
 # ------------------------------------------------------------------
 
@@ -284,12 +338,26 @@ class ThreadContextInfo(BaseModel):
 
 
 class ContextStats(BaseModel):
-    """Budget contexte (§41) — volumétrie approximative."""
+    """Budget contexte (§41/§47) — volumétrie + budget V6.8.
+
+    Champs V6.8 avec defaults : aucun test/existant cassé.
+    budget_status ∈ ok/near_limit/compressed/exceeded/unknown
+    (§48) — unknown = fenêtre inconnue (assomption conservatrice
+    documentée, budget.py).
+    """
 
     memories_used: int = 0
     knowledge_items: int = 0
     user_context_chars: int = 0
     context_size: int = 0
+    # --- V6.8 §47 ---
+    estimated_input_tokens: int = 0
+    context_window: int | None = None
+    reserved_output_tokens: int = 0
+    available_input_tokens: int | None = None
+    budget_status: str = "unknown"
+    sources_used: int = 0
+    sources_dropped: int = 0
 
 
 class BuiltContext(BaseModel):
@@ -311,6 +379,14 @@ class BuiltContext(BaseModel):
         description="Recherche web V6.5 (§24) — remplie uniquement "
         "si knowledge insuffisant ET matière supportée. "
         "status=unavailable sinon (aucune tentative).",
+    )
+    fallback: "FallbackDecision" = Field(
+        default_factory=lambda: FallbackDecision(
+            action="continue_without_external_search",
+            reason="default",
+        ),
+        description="Décision de fallback V6.6 (§6) — matrice "
+        "routing/knowledge/web → action",
     )
     tools: ResolvedTools = Field(default_factory=ResolvedTools)
     user: UserContextInfo = Field(
@@ -334,6 +410,7 @@ __all__ = [
     "RoutingResult",
     "SearchResult",
     "SearchResponse",
+    "FallbackDecision",
     "KnowledgeResult",
     "KnowledgeSearchResult",
     "ResolvedTools",

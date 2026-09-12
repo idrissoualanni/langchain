@@ -73,6 +73,9 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+    # V6.7 : réponse structurée (contrat AgentResponse) — le
+    # texte brut reste pour rétrocompatibilité.
+    agent_response: dict | None = None
     user_id: str
     thread_id: str
     interaction_count: int
@@ -98,6 +101,9 @@ class CheckpointOut(BaseModel):
     message_count: int
     interaction_count: int
     summary: str
+    # V6.8 (audit §62 G.3) : nature du checkpoint — le frontend
+    # consomme ce champ structuré au lieu de parser le summary.
+    kind: str = "state"
 
 
 class HealthResponse(BaseModel):
@@ -277,7 +283,10 @@ class ContextPreviewResponse(BaseModel):
     router: dict
     subject: dict | None
     knowledge: dict
-    web: dict | None = None  # V6.5 §29 : SearchWebResponse web fallback
+    web: dict | None = None
+    # V6.6/V6.8 : décision de fallback + budget (Inspector/dev)
+    fallback: dict | None = None
+    budget: dict | None = None  # V6.5 §29 : SearchWebResponse web fallback
     tools: dict
     user: dict
     thread: dict

@@ -107,15 +107,47 @@ def build_context_preview(
         user_id=payload.user_id,
         thread_id=payload.thread_id or "",
     )
+
+    # V6.8 §47 : budget (contrat frontend verrouillé) —
+    # jamais exposé dans le chat étudiant, Context Inspector
+    # uniquement (§32/§55).
+    stats = ctx.get("stats") or {}
+    budget = {
+        "estimated_input_tokens": stats.get(
+            "estimated_input_tokens"
+        ),
+        "context_window": stats.get("context_window"),
+        "reserved_output_tokens": stats.get(
+            "reserved_output_tokens", 0
+        ),
+        "available_input_tokens": stats.get(
+            "available_input_tokens"
+        ),
+        "budget_status": stats.get("budget_status", "unknown"),
+        "sources_used": stats.get("sources_used", 0),
+        "sources_dropped": stats.get("sources_dropped", 0),
+    }
+    # V6.6 : décision de fallback (interface développeur)
+    fb = ctx.get("fallback") or {}
+    fallback = {
+        "action": fb.get("action", ""),
+        "reason": fb.get("reason", ""),
+        "source_status": fb.get("source_status", ""),
+        "confidence": fb.get("confidence", 0.0),
+        "candidates": fb.get("candidates", []),
+    }
+
     return ContextPreviewResponse(
         router=ctx["routing"],
         subject=ctx["subject"],
         knowledge=ctx["knowledge"],
         web=ctx.get("web"),
+        fallback=fallback,
         tools=ctx["tools"],
         user=ctx["user"],
         thread=ctx["thread"],
         learning=ctx.get("learning"),
+        budget=budget,
         prompt_preview=prompt,
         stats=ctx["stats"],
     )

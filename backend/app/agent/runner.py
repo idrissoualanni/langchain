@@ -83,12 +83,20 @@ def get_thread_state(user_id: str, thread_id: str) -> dict | None:
     }
 
 
-def _checkpoint_summary(snapshot, parent_messages_count: int) -> str:
-    """Résumé lisible d'un checkpoint : nature du dernier message ajouté."""
+def _checkpoint_summary(
+    snapshot, parent_messages_count: int
+) -> tuple[str, str]:
+    """Résumé d'un checkpoint : (kind structuré, texte lisible).
+
+    V6.8 (audit §62 G.3) : le frontend consomme `kind` —
+    plus JAMAIS de parsing du texte summary (anti-pattern
+    §18). kind ∈ user_message / tool_call / tool_result /
+    assistant / state / message.
+    """
     values = snapshot.values or {}
     messages = values.get("messages", [])
     if len(messages) <= parent_messages_count:
-        return "State checkpoint"
+        return "state", "State checkpoint"
 
     added = messages[parent_messages_count:]
     last = added[-1]
@@ -97,21 +105,30 @@ def _checkpoint_summary(snapshot, parent_messages_count: int) -> str:
     if msg_type == "HumanMessage":
         content = getattr(last, "content", "")
         if isinstance(content, str) and content:
-            return f'User message "{content[:60]}..."' if len(content) > 60 else f'User message "{content}"'
-        return "User message"
+            s = (
+                f'User message "{content[:60]}..."' 
+                if len(content) > 60
+                else f'User message "{content}"'
+            )
+        else:
+            s = "User message"
+        return "user_message", s
     if msg_type == "AIMessage":
         tool_calls = getattr(last, "tool_calls", None)
         if tool_calls:
             names = ", ".join(
                 c.get("name", "?") for c in tool_calls
             )
-            return f"Tool call: {names}"
-        return "Assistant response"
+            return "tool_call", f"Tool call: {names}"
+        return "assistant", "Assistant response"
     if msg_type == "ToolMessage":
         name = getattr(last, "name", "tool")
-        return f"Tool result ({name})"
+        return (
+            "tool_result",
+            f"Tool result ({name})",
+        )
 
-    return f"Message ({msg_type})"
+    return "message", f"Message ({msg_type})"
 
 
 def get_thread_history(user_id: str, thread_id: str) -> list[dict]:
@@ -132,6 +149,7 @@ def get_thread_history(user_id: str, thread_id: str) -> list[dict]:
         checkpoint_id = (
             snapshot.config.get("configurable", {}).get("checkpoint_id")
         )
+        kind, summary = _checkpoint_summary(snapshot, parent_count)
 
         history.append(
             {
@@ -145,9 +163,8 @@ def get_thread_history(user_id: str, thread_id: str) -> list[dict]:
                 "interaction_count": values.get(
                     "interaction_count", 0
                 ),
-                "summary": _checkpoint_summary(
-                    snapshot, parent_count
-                ),
+                "kind": kind,
+                "summary": summary,
             }
         )
         parent_count = len(messages)
@@ -283,6 +300,42 @@ async def run_agent_stream(
         user_id=user_id,
         thread_id=thread_id,
     )
+
+    # V6.7 §26 : normalisation (activité + fallback du registre)
+    from app.agent.middleware import get_last_context
+    from app.agent.normalizer import normalize_response
+
+    new_state_pre = agent.get_state(config)
+    activity_pre = dict(
+        (new_state_pre.values or {}).get("learning_activity") or {}
+    )
+    fallback_pre = None
+    search_results_pre = None
+    search_used_pre = False
+    try:
+        last_ctx = get_last_context(thread_id)
+        if last_ctx is not None:
+            fallback_pre = getattr(last_ctx, "fallback", None)
+            web_pre = getattr(last_ctx, "web", None)
+            if web_pre is not None:
+                search_results_pre = [
+                    r.model_dump() for r in web_pre.results
+                ]
+                search_used_pre = (
+                    getattr(web_pre, "status", "") == "found"
+                    and bool(web_pre.results)
+                )
+    except Exception:
+        pass
+
+    agent_response = normalize_response(
+        message=response_content,
+        activity=activity_pre or None,
+        search_results=search_results_pre,
+        search_used=search_used_pre,
+        fallback=fallback_pre,
+    ).model_dump()
+
     yield {
         "event": "ASSISTANT_MESSAGE",
         "level": "INFO",
@@ -290,6 +343,7 @@ async def run_agent_stream(
         "thread_id": thread_id,
         "message": response_content,
         "response": response_content,
+        "agent_response": agent_response,
     }
 
     new_state = agent.get_state(config)
@@ -397,8 +451,47 @@ def run_agent(user_id: str, thread_id: str, message: str) -> dict:
         thread_id=thread_id,
     )
 
+    # V6.7 §26 : Response Normalizer — structures internes →
+    # AgentResponse (contrat public). Le texte brut reste
+    # disponible (rétrocompatibilité) ; agent_response est la
+    # voie structurée du frontend.
+    from app.agent.middleware import get_last_context
+    from app.agent.normalizer import normalize_response
+
+    activity = dict(
+        (new_state.values or {}).get("learning_activity") or {}
+    )
+    # FallbackDecision du run courant (registre du middleware)
+    fallback = None
+    search_results = None
+    search_used = False
+    try:
+        last_ctx = get_last_context(thread_id)
+        if last_ctx is not None:
+            fallback = getattr(last_ctx, "fallback", None)
+            web = getattr(last_ctx, "web", None)
+            if web is not None:
+                search_results = [
+                    r.model_dump() for r in web.results
+                ]
+                search_used = (
+                    getattr(web, "status", "") == "found"
+                    and bool(web.results)
+                )
+    except Exception:
+        pass
+
+    agent_response = normalize_response(
+        message=response_content,
+        activity=activity or None,
+        search_results=search_results,
+        search_used=search_used,
+        fallback=fallback,
+    ).model_dump()
+
     return {
         "response": response_content,
+        "agent_response": agent_response,
         "user_id": user_id,
         "thread_id": thread_id,
         "interaction_count": interaction_count,

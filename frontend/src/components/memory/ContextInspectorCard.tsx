@@ -42,6 +42,24 @@ const SEARCH_TONES: Record<string, string> = {
   error: 'text-[#ef4444]',
 };
 
+// V6.8 §54 — couleurs de statut budget
+const BUDGET_TONES: Record<string, string> = {
+  ok: 'text-[#22c55e]',
+  near_limit: 'text-[#f59e0b]',
+  compressed: 'text-[#f59e0b]',
+  exceeded: 'text-[#ef4444]',
+  unknown: 'text-[#94a3b8]',
+};
+
+// V6.6 §54 — couleurs d'action fallback
+const FALLBACK_TONES: Record<string, string> = {
+  use_local_knowledge: 'text-[#22c55e]',
+  use_web_search: 'text-[#22d3ee]',
+  ask_clarification: 'text-[#f59e0b]',
+  use_general_tutor: 'text-[#94a3b8]',
+  continue_without_external_search: 'text-[#94a3b8]',
+};
+
 function Section({
   title,
   open,
@@ -114,6 +132,8 @@ export function ContextInspectorCard({
   const [openTools, setOpenTools] = useState(false);
   const [openPrompt, setOpenPrompt] = useState(false);
   const [openLearning, setOpenLearning] = useState(false);
+  const [openBudget, setOpenBudget] = useState(false);
+  const [openFallback, setOpenFallback] = useState(false);
 
   const runPreview = async () => {
     if (!userId || !query.trim()) return;
@@ -500,6 +520,110 @@ export function ContextInspectorCard({
                       : 'Indisponible (erreur de lecture — fallback silencieux).'}
                   </div>
                 )}
+              </Section>
+            )}
+
+            {/* V6.8 §54 — Budget (interface développeur uniquement) */}
+            {preview.budget && (
+              <Section
+                title="budget"
+                badge={preview.budget.budget_status}
+                open={openBudget}
+                onToggle={() => setOpenBudget(!openBudget)}
+              >
+                <div className="space-y-1.5 font-mono text-[10.5px]">
+                  <div className="text-[#f5f7fa]/85">
+                    {preview.budget.estimated_input_tokens != null
+                      ? `${(preview.budget.estimated_input_tokens / 1000).toFixed(1)}k`
+                      : '—'}{' '}
+                    <span className="text-[#94a3b8]">/</span>{' '}
+                    {preview.budget.context_window != null
+                      ? `${(preview.budget.context_window / 1000).toFixed(0)}k window`
+                      : 'window ? (inconnue)'}
+                    <span
+                      className={
+                        BUDGET_TONES[
+                          preview.budget.budget_status
+                        ] ?? 'text-[#94a3b8]'
+                      }
+                    >
+                      {' '}
+                      · {preview.budget.budget_status}
+                    </span>
+                  </div>
+                  <div className="text-[#94a3b8]">
+                    output réservé :{' '}
+                    {preview.budget.reserved_output_tokens} tok ·
+                    available :{' '}
+                    {preview.budget.available_input_tokens != null
+                      ? `${preview.budget.available_input_tokens}`
+                      : 'assumé (fallback conservateur)'}
+                  </div>
+                  <div className="text-[#94a3b8]">
+                    sources : {preview.budget.sources_used} used ·{' '}
+                    {preview.budget.sources_dropped} dropped
+                    {preview.budget.sources_dropped > 0 && (
+                      <span className="text-[#f59e0b]">
+                        {' '}
+                        (compression P4→P3→P2, P0 intact)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </Section>
+            )}
+
+            {/* V6.6 §54/§55 — Fallback (raison, candidats — dev) */}
+            {preview.fallback && (
+              <Section
+                title="fallback"
+                badge={preview.fallback.action}
+                open={openFallback}
+                onToggle={() => setOpenFallback(!openFallback)}
+              >
+                <div className="space-y-1.5 font-mono text-[10.5px]">
+                  <div className="text-[#f5f7fa]/85">
+                    action :{' '}
+                    <span
+                      className={
+                        FALLBACK_TONES[
+                          preview.fallback.action
+                        ] ?? 'text-[#94a3b8]'
+                      }
+                    >
+                      {preview.fallback.action}
+                    </span>
+                  </div>
+                  <div
+                    className="text-[#94a3b8]"
+                    title={preview.fallback.reason}
+                  >
+                    raison :{' '}
+                    {preview.fallback.reason.length > 90
+                      ? `${preview.fallback.reason.slice(0, 90)}…`
+                      : preview.fallback.reason}
+                  </div>
+                  <div className="text-[#94a3b8]">
+                    états : {preview.fallback.source_status || '—'} ·
+                    conf.{' '}
+                    {Math.round(
+                      preview.fallback.confidence * 100
+                    )}
+                    %
+                  </div>
+                  {preview.fallback.candidates.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-0.5">
+                      {preview.fallback.candidates.map((c) => (
+                        <span
+                          key={c}
+                          className="rounded bg-[#111820] px-1.5 py-0.5 text-[9.5px] text-[#a5f3fc]"
+                        >
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </Section>
             )}
 

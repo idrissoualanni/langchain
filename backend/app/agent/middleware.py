@@ -91,6 +91,36 @@ def _last_user_query(request: ModelRequest) -> str:
         return ""
 
 
+# ------------------------------------------------------------------
+# Registre du dernier BuiltContext par thread (V6.6/V6.7).
+#
+# Le dynamic_prompt construit le contexte ; le Response
+# Normalizer (runner) a besoin de la FallbackDecision après le
+# run (ex: ambiguous → clarification). Transmettre via le state
+# LangGraph imposerait un champ de plus — un registre borné par
+# thread_id suffit (dernier run gagne ; purgé au-delà de 128).
+# ------------------------------------------------------------------
+_last_context_registry: dict[str, object] = {}
+_REGISTRY_MAX = 128
+
+
+def _register_context(thread_id: str, context) -> None:
+    """Mémorise le dernier BuiltContext d'un thread (borné)."""
+    if len(_last_context_registry) >= _REGISTRY_MAX:
+        # Purge : garder les 64 entrées les plus récentes
+        # (dict Python conserve l'ordre d'insertion).
+        recent = list(_last_context_registry.items())[-64:]
+        _last_context_registry.clear()
+        _last_context_registry.update(recent)
+    _last_context_registry[thread_id] = context
+
+
+def get_last_context(thread_id: str):
+    """Dernier BuiltContext du thread (ou None) — lu par le
+    normalizer."""
+    return _last_context_registry.get(thread_id)
+
+
 @dynamic_prompt
 def tutor_dynamic_prompt(request: ModelRequest) -> str:
     """Dynamic prompt officiel LangChain (§8/§34).
@@ -98,6 +128,13 @@ def tutor_dynamic_prompt(request: ModelRequest) -> str:
     Pipeline métier (§72) :
       Runtime Context (user_id) → Context Builder (sélection)
       → Prompt Builder (présentation) → prompt.
+
+    V6.6/V6.7 : le BuiltContext construit (routing/fallback/
+    web) est mis à disposition du Response Normalizer via
+    _last_context_registry (clé thread_id) — le runner lit la
+    décision de fallback après le run pour produire
+    l'AgentResponse (clarification...). Registre borné, mémoire
+    courte, thread-safe minimal (dict sous GIL, écrasement).
 
     Fallback (§37) : toute erreur du Context Builder est loggée
     CONTEXT_BUILD_ERROR puis le CORE PROMPT seul est utilisé —
@@ -121,6 +158,8 @@ def tutor_dynamic_prompt(request: ModelRequest) -> str:
             thread_id=thread_id,
             query=query,
         )
+        if thread_id:
+            _register_context(thread_id, context)
         return build_system_prompt(
             core_prompt=CORE_PROMPT,
             context=context,

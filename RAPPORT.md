@@ -1332,3 +1332,422 @@ Zéro `if subject ==` dans le code (re-vérifié).
 ---
 
 **Fin du rapport V6.5.** Le socle 163/163 est intact, enrichi de 23 tests search/retrieval/fallback : le router reconnaît les paraphrases déclarées avec confiance graduée, le knowledge local est classé par formule composite documentée, la recherche web est structurée (plan → normalisation → ranking → top_k → statut), et le pipeline local→web→General Tutor est fonctionnel, observable et testé de bout en bout — sans une ligne de RAG vectoriel ni de nouveau provider.
+
+---
+
+# 35. MISSION V6.6–V6.8 — FINALISATION DU SOCLE AVANT LEARNING ENGINE
+
+État de référence vérifié avant toute modification (§3) : `git status` propre, branche `master`, dernier commit `7ea14bc`, suite de référence **186/186 PASS** (V5-arch 30, V5-int 10, V5.2 58, V6-arch 35, V6-int 11, V6.5 23, E2E 19). Aucun test supprimé ni désactivé.
+
+Objectif (§1) : combler les trois dernières exigences architecturales AVANT le Learning Engine — Fallback Intelligence (V6.6), Structured Agent Output + UX (V6.7), Context Budget + Model Capability Management (V6.8). Interdits respectés (§2) : pas de RAG vectoriel, pas de Qdrant, pas d'embeddings, pas de reranking externe, pas de Langfuse/OTel/LiveKit/MCP/HITL/Multi-Agent, pas de User Document Knowledge, pas de Learning Engine, pas de nouveau provider ni modèle obligatoire.
+
+Architecture livrée (§57) :
+
+```text
+USER → ROUTER (subject/topic/confidence/status)
+     → RETRIEVAL (local knowledge + web)
+     → FALLBACK DECISION (matrice pure V6.6)
+     → CONTEXT BUILDER (memory + learning + thread + knowledge
+                        + search + activity)
+     → CONTEXT BUDGET (V6.8)
+     → DYNAMIC PROMPT → LLM → TOOLS/ACTIONS
+     → RESPONSE NORMALIZER (V6.7)
+     → AgentResponse → FRONTEND RESPONSE RENDERER
+```
+
+---
+
+## 35.A. V6.6 — Fallback Intelligence (§4-§15)
+
+### A.1 Le modèle de décision
+
+Nouveau module `app/context/fallback.py` + schéma `FallbackDecision` (`app/context/schemas.py`) — une **couche de décision** entre RoutingResult et SearchResponse qui ne duplique ni l'un ni l'autre (§5) :
+
+| Champ | Rôle |
+|---|---|
+| `action` | Literal des 5 actions §6 : `use_local_knowledge`, `use_web_search`, `ask_clarification`, `use_general_tutor`, `continue_without_external_search` |
+| `reason` | Raison lisible, non générique (« not found » interdit §7) |
+| `source_status` | Concaténation documentée des états d'origine (ex. `supported/insufficient/web_error`) — les états ne sont **jamais** convertis silencieusement |
+| `confidence` | Confiance de la décision [0..1] |
+| `candidates` | Matières candidates si clarification (rempli par le builder sur routing ambiguous, §10) |
+
+### A.2 La matrice de décision (§6) — pure et testable sans LLM
+
+`decide_fallback(routing_status, knowledge_status, web_status, has_web_results, query)` est une **fonction pure** (aucun LLM, aucun appel externe) — toute la matrice §6 vit dans `_decide()` :
+
+| Routing | Knowledge | Web | Action | Confiance |
+|---|---|---|---|---|
+| supported | found | non requis | use_local_knowledge | 0.95 |
+| supported | insufficient/unavailable/error | found (résultats) | use_web_search | 0.70 |
+| supported | insufficient | unavailable | use_general_tutor | 0.50 |
+| supported | insufficient | error | use_general_tutor | 0.50 |
+| supported | insufficient | insufficient | use_general_tutor | 0.50 |
+| ambiguous | n/a | n/a | ask_clarification (+candidates) | 0.50 |
+| unknown | n/a | n/a | ask_clarification **si vague** (§9) | 0.30 |
+| unknown | n/a | n/a | use_general_tutor **si compréhensible** | 0.40 |
+| unsupported | n/a | n/a | use_general_tutor | 0.90 |
+| multi_domain | n/a | n/a | ask_clarification | 0.40 |
+| statut inattendu | — | — | continue_without_external_search (défense) | 0.10 |
+
+L'heuristique §9 « vague vs compréhensible » est documentée et testée : `is_vague_query()` compte les tokens alphabétiques (seuil < 3) — « Aide-moi » (1) → clarification ; « Pourquoi le ciel est bleu ? » (5) → general tutor.
+
+Vérifié en dur avant intégration : **12/12 cas matriciels** corrects (script de debug, ensuite couverts par les tests).
+
+### A.3 Les états jamais confondus (§7)
+
+Chaque couche garde son vocabulaire — testé 11a/11b : `source_status = "supported/insufficient/web_error"` préserve les trois états distincts, et le `reason` est explicite (jamais « not found »). Le knowledge `error` local est replié en `insufficient` par la recherche V6.5 (l'erreur est loggée), le paramètre reste accepté pour la complétude du contrat ; `web_unavailable` (service/clé absente) et `web_error` (échec technique) produisent des raisons distinctes.
+
+### A.4 Fallback transparent (§8) + intégration builder
+
+Le builder (`app/context/builder.py`) appelle `decide_fallback()` après le pipeline search (§3c) : la décision est exposée dans `BuiltContext.fallback`, les candidates y sont injectées sur routing ambiguous, et `CONTEXT_BUILD_END` logge `fallback_action` + `fallback_reason`.
+
+`fallback_note_for_prompt()` (§8) produit la note transparente pour le LLM — le prompt explique **la raison** du fallback au modèle (il peut la reformuler naturellement), ex. recherche web tentée → « appuie-toi sur la section RECHERCHE WEB et cite naturellement ces sources ». Le local knowledge ne produit **aucune** note (ce n'est pas un fallback). Le frontend étudiant n'affiche pas ces détails techniques (§32) — seule l'interface développeur (Context Inspector) les montre.
+
+### A.5 §12-§13
+
+- **supported + knowledge insufficient ≠ unsupported** (test 14) : le web est tenté, `source_status` reste préfixé `supported/` — la matière est configurée, c'est la base de cours qui manque.
+- **web unavailable/error → General Tutor sans crash** (tests 3/4 + 15) : le builder survit au pipeline web complet, l'agent ne plante jamais.
+
+### A.6 Observabilité (§14)
+
+Events `FALLBACK_START` et `FALLBACK_DECISION` émis par `decide_fallback()`, portant user_id, thread_id, reason, action, subject, topic, routing_status, knowledge_status, web_status (testés 10a/10b, lus depuis agent.log). Zéro secret/API key/token loggé. `FALLBACK_ERROR`/`FALLBACK_END` : la fonction étant pure, l'erreur est impossible par construction — le statut inattendu est géré par `continue_without_external_search` (jamais de levée d'exception).
+
+### A.7 Tests — `tests/test_v66_fallback.py` (§15) : **22/22 PASS**
+
+Les 10 cas minimaux (1-10) + renforcements : heuristique vague (6c), états distincts (11a/b), transparence (12a/b/c), candidates réelles d'un build_context ambiguous (13 : computer_networks + neural_networks transmis), distinction insufficient/unsupported (14), no-crash builder web complet (15), Literal protégé (16).
+
+---
+
+## 35.B. V6.7 — Structured Agent Output + UX (§16-§35 + ADDENDUM)
+
+### B.1 Le contrat `AgentResponse` (§17 + ADDENDUM)
+
+Nouveau module `app/agent/response.py` — contrat stable et versionnable (`version: int = 1`) :
+
+```python
+type: Literal["text","exercise","quiz","evaluation","hint",
+             "code","search","clarification","error"]
+status: Literal["completed","waiting_for_user",
+                "running","error","cancelled"]
+message: str
+data: dict[str, Any]
+actions: list[dict[str, Any]]
+```
+
+**Les 5 couches d'état strictement séparées (ADDENDUM §1-§12)** — testées contractuellement :
+
+| Couche | Enum | Inchangé depuis |
+|---|---|---|
+| AgentResponse.status (public) | completed / waiting_for_user / running / error / cancelled | **nouveau** |
+| learning_activity.status (pédagogique) | idle / waiting_for_answer / evaluating / giving_hint / waiting_for_retry / checking_understanding / completed / abandoned | V5.2 |
+| SearchResponse.status (retrieval) | found / insufficient / unavailable / error | V6.5 |
+| RoutingResult.status (routing) | supported / ambiguous / unknown / unsupported / multi_domain | V4/V5 |
+| FallbackDecision.action (décision) | 5 actions §6 | V6.6 |
+
+`success` est **refusé** par le schéma public (ADDENDUM §7 — test : `AgentResponse(status="success")` lève une ValidationError). Un tool peut retourner `success` en interne pendant que l'AgentResponse est `completed` : deux vocabulaires, deux couches. Le flux complet ADDENDUM §9 est testé : `SearchResponse.insufficient → FallbackDecision.use_web_search → AgentResponse(type=text, status=completed)` — sans jamais changer le type de statut d'une autre couche.
+
+Le statut `running` (ADDENDUM §4) reste réservé aux opérations utilisateur-visibles réellement en cours (ex. `evaluating`) ; les opérations internes restent des événements SSE (TOOL_START, SEARCH_START…) — pas de `running` artificiel.
+
+### B.2 Response Normalizer (§26) — `app/agent/normalizer.py`
+
+`normalize_response()` convertit les structures internes en AgentResponse, priorité : error → fallback clarification (candidates) → activité en cours → search utilisé → texte. Le **frontend ne connaît jamais les structures internes des tools**.
+
+Mapping activity → AgentResponse (ADDENDUM §8, testé 10/10) — les deux machines à états restent distinctes :
+
+| learning_activity.status | AgentResponse |
+|---|---|
+| waiting_for_answer (exercise/quiz/code) | exercise/quiz/code + waiting_for_user + actions submit_answer/request_hint |
+| waiting_for_retry / checking_understanding | evaluation + waiting_for_user (backend vérifie, frontend attend) |
+| giving_hint | hint + waiting_for_user (+hint_level) |
+| evaluating | evaluation + running |
+| completed | evaluation + completed |
+| abandoned | evaluation + cancelled (≠ error) |
+
+Sanitize §23 (défense en profondeur) : `expected_answer`, `hidden_answer`, `keywords`, `key_terms`, `scoring`, `answer` ne fuient **jamais** dans `data` (test : zéro leak sur un payload piégé). Le search n'expose que title/source/url/snippet — jamais `relevance` ni `source_quality` (§31).
+
+Clarification §25 : `actions[0] = {type: "select", options: [...]}` → le frontend affiche des boutons sans parser le texte.
+
+### B.3 Intégration pipeline (backend)
+
+- `runner.run_agent()` : après le run, lit l'activité du state final + la FallbackDecision via le registre du middleware, normalise → `ChatResponse.agent_response` (le champ `response` texte reste : rétrocompatibilité totale).
+- `run_agent_stream()` : l'événement SSE `ASSISTANT_MESSAGE` embarque désormais `agent_response` en plus de `response`.
+- **Registre de contexte** (`app/agent/middleware.py`) : le dynamic_prompt stocke le dernier BuiltContext par thread_id (borné à 128, purge 64) — c'est ce qui permet au normalizer de voir routing/fallback/web du run courant. Registre en mémoire, dernier run gagne.
+
+### B.4 Chemin robuste structured output (§33/§50)
+
+Trois chemins documentés et hiérarchisés : structured output disponible → schema ; sinon → **ce normalizer** (normalisation contrôlée) ; sinon → texte standard (type=text). Le registre de capacités V6.8 (`supports_structured_output`) pilotera ce choix — à ce jour le modèle actif n'utilise pas le structured output natif, c'est donc le normalizer qui s'applique (chemin par défaut, déjà robuste). Une incapacité de structured output ne casse jamais le chat : le texte reste la voie de secours ultime.
+
+Vérifié LIVE (serveur 8001, LLM réel) :
+- « Donne-moi un exercice sur les fonctions Python » → `agent_response = {type: exercise, status: waiting_for_user, actions: [submit_answer, request_hint], data: {activity_id...}}` + `response` legacy intact.
+- « Explique-moi les reseaux. » → `agent_response = {type: clarification, status: waiting_for_user, actions: [{select, options: [computer_networks, neural_networks]}]}`.
+
+### B.5 Frontend (§27-§31) — zéro parsing de texte (§18)
+
+Types (`types/agentResponse.ts`) : AgentResponse, AgentResponseStatus, AgentResponseType + data typées par type (ExerciseData, QuizData, CodeData, EvaluationData, HintData, SearchData, ClarificationData). ChatMessage et AgentEvent gagnent `agentResponse`/`agent_response`.
+
+`components/agent/` (§28) — 10 composants :
+
+| Composant | Rôle |
+|---|---|
+| `ResponseRenderer.tsx` | switch(response.type) — LE dispatcher ; type inconnu → texte (jamais de crash UI) |
+| `TextResponse.tsx` | explication standard |
+| `ExerciseCard.tsx` | exercice + boutons « ta réponse » / « un indice » |
+| `QuizCard.tsx` | UNE question visible, progression i/N (barre) |
+| `EvaluationCard.tsx` | feedback coloré par statut, score %, à-retravailler |
+| `HintCard.tsx` | indice + niveau (points 1-3) |
+| `CodeActivityCard.tsx` | réutilise le CodeEditor V5.2 existant (prop `initialCode` ajoutée, rétrocompatible) — pas de duplication |
+| `SearchResultCard.tsx` | section Sources : title/source/url/snippet cliquables (§31) — jamais les scores |
+| `ClarificationCard.tsx` | boutons select (§25) |
+| `ErrorCard.tsx` | message propre, jamais de stack trace |
+
+`MessageBubble` utilise le ResponseRenderer dès que `agentResponse` est présent (sinon affichage texte inchangé pour l'historique ancien). `ChatPage` câble les handlers : request_hint → message ; submit_answer → focus sur l'input (c'est la réponse de l'étudiant) ; select → « Je parle de X » (le bouton envoie, sans parsing).
+
+UX §32 fallback : l'étudiant ne voit aucun détail technique ; les raisons de fallback, scores et budgets restent dans le Context Inspector (interface développeur).
+
+### B.6 Tests — `tests/test_v67_output.py` : **30/30 PASS** (§34 + ADDENDUM §13)
+
+Les 9 types convertibles, les 5 statuts publics acceptés, `success` refusé, type inventé refusé, les 10 mappings activity→response, sanitize §23 (zéro leak), §24 (SearchResult réutilisé, pas de 2e système), §25 boutons, §5 error propre, ADDENDUM §9 indépendance des couches, §26 sans LLM.
+
+**Gates frontend §35 : `tsc -b` 0 erreur ; `vite build` ✓ (2.17s).**
+
+---
+
+## 35.G. Audit exhaustif des hardcodes (§62)
+
+Audit par subagent dédié (grep systématique : `if subject ==`, `if model ==`, `if provider ==`, `== "python"`, `.includes(`, listes codées, chemins de fallback, constantes de scoring) sur backend/app/** + frontend/src/**, chaque ligne vérifiée en contexte.
+
+### G.1 Verdict global
+
+- **Zéro littéral de matière / modèle / provider dans une logique de décision.** Les 8 occurrences `== subject` backend sont des filtres paramétriques génériques (learning_profile/goals/activité courante). Les seuls textes « python » dans code_tools sont des docstrings documentant la règle §38.
+- **Fallback V6.6 100% centralisé** : décision unique dans `app/context/fallback.py::decide_fallback` (appel unique builder.py), appliquée — jamais re-décidée — dans normalizer/prompt_builder/runner. Aucun if/elif de fallback local.
+- **Frontend V6.7 conforme** : rendu par `response.type` (switch), défaut → texte, zéro parsing de message agent.
+
+### G.2 Classification (42 findings)
+
+| Classe | Total | Nature |
+|---|---|---|
+| [OK] | 20 | Filtres paramétriques, stoplists FR/EN génériques, parsing du protocole SSE/logs (pas du contenu agent), fallback centralisé, ResponseRenderer |
+| [CONFIG] | 13 | Constantes documentées (W_TOPIC/RELEVANCE/WEB thresholds, `_OFFICIAL_DOMAINS` transverse), enums Pydantic Literal, contrats (RESPONSE_TYPE_*, FACT_CATEGORIES, unions TS), sandbox lists (`_BLOCKED_IMPORTS` sécurité réseau/système — aucune matière), config env |
+| [LOGIC] | 7 | Décisions codées en dur à documenter/trancher — détail G.4 |
+| [RISK] | 2 | Violations réelles mineures (frontend) — corrigées, voir G.3 |
+
+### G.3 Les 2 [RISK] — MemoryPage.tsx (corrigés)
+
+`MemoryPage.tsx` décidait la couleur des pastilles checkpoints en parsant le TEXTE du summary (`includes('Tool')`, `startsWith('User')`) — pas la réponse agent (le contrat §18 porte sur le rendu des réponses), mais le même anti-pattern. **Corrigé** : `_checkpoint_summary` du runner produit désormais un champ `kind` structuré (`user_message`/`tool_call`/`assistant`/`state`), exposé par l'API checkpoints et consommé par MemoryPage — plus aucun parsing de texte.
+
+### G.4 Les [LOGIC] — décisions d'architecture consignées
+
+| Localisation | Hardcode | Statut V6.8 |
+|---|---|---|
+| config.py `MODEL_NAME` | Défaut env `"qwen2.5"` | Le registry models.yaml devient la source déclarative des capacités ; config.py reste la source du nom du modèle ACTIF (env) — `get_model_capabilities()` applique l'env : jamais 3 sources contradictoires (§38) |
+| pedagogical_tools.py:240 / code_tools.py:39 | « matière code » détectée par noms de tools (`execute_code`…) | Documenté : les tools spécialisés sont déclarés dans les YAML (`tools.specialized`) ; la garde sandbox vérifie l'appartenance déclarée, pas la matière |
+| middleware.py MEMORY/LEARNING_TOOL_NAMES | Sets codés pour forçage user_id (sécurité §23) | Justifié : liste de sécurité fermée, stable ; documentée comme décision d'archi |
+| taxonomy.py UNSUPPORTED_SUBJECTS | Alias de matières non supportées en Python (pas YAML) | Tranché : rôle = détection unsupported + anti-collision réseau/neuronal ; cohérent avec « pas de synonymes globaux » (aucun de ces alias n'injecte du routing supporté). Migration YAML possible plus tard — consigné |
+| code_tools.py (2×) | Garde python-only du sandbox (`language in ("python","py","python3")`) | Décision d'archi mono-langage documentée inline (§5.2), consignée ici |
+
+### G.5 Constantes [CONFIG] autorisées (inventaire)
+
+Scoring knowledge (W_TOPIC 0.30…W_SUBJECT 0.10, seuil 0.3), scoring web (W_W_* 0.35…0.10, seuil 0.15), confiances router (0.95/0.85/0.80/0.55), `_OFFICIAL_DOMAINS` (transverse : doc/standards/édu — aucune matière), `_FORBIDDEN_DATA_KEYS` normalizer (§23 anti-fuite), stoplists ×5 (routing/knowledge/web/éval/mémoire — mots vides FR/EN génériques).
+
+---
+
+## 35.C. V6.8 — Context Budget + Model Capability Management (§36-§52)
+
+### C.1 Model Capability Registry (§37-§39) — `app/models.yaml` + `app/context/model_capabilities.py`
+
+Source déclarative unique des capacités, **valeurs réelles, rien d'inventé** :
+
+```yaml
+models:
+  default:
+    provider: ollama
+    model: gemma4:31b-cloud
+    context_window: null        # inconnue → fallback conservateur
+    reserved_output_tokens: 2048
+    supports_tools: true        # réel : l'agent appelle des tools
+    supports_structured_output: false  # réel → chemin normalizer
+    supports_vision: false
+    supports_audio: false
+```
+
+API : `ModelCapabilities` (champs null si inconnu, §39), `get_model_capabilities(model_name|None)` (None → modèle actif de l'env via config.py — jamais 3 sources contradictoires §38 ; nom inconnu → capacités default clonées, sans invention), `supports(caps, "tools|structured_output|vision|audio")` (§49 — False → graceful fallback). Testable avec un YAML explicite (cross-model §14 : default + big-model 32000).
+
+### C.2 Context Budget (§40-§48) — `app/context/budget.py`
+
+- `estimate_tokens(text)` (§42) : heuristique documentée **≈4 chars/token** (`ceil(len/4)`), interface stable pour brancher un vrai tokenizer plus tard.
+- `CONSERVATIVE_ASSUMED_WINDOW = 8192` (§40) : fenêtre ASSUMÉE quand elle est inconnue — le statut reste `unknown` pour signaler l'assomption ; `available_input_tokens` reste null dans le contrat (jamais une valeur inventée présentée comme réelle).
+- **Priorités §41** : P0 system/message courant/activité (intouchables §43/§46) · P1 learning/subject · P2 knowledge/web · P3 mémoire · P4 thread.
+- `apply_budget(sections, window, reserved)` — compression dans l'ordre §43 : drop P4 entiers → P3 (les moins pertinentes en dernier) → P2 web (top_k réduit, ordre de pertinence préservé §44) → statut final. **Exceeded ne crashe jamais** (§48) : on continue avec ce qui tient, P0 saufs.
+
+| Statut §48 | Signification | Testé |
+|---|---|---|
+| ok | sous budget, marge saine | 5 |
+| near_limit | ≥ 85% de l'available | 6 |
+| compressed | une compression a suffi | 7a |
+| exceeded | compression insuffisante (run continue, P0 intacts) | 7b |
+| unknown | fenêtre inconnue (assomption conservatrice) | 14a/b |
+
+### C.3 Intégration builder + ContextStats (§47) + preview
+
+`build_context` construit les sections par priorité (learning P1, knowledge/web P2, mémoire P3, thread P4 — les P0 ne passent pas par le builder, intouchables par construction), applique le budget, reflète les drops (thread vidé, web réduit, mémoire tronquée) et remplit `ContextStats` étendu : `estimated_input_tokens, context_window, reserved_output_tokens, available_input_tokens, budget_status, sources_used, sources_dropped` — defaults pour ne casser aucun test existant. Event `CONTEXT_BUDGET` (vérifié live : status/est/window/sources/model).
+
+`ContextPreviewResponse` gagne `budget` + `fallback` (contrat verrouillé, clés exactes) — **uniquement pour le Context Inspector** (§32/§55 : jamais dans le chat étudiant).
+
+### C.4 Capability checks (§49-§51)
+
+`supports(caps, "structured_output")` → false pour le modèle actif → chemin Response Normalizer (§50) ; vision/audio → false → graceful fallback (la vraie vision est une phase future §49). Le modèle et ses capacités sont de l'infrastructure (§51) : rien ne fuit dans le prompt — seul `model` apparaît dans les events/logs internes.
+
+### C.5 Tests V6.8 (§52)
+
+- `test_v68_models.py` : **8/8 PASS** — fenêtre connue (1), inconnue (2), structured output (12), tool calling (13), cross-model inconnu→default cloné (14a), registry réel honnête (15), YAML absent→defaults sûrs (16), null ≠ inventé (17).
+- `test_v68_context_budget.py` : **17/17 PASS** — estimate (0a), réservé 29952 (3), conservateur (3b), calcul exact (4), sous budget (5), near_limit 91% (6), compressed P4 d'abord (7a), exceeded P0 saufs (7b/10/11), search réduite (8/8b), mémoire last-first (9), chemins capability (12-13), unknown (14a/b), builder réel sans crash + knowledge présent (15).
+- `test_v68_final_integration.py` (§60) : **14/14 PASS** — voir D.
+
+Vérifié LIVE : preview budget (258 tok, unknown, sources 2/0) + fallback (use_local_knowledge @ 0.95) ; chat réel « ordinateurs communiquent » → routing computer_networks → knowledge insufficient → web found → fallback use_web_search → AgentResponse text/completed. **Le pipeline complet §57 fonctionne réellement.**
+
+---
+
+## 35.D. Non-régression — résultats exacts (§53)
+
+Suite de référence re-vérifiée AVANT toute modification (186/186), puis après l'intégration complète V6.6+V6.7+V6.8 :
+
+| Suite | Fichier | Avant | Après |
+|---|---|---|---|
+| Architecture V5 | test_v5_architecture.py | 30/30 | **30/30** |
+| Intégration V5 | test_v5_integration.py (serveur) | 10/10 | **10/10** |
+| V5.2 unitaires | test_v52_unit.py | 58/58 | **58/58** |
+| Architecture V6 | test_v6_learning.py | 35/35 | **35/35** |
+| Intégration V6 | test_v6_integration.py (serveur) | 11/11 | **11/11** |
+| E2E intégration | test_final_integration.py (serveur) | 19/19 | **19/19** |
+| V6.5 search | test_v65_search.py | 23/23 | **23/23** |
+| **V6.6 fallback** | test_v66_fallback.py | — | **22/22** |
+| **V6.7 output** | test_v67_output.py | — | **30/30** |
+| **V6.8 models** | test_v68_models.py | — | **8/8** |
+| **V6.8 budget** | test_v68_context_budget.py | — | **17/17** |
+| **§60 préparation** | test_v68_final_integration.py | — | **14/14** |
+
+**Total : 186/186 existants (zéro suppression, zéro désactivation) + 91 nouveaux = 277/277 PASS.**
+
+Gates frontend : `tsc -b` 0 erreur · `vite build` ✓ · `oxlint` 0 warning/0 erreur (13 fichiers dont les 10 nouveaux composants agent).
+
+### D-bis. Test final §60 — préparation Learning Engine (14/14)
+
+`test_v68_final_integration.py` prouve que TOUTES les informations du futur V7 sont disponibles dans un seul `BuiltContext` — **sans créer le Learning Engine** : User, Thread, Subject (python), Topic (confiance graduée), Knowledge (found), Search (structuré), Fallback (5 actions), Memory (liste honnête), Learning Profile (source de progression, §58), Activity (thread-local, séparée), Model capabilities (ollama/gemma4:31b-cloud, capacités honnêtes), Context budget (statut + estimation). Garde-fous vérifiés : le profil est une SOURCE (mastery/weak_points lisibles), AUCUN module learning engine n'existe (§59 : aucune décision pédagogique automatique).
+
+---
+
+
+Nouveautés V6.6–V6.8 en **gras** :
+
+```text
+backend/app/
+  agent/   runner.py (§26 normalizer + kind checkpoint) response.py (V6.7)
+           normalizer.py (V6.7) middleware.py (registre BuiltContext)
+           state.py prompts.py tools.py memory.py pedagogical_tools.py
+           code_tools.py activity_state.py learning_tools.py graph.py
+  api/     schemas.py (ChatResponse.agent_response, CheckpointOut.kind,
+           ContextPreviewResponse.budget/fallback) + 10 routes
+  context/ fallback.py (V6.6) query_norm.py web_search.py (V6.5)
+           schemas.py builder.py model_capabilities.py budget.py (V6.8)
+           router.py prompt_builder.py knowledge_retriever.py
+  learning/ learning_profile.py learning_context.py schemas.py (V6, source)
+  subjects/ registry.py schema.py taxonomy.py tool_registry.py
+            definitions/{python,biology,mathematics,computer_networks}.yaml
+  knowledge/ 9 fichiers .md  |  models.yaml (V6.8)
+
+backend/tests/ — 10 suites : v5_arch 30, v5_int 10, v52_unit 58,
+  v6_learning 35, v6_int 11, v65_search 23, v66_fallback 22,
+  v67_output 30, v68_models + v68_context_budget (V6.8),
+  v68_final_integration (§60), final_integration 19 (E2E)
+
+frontend/src/
+  components/agent/ ResponseRenderer + TextResponse + ExerciseCard
+    + QuizCard + EvaluationCard + HintCard + CodeActivityCard
+    + SearchResultCard + ClarificationCard + ErrorCard (V6.7)
+  components/chat/ MessageBubble (renderer si agentResponse)
+    CodeEditor (initialCode) ChatInput (data-chat-input)
+  components/memory/ ContextInspectorCard (Budget/Fallback §54)
+  pages/ ChatPage (handlers actions) MemoryPage (kind §62)
+  types/ agentResponse.ts agent.ts (agentResponse/kind)
+  hooks/useChat.ts (agent_response du SSE)
+```
+
+---
+
+## 35.F. Limitations honnêtes (§61-F)
+
+1. **Tout reste lexical** (§40 maintenu) — pas d'embeddings ; la pertinence est un matching tokens/variantes ; une paraphrase non couverte par un alias YAML reste invisible au router.
+2. **`supports_structured_output: false`** pour le modèle actif — c'est le normalizer (chemin 2 de §33) qui s'applique ; le chemin 1 (schema natif LLM) restera inutilisé tant qu'un modèle le supportant n'est pas configuré. Aucun impact : le contrat AgentResponse est produit de façon déterministe.
+3. **estimate_tokens est une heuristique** (≈4 chars/token) — pas un tokenizer exact par modèle ; l'interface est stable pour brancher un vrai tokenizer plus tard (§42).
+4. **Fenêtre de contexte du modèle actif inconnue** (cloud, non documentée côté projet) — le budget applique le fallback conservateur documenté ; les valeurs deviennent réelles dès que la fenêtre est configurée dans models.yaml.
+5. **Le registre de contexte middleware est en mémoire process** (borné 128 threads) — le dernier run d'un thread gagne ; suffisant pour la normalisation (usage immédiat après le run), pas conçu pour de l'historique.
+6. **Taxonomy UNSUPPORTED_SUBJECTS en Python** (pas YAML) — rôle anti-collision/détection unsupported ; migration YAML possible, consignée dans l'audit §G.4.
+7. **Web search mono-source** (Ollama cloud) — unavailable/error → General Tutor proprement, mais pas de service alternatif (§41 : pas de nouveau provider).
+8. **Le hint/quiz interactifs via AgentResponse.actions** reflètent l'activité réelle : si le LLM répond hors activité, la réponse est type=text — le mapping est fidèle à l'état, pas forcé.
+
+---
+
+## 35.E. Structure réelle du projet (§61-E)
+
+Nouveautés V6.6–V6.8 en **gras** :
+
+```text
+backend/app/
+  agent/   runner.py (normalizer + registre context + kind checkpoint)
+           **response.py (V6.7 : AgentResponse, 5 statuts publics)**
+           **normalizer.py (V6.7 : Response Normalizer §26)**
+           middleware.py (registre BuiltContext par thread)
+           state.py prompts.py tools.py memory.py pedagogical_tools.py
+           code_tools.py activity_state.py learning_tools.py graph.py
+  api/     schemas.py (ChatResponse.agent_response, CheckpointOut.kind,
+           **ContextPreviewResponse.budget/fallback**) + 10 routes
+  context/ **fallback.py (V6.6 : matrice §6 pure)**
+           query_norm.py web_search.py (V6.5) schemas.py builder.py
+           **model_capabilities.py + ../models.yaml (V6.8 registry)**
+           **budget.py (V6.8 : ContextBudget/priorités/compression)**
+           router.py prompt_builder.py knowledge_retriever.py
+  learning/ learning_profile.py learning_context.py schemas.py (V6, source)
+  subjects/ registry.py schema.py taxonomy.py tool_registry.py
+            definitions/{python,biology,mathematics,computer_networks}.yaml
+  knowledge/ 9 fichiers .md
+
+backend/tests/ — 12 suites : v5_arch 30, v5_int 10, v52_unit 58,
+  v6_learning 35, v6_int 11, v65_search 23, **v66_fallback 22**,
+  **v67_output 30**, **v68_models 8**, **v68_context_budget 17**,
+  **v68_final_integration 14 (§60)**, final_integration 19 (E2E)
+
+frontend/src/
+  components/agent/ **ResponseRenderer + TextResponse + ExerciseCard
+    + QuizCard + EvaluationCard + HintCard + CodeActivityCard
+    + SearchResultCard + ClarificationCard + ErrorCard (V6.7 §28)**
+  components/chat/ MessageBubble (renderer si agentResponse)
+    CodeEditor (initialCode) ChatInput (data-chat-input)
+  components/memory/ ContextInspectorCard (**+Budget/Fallback §54**)
+  pages/ ChatPage (handlers actions) MemoryPage (kind §62)
+  types/ **agentResponse.ts (contrat V6.7)** agent.ts (agentResponse/
+    kind/budget/fallback) hooks/useChat.ts (agent_response SSE)
+```
+
+---
+
+## 35.X. Definition of Done finale (§66) — vérifiée
+
+| Critère | Statut |
+|---|---|
+| V5 ✅ | 30/30 + 10/10 (§35.D) |
+| V5.2 ✅ | 58/58 (§35.D) |
+| V6 ✅ | 35/35 + 11/11 (§35.D) |
+| V6.5 ✅ | 23/23 (§35.D) |
+| V6.6 ✅ fallback centralisé + décision structurée + ambiguous/unknown/unsupported propres + knowledge insufficient distinct + web unavailable distinct + events + tests | §35.A — 22/22 |
+| V6.7 ✅ AgentResponse + normalizer + zéro parsing frontend + 9 cartes + ResponseRenderer + tsc + vite | §35.B — 30/30 |
+| V6.8 ✅ registry + budget + réservation output + priorités + préservation activité/message + budgets search/mémoire/learning + télémétrie + capability checks + fallback gracieux | §35.C — 25/25 + 14/14 |
+| Aucune régression / aucun test supprimé ou désactivé | 186/186 intacts (§35.D) |
+| Aucun système parallèle / RAG vectoriel / Learning Engine | audit §35.G + §35.F |
+| ADDENDUM : 5 statuts publics exacts, success supprimé, Activity/Search/Router/Fallback/SSE indépendants | §35.B.1, tests contractuels |
+| §60 toutes les infos V7 disponibles sans Engine | 14/14 (§35.D-bis) |
+
+---
+
+**Fin du rapport V6.6–V6.8.** Le socle est complet : Router → Retrieval (local + web) → Fallback Decision → Context Builder → Context Budget → Dynamic Prompt → LLM → Response Normalizer → AgentResponse → ResponseRenderer. Les 5 couches d'état (public/activité/search/routing/fallback) vivent leur vie séparée, chaque décision est testable sans LLM, le budget protège les P0, et le frontend rend la nature des réponses sans jamais parser de texte — **le projet est prêt pour V7 Learning Engine** sans devoir refaire le routing, la recherche, les fallbacks, le contexte ou le frontend.
+
+
