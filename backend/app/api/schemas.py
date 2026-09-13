@@ -293,6 +293,9 @@ class ContextPreviewResponse(BaseModel):
     learning: dict | None = None  # V6 : LearningContextInfo ou null
     prompt_preview: str
     stats: dict
+    # V7 §47 : décision pédagogique du Learning Engine (Inspector/
+    # dev uniquement — jamais exposée brute à l'étudiant §48)
+    learning_strategy: dict | None = None
 
 
 # ------------------------------------------------------------------

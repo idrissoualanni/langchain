@@ -1859,5 +1859,219 @@ langchain/
 
 **Fin du rapport V6.8.1.** Tous les contrats de contexte ont un propriétaire unique, les doublons sont fusionnés (retrieval) ou supprimés (ContextPriority), BuiltContext est l'agrégé canonique typé complet (routing/subject/knowledge/web/fallback/tools/user/thread/learning/budget/model/activity/stats), l'incompatibilité entre contrats est rejetée explicitement, et 50 tests contractuels verrouillent le tout — **V7 peut écrire `decision = learning_engine.decide(context)` sans rien reconstruire.**
 
+---
+
+# 37. MISSION V7 — LEARNING ENGINE (décision pédagogique déterministe)
+
+> « Quelle est la meilleure prochaine action pédagogique pour cet
+> étudiant, dans ce contexte précis ? » — répondue par une couche
+> métier **déterministe, testable, explicable**, placée entre le
+> Context Builder et le prompt. **Aucun** deuxième agent, graphe
+> ou LLM (§2/§3).
+
+## 37.A — Architecture (§2/§3/§26)
+
+Le flux réel reste strictement :
+
+```
+Router → Retrieval → Fallback → Context Builder
+       → Learning Engine (decide) → LearningDecision
+       → Prompt Builder (+ bloc stratégie §31) → LLM
+```
+
+- `decide(context: BuiltContext, user_id, thread_id) -> LearningDecision`
+  consomme le BuiltContext **tel quel** (contrat V6.8.1) — pas de
+  15 paramètres, pas de re-query (§26).
+- Le moteur est **purement lecture** : il lit `context.routing`,
+  `context.knowledge`, `context.learning`, `context.activity`, et
+  l'historique via `list_observations` (§11 trajectoire). Il
+  n'appelle JAMAIS `search_knowledge`/`web_search`/`route_subject`
+  (§16-§18), n'écrit JAMAIS le profil (§4.1), n'exécute JAMAIS un
+  tool (§24/§25 — `recommended_tool` est une suggestion).
+- Emplacement : `app/learning/engine.py` (décision), `rules.py`
+  (constantes nommées + helpers), `decision.py` (schéma).
+
+## 37.B — LearningDecision (§5-§7, extra=forbid)
+
+12 actions : `answer, explain, practice, hint, evaluate, quiz,
+review, deepen, advance_topic, clarify, continue_activity,
+complete_activity`. Champs : `action, subject, topic, reason,
+confidence [0-1], priority [0-10], activity_id, recommended_tool,
+metadata` — rejet explicite de tout champ parallèle
+(`LearningDecision(score_interne=…)` → ValidationError, test ST2).
+
+## 37.C — Règles et constantes nommées (§12-§15, §22)
+
+- `MASTERY_THRESHOLDS` : weak < 0.40 ≤ developing < 0.70 ≤
+  proficient < 0.85 ≤ strong (zones §12).
+- `CONFIDENCE_LOW=0.40`, `CONFIDENCE_HIGH=0.70`,
+  `MIN_ATTEMPTS_TO_ADVANCE=2` (§13).
+- Trajectoire (§11) : `read_trajectory` sur les 3 derniers scores
+  (`TRAJECTORY_WINDOW=3`), pente moyenne comparée à
+  `TRAJECTORY_MIN_DELTA=0.02` → progression/regression/plateau ;
+  moins de 2 scores → `unknown` (pas d'invention §20).
+  *Fix session : 0.05 → 0.02 — l'exemple spec [0.72, 0.70, 0.69,
+  0.65] (pente −0.025) n'était pas détecté comme régression.*
+- Priorité (§22) : somme pondérée plafonnée à 10 —
+  `W_CURRENT_ACTIVITY=10, W_WEAK_POINT=5, W_REGRESSION=5,
+  W_LOW_MASTERY=4, W_ACTIVE_GOAL=4, W_LOW_CONFIDENCE=3,
+  W_STALE_TOPIC=2`.
+- `TRAJECTORY_STALE_DAYS=14` (topic non revisité → §35 révision
+  simple, pas de spaced repetition complet).
+
+## 37.D — Hiérarchie de décision (§8-§15, §33, §43)
+
+Ordre effectif dans `_decide_impl` (conflits tranchés, testés C1-C3) :
+
+1. **Activité courante** (§8/§33) : statut bloquant
+   (`waiting_for_answer/…/checking_understanding`) → action dans
+   `ACTIVITY_TRANSITIONS[statut]` uniquement. L'activité PRIME sur
+   tout (jamais de nouveau topic en plein exercice).
+2. **Ambiguïté** (§18) : routing ambiguous → `clarify` (jamais de
+   re-routage interne).
+3. **Sécurité connaissance** (§16) : knowledge absent → `answer`
+   (jamais d'exercice inventé sans matière).
+4. **Premier contact** (§19/§20) : pas de profil → `explain`
+   (not_started ≠ erreur, pas de progression inventée).
+5. **Régression** (§11) : trend descendant → `review`.
+6. **Confiance basse** (§13) : zone proficient/strong + confiance
+   < 0.40 → `evaluate` — mastery 0.78 + confiance 0.24 → évaluer,
+   PAS avancer (test S5/S5c ; fix session : la règle s'appliquait
+   par zone, elle est désormais globale).
+7. **Weak points** (§14) : pratique ciblée, toutes zones — le
+   besoin réel passe avant l'avance (test C2 ; fix session : ne
+   s'appliquait qu'aux zones basses).
+8. **Zones** (§12) : weak → review/evaluate ; developing →
+   practice (quiz si attempts ≥ 2) ; proficient → deepen (ou
+   review si stale) ; strong → advance_topic (uniquement si
+   attempts ≥ 2, sinon quiz de confirmation §13).
+9. **Goal** (§15) : en zone strong, un goal actif sur un AUTRE
+   topic oriente `advance_topic` vers le topic du goal (fix
+   session : `get_learning_context` filtrait le goal par topic
+   courant — le goal « loops » était invisible depuis
+   « functions » ; le filtre est par sujet, test S8/S8b).
+
+## 37.E — Intégration prompt (§31, §46)
+
+- `add_learning_strategy_block(prompt, decision)` ajoute
+  « `## LEARNING STRATEGY (décision pédagogique du système)` » :
+  Action/Sujet/Topic/Raison + une instruction naturelle par
+  action (12 mappings). **Aucun** score/poids interne dans le
+  prompt (test L6) — le LLM reçoit une intention pédagogique,
+  pas des métriques.
+- Middleware `tutor_dynamic_prompt` : `decide()` après
+  `build_context`, try/except (LEARNING_ENGINE_ERROR → le run
+  continue SANS stratégie — le moteur ne casse jamais le chat).
+- Événements (§46) : LEARNING_ENGINE_START / LEARNING_DECISION /
+  LEARNING_ENGINE_END (+ ERROR), sans messages complets ni
+  secrets.
+- Preview API : `learning_strategy` dict dans
+  ContextPreviewResponse (§47, dev-only).
+
+## 37.F — Tests (§42-§45)
+
+`tests/test_v7_learning_engine.py` — **46 vérifications** :
+
+- Zones/trajectoire : Z1-Z2, T1-T4 (dont régression spec
+  0.72→0.65 et « <2 scores = unknown »).
+- 14 scénarios §42 : S1-S14 (not_started, weak/developing/strong,
+  strong+confiance haute, confiance basse §13, weak point,
+  activity bloquante, clarify, knowledge absent, transitions
+  ACTIVITY_TRANSITIONS, isolation A/B, cross-thread même profil
+  activités différentes).
+- Trajectoire réelle : TR1-TR2 (profils semés via
+  `update_profile_from_observation`).
+- Conflits §43 : C1 activité>mastery, C2 weak point>advance,
+  C3 activité>ambiguïté.
+- Stabilité §44 : ST1 (5 exécutions → décision identique), ST2
+  (extra=forbid).
+- Garde-fous source : G1 (pas d'écriture profil), G2 (pas de
+  router/recherche recréés), G3 (signature `decide(context:
+  BuiltContext)`).
+- Intégration LLM réelle §45 (serveur) : L1 chat réel répond,
+  L2 LEARNING_DECISION dans agent.log (via `read_log_file` — le
+  bus in-process ne voit pas les events du serveur), L3
+  action/reason/priority sans messages complets, L4 preview
+  expose learning_strategy, L5 bloc LEARNING STRATEGY dans
+  prompt_preview, L6 aucun score interne.
+
+Non-régression : 13 suites (10 unitaires + 3 intégrations
+serveur) — V6.8/V6.8.1 inchangées, garde-fou §58 migré (3
+assertions : lecture seule, pas de router/recherche, BuiltContext).
+
+## 37.G — Frontend (§47-§49)
+
+- `types/agent.ts` : `LearningAction` (12), `LearningStrategyInfo`
+  (action/subject/topic/reason/confidence/priority/
+  recommended_tool), `ContextPreview.learning_strategy?`.
+- `ContextInspectorCard.tsx` : section « learning strategy »
+  (dev §47) — badge action, tones par action, raison, confiance,
+  priorité /10, outil recommandé avec la mention explicite « le
+  tuteur choisit — jamais exécuté d'office ».
+- **Interdits respectés (§32/§49)** : aucune nouvelle carte
+  étudiant, aucun Assistant UI, aucune logique brute exposée à
+  l'étudiant — les composants existants (ResponseRenderer,
+  ExerciseCard, …) restent les seules surfaces étudiant.
+
+## 37.H — Sous-agents (§41)
+
+5 missions V7 lancées (Architecture, Pedagogical Rules, Test
+Matrix, UX, LangChain Integration). **Résultat : 0 fichier
+modifié par les sous-agents.** Infrastructure host défaillante en
+session (panne sandbox ACL Windows : `--temp` inexistant ; puis
+disque plein ENOSPC nettoyé) : les agents ont échoué ou été
+interrompus en cours de route. Le parent a réalisé l'intégralité
+de la mission en direct (lecture/écriture/grep vérifiables) ;
+l'agent « Pedagogical Rules » a été interrompu volontairement
+une fois ses recherches devenues redondantes avec
+l'implémentation déjà validée.
+
+## 37.I — Arbre réel après V7
+
+```
+backend/app/learning/
+├── __init__.py
+├── activity.py          (V5.1/V5.2, inchangé)
+├── decision.py          (V7 — LearningDecision + ACTIVITY_TRANSITIONS)
+├── engine.py            (V7 — decide(), hiérarchie §8-§15)
+├── rules.py             (V7 — seuils/poids/trajectoire nommés)
+├── learning_context.py   (V6 + fix §15 : goal visible cross-topic)
+├── learning_profile.py  (V6, inchangé)
+└── schemas.py           (V6.8.1, inchangé)
+backend/app/context/
+├── prompt_builder.py    (+ add_learning_strategy_block, param decision)
+└── ...
+backend/app/agent/middleware.py (+ decide() dans tutor_dynamic_prompt)
+backend/app/api/subjects.py / schemas.py (+ learning_strategy preview)
+backend/tests/test_v7_learning_engine.py (46 vérifications)
+frontend/src/types/agent.ts (+ LearningAction/LearningStrategyInfo)
+frontend/src/components/memory/ContextInspectorCard.tsx (+ section)
+```
+
+## 37.J — Limitations honnêtes
+
+1. Le suivi de trajectoire s'appuie sur les 3 dernières
+   observations du topic (`list_observations`, FIFO 50) — pas de
+   fenêtre calibrée par temps écoulé ; un étudiant actif et un
+   étudiant revenant après 3 mois sont traités sur le même
+   historique récent.
+2. `review` (§35) est une révision simple guidée par le prompt —
+   aucun vrai spaced repetition (pas de scheduling SM-2 ou
+   équivalent, hors périmatoire V7).
+3. Les poids de priorité (§22) sont des constantes nommées
+   raisonnées, pas des paramètres appris/calibrés — ajustables
+   en production mais sans mécanisme d'optimisation.
+4. `mastery_zone(None)` renvoie `unknown` : un topic connu du
+   Registry mais jamais travaillé ne déclenche PAS de décision de
+   zone (§19) — il suit le chemin « premier contact » explain.
+5. Le bloc stratégie du prompt liste les 12 instructions par
+   action : la formulation naturelle est déléguée au LLM — le
+   moteur ne rédige jamais de texte étudiant.
+6. L2 (§45) dépend du fichier agent.log partagé — si le serveur
+   et le test tournent depuis des répertoires différents, la
+   vérification lit un journal différent (contrainte test
+   documentée, pas un défaut produit).
+
+
 
 

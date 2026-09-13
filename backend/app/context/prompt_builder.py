@@ -8,11 +8,16 @@ def build_system_prompt(
     context: BuiltContext,
     user_id: str = "",
     thread_id: str = "",
+    decision=None,
 ) -> str:
     """Assemble le system prompt final depuis le contexte structuré.
 
     Structure (§34) : CORE + MATIÈRE + NOTES ROUTING (fallbacks)
     + KNOWLEDGE + USER CONTEXT + THREAD + LEARNING (réservé).
+
+    V7 : `decision` (LearningDecision optionnelle) sert UNIQUEMENT
+    à l'observabilité PROMPT_BUILD — le bloc pédagogique est
+    ajouté séparément via add_learning_strategy_block (§31).
     """
     parts: list[str] = [core_prompt.strip()]
 
@@ -256,6 +261,92 @@ def build_system_prompt(
                 if context.learning is not None
                 else None
             ),
+            "learning_action": (
+                decision.action
+                if decision is not None
+                else None
+            ),
         },
     )
     return prompt
+
+
+def add_learning_strategy_block(
+    prompt: str, decision
+) -> str:
+    """Bloc LEARNING STRATEGY V7 (§31) — la décision pédagogique
+    du Learning Engine, présentée au LLM comme instruction.
+
+    Contenu EXPOSÉ : action / sujet / topic / raison lisible /
+    instruction. JAMAIS exposés (§31) : scores internes, poids,
+    algorithme de scoring, priorité brute, metadata.
+
+    Le LLM exécute l'interaction NATURELLE (§2) : il annonce la
+    stratégie en langage humain, jamais en jargon interne.
+    """
+    if decision is None:
+        return prompt
+    lines = [
+        "## LEARNING STRATEGY (décision pédagogique du système)",
+        f"Action : {decision.action}",
+    ]
+    if decision.subject:
+        lines.append(f"Sujet : {decision.subject}")
+    if decision.topic:
+        lines.append(f"Topic : {decision.topic}")
+    if decision.reason:
+        lines.append(f"Raison : {decision.reason}")
+    tool_hint = {
+        "practice": (
+            "Instruction : propose une activité adaptée "
+            "(l'outil create_exercise est disponible)."
+        ),
+        "quiz": (
+            "Instruction : lance un quiz court "
+            "(create_quiz est disponible)."
+        ),
+        "review": (
+            "Instruction : reprends ce point avec une révision "
+            "guidée, sans le présenter comme une punition."
+        ),
+        "deepen": (
+            "Instruction : propose un angle d'approfondissement "
+            "puis une question ouverte."
+        ),
+        "advance_topic": (
+            "Instruction : indique clairement que l'étudiant "
+            "semble prêt à passer à la suite, sans exposer de "
+            "chiffres internes."
+        ),
+        "evaluate": (
+            "Instruction : évalue la réponse de l'étudiant "
+            "(evaluate_answer / assess_understanding disponibles)."
+        ),
+        "hint": (
+            "Instruction : donne un indice progressif "
+            "(give_hint disponible)."
+        ),
+        "continue_activity": (
+            "Instruction : poursuis l'activité en cours, ne "
+            "change pas de sujet."
+        ),
+        "complete_activity": (
+            "Instruction : conclus proprement l'activité en cours."
+        ),
+        "clarify": (
+            "Instruction : demande une précision avant de choisir "
+            "une stratégie, propose les options si tu les as."
+        ),
+        "explain": (
+            "Instruction : explique le concept simplement, puis "
+            "propose une mise en pratique."
+        ),
+        "answer": (
+            "Instruction : réponds directement et naturellement "
+            "à la demande."
+        ),
+    }
+    hint = tool_hint.get(decision.action)
+    if hint:
+        lines.append(hint)
+    return prompt + "\n\n" + "\n".join(lines)

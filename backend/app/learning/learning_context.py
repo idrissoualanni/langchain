@@ -134,7 +134,6 @@ def get_learning_context(
                             g
                             for g in profile.goals
                             if g.subject == subject
-                            and (g.topic is None or g.topic == topic)
                         ]
                     ),
                 )

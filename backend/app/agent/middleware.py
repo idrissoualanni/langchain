@@ -213,12 +213,45 @@ def tutor_dynamic_prompt(request: ModelRequest) -> str:
         )
         if thread_id:
             _register_context(thread_id, context)
-        return build_system_prompt(
+        # V7 §30 : Learning Engine — build_context → decide →
+        # prompt. Couche de décision PURE (déterministe §21) :
+        # lit le BuiltContext, produit une LearningDecision, ne
+        # touche ni au profil ni aux sources (§4/§17/§18).
+        decision = None
+        try:
+            from app.learning.engine import decide
+
+            decision = decide(
+                context, user_id=user_id, thread_id=thread_id
+            )
+        except Exception as exc:
+            log_event(
+                "LEARNING_ENGINE_ERROR",
+                level="ERROR",
+                message=(
+                    f"Learning engine unavailable, continuing "
+                    f"without strategy: {exc}"
+                ),
+                user_id=user_id,
+                thread_id=thread_id or None,
+                extra={
+                    "operation": "learning_engine",
+                    "error": str(exc)[:300],
+                },
+            )
+        prompt = build_system_prompt(
             core_prompt=CORE_PROMPT,
             context=context,
             user_id=user_id,
             thread_id=thread_id,
         )
+        if decision is not None:
+            from app.context.prompt_builder import (
+                add_learning_strategy_block,
+            )
+
+            prompt = add_learning_strategy_block(prompt, decision)
+        return prompt
     except Exception as exc:
         log_event(
             "CONTEXT_BUILD_ERROR",

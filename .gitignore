@@ -31,3 +31,8 @@ logs/*.log
 # OS
 .DS_Store
 Thumbs.db
+
+backend/server.err
+backend/server.log
+backend/*.out
+backend/*.err

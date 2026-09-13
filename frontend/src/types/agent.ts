@@ -268,6 +268,34 @@ export interface FallbackInfo {
   candidates: string[];
 }
 
+// ---- V7 — Stratégie pédagogique (Learning Engine, dev §47) ----
+// Décision déterministe du Learning Engine : visible dans le
+// Context Inspector (dev) — JAMAIS exposée brute à l'étudiant
+// (§49 : le tuteur reformule naturellement).
+export type LearningAction =
+  | 'answer'
+  | 'explain'
+  | 'practice'
+  | 'hint'
+  | 'evaluate'
+  | 'quiz'
+  | 'review'
+  | 'deepen'
+  | 'advance_topic'
+  | 'clarify'
+  | 'continue_activity'
+  | 'complete_activity';
+
+export interface LearningStrategyInfo {
+  action: LearningAction;
+  subject: string | null;
+  topic: string | null;
+  reason: string;
+  confidence: number;
+  priority: number;
+  recommended_tool: string | null;
+}
+
 export interface ContextPreview {
   router: RouterInfo;
   subject: SubjectContextInfo | null;
@@ -283,6 +311,7 @@ export interface ContextPreview {
   };
   learning?: LearningContextData | null; // V6
   budget?: ContextBudgetInfo; // V6.8 — budget
+  learning_strategy?: LearningStrategyInfo | null; // V7 — décision engine
   prompt_preview: string;
   stats: Record<string, number>;
 }

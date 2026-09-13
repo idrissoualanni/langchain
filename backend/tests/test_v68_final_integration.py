@@ -180,15 +180,37 @@ check(
 
 import importlib.util  # noqa: E402
 
-no_engine = importlib.util.find_spec(
-    "app.learning.engine"
-) is None and importlib.util.find_spec(
-    "app.learning_engine"
-) is None
-check(
-    "AUCUN Learning Engine implémenté (§2 — phases suivantes)",
-    no_engine,
-)
+# V7 : le Learning Engine EXISTE désormais — le garde-fou §58 de
+# V6.8 (aucun engine AVANT l'unification des contrats) devient :
+# l'engine est une COUCHE DE DÉCISION PURE (§4.1) — elle n'écrit
+# JAMAIS le profil et ne recrée NI router NI recherche.
+engine_spec = importlib.util.find_spec("app.learning.engine")
+if engine_spec is not None:
+    import inspect  # noqa: E402
+
+    from app.learning import engine as _engine  # noqa: E402
+
+    _src = inspect.getsource(_engine)
+    check(
+        "Engine V7 : n'écrit PAS le profil (§4.1 lecture seule)",
+        "write_learning_profile" not in _src
+        and "update_profile_from_observation" not in _src,
+    )
+    check(
+        "Engine V7 : ne recrée PAS router/recherche (§17/§18)",
+        "route_subject" not in _src
+        and "web_search(" not in _src
+        and "search_knowledge(" not in _src,
+    )
+    check(
+        "Engine V7 : consomme BuiltContext (§26)",
+        "from app.context.schemas import BuiltContext" in _src,
+    )
+else:
+    check(
+        "AUCUN Learning Engine avant V7 (§2 — phases suivantes)",
+        True,
+    )
 
 # Résumé
 print()

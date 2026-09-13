@@ -108,6 +108,33 @@ def build_context_preview(
         thread_id=payload.thread_id or "",
     )
 
+    # V7 §47 : le prompt_preview montre AUSSI le bloc stratégie
+    # (ce que le LLM verra réellement au run — cohérence §31).
+    preview_prompt = prompt
+    try:
+        from app.learning.engine import decide
+
+        d = decide(
+            context, user_id=payload.user_id, thread_id=""
+        )
+        from app.context.prompt_builder import (
+            add_learning_strategy_block,
+        )
+
+        preview_prompt = add_learning_strategy_block(prompt, d)
+        learning_strategy = {
+            "action": d.action,
+            "subject": d.subject,
+            "topic": d.topic,
+            "reason": d.reason,
+            "confidence": d.confidence,
+            "priority": d.priority,
+            "recommended_tool": d.recommended_tool,
+        }
+    except Exception:
+        learning_strategy = None
+        preview_prompt = prompt
+
     # V6.8 §47 : budget (contrat frontend verrouillé) —
     # jamais exposé dans le chat étudiant, Context Inspector
     # uniquement (§32/§55).
@@ -148,6 +175,7 @@ def build_context_preview(
         thread=ctx["thread"],
         learning=ctx.get("learning"),
         budget=budget,
-        prompt_preview=prompt,
+        prompt_preview=preview_prompt,
         stats=ctx["stats"],
+        learning_strategy=learning_strategy,
     )

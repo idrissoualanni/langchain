@@ -60,6 +60,22 @@ const FALLBACK_TONES: Record<string, string> = {
   continue_without_external_search: 'text-[#94a3b8]',
 };
 
+// V7 §47 — couleurs d'action pédagogique (Learning Engine)
+const STRATEGY_TONES: Record<string, string> = {
+  answer: 'text-[#94a3b8]',
+  explain: 'text-[#6c63ff]',
+  practice: 'text-[#22c55e]',
+  hint: 'text-[#22d3ee]',
+  evaluate: 'text-[#f59e0b]',
+  quiz: 'text-[#f59e0b]',
+  review: 'text-[#f59e0b]',
+  deepen: 'text-[#6c63ff]',
+  advance_topic: 'text-[#22c55e]',
+  clarify: 'text-[#f59e0b]',
+  continue_activity: 'text-[#22d3ee]',
+  complete_activity: 'text-[#22c55e]',
+};
+
 function Section({
   title,
   open,
@@ -134,6 +150,7 @@ export function ContextInspectorCard({
   const [openLearning, setOpenLearning] = useState(false);
   const [openBudget, setOpenBudget] = useState(false);
   const [openFallback, setOpenFallback] = useState(false);
+  const [openStrategy, setOpenStrategy] = useState(false);
 
   const runPreview = async () => {
     if (!userId || !query.trim()) return;
@@ -621,6 +638,63 @@ export function ContextInspectorCard({
                           {c}
                         </span>
                       ))}
+                    </div>
+                  )}
+                </div>
+              </Section>
+            )}
+
+            {/* V7 §47 — Learning Strategy (décision engine, dev) */}
+            {preview.learning_strategy && (
+              <Section
+                title="learning strategy"
+                badge={preview.learning_strategy.action}
+                open={openStrategy}
+                onToggle={() => setOpenStrategy(!openStrategy)}
+              >
+                <div className="space-y-1.5 font-mono text-[10.5px]">
+                  <div className="text-[#f5f7fa]/85">
+                    action :{' '}
+                    <span
+                      className={
+                        STRATEGY_TONES[
+                          preview.learning_strategy.action
+                        ] ?? 'text-[#94a3b8]'
+                      }
+                    >
+                      {preview.learning_strategy.action}
+                    </span>
+                    {(preview.learning_strategy.subject ||
+                      preview.learning_strategy.topic) && (
+                      <span className="text-[#94a3b8]">
+                        {' '}
+                        · {preview.learning_strategy.subject ?? '?'}/
+                        {preview.learning_strategy.topic ?? '?'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[#94a3b8]">
+                    raison :{' '}
+                    {preview.learning_strategy.reason.length > 110
+                      ? `${preview.learning_strategy.reason.slice(0, 110)}…`
+                      : preview.learning_strategy.reason}
+                  </div>
+                  <div className="text-[#94a3b8]">
+                    conf.{' '}
+                    {Math.round(
+                      preview.learning_strategy.confidence * 100
+                    )}
+                    % · priorité{' '}
+                    {preview.learning_strategy.priority}/10
+                  </div>
+                  {preview.learning_strategy.recommended_tool && (
+                    <div className="text-[#6c63ff]">
+                      outil recommandé :{' '}
+                      {preview.learning_strategy.recommended_tool}
+                      <span className="text-[#94a3b8]">
+                        {' '}
+                        (le tuteur choisit — jamais exécuté d'office)
+                      </span>
                     </div>
                   )}
                 </div>
