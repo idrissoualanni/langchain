@@ -1,0 +1,51 @@
+id: sante
+name: Médecine et santé
+domain: sante
+description: Base pédagogique structurée pour Médecine et santé. Contenu introductif
+  et intermédiaire, conçu pour l'apprentissage, le raisonnement et la révision.
+aliases:
+- santé
+- médecine
+- health
+- medicine
+- organes
+- systèmes
+- anatomie humaine
+- anatomy
+- fonctionnement des organes
+- homéostasie
+- physiology
+- prévention
+- épidémiologie
+- population
+- prévention sanitaire
+topics:
+- anatomie
+- physiologie
+- sante_publique
+semantic_terms:
+  anatomie:
+  - Notions fondamentales de anatomie avec définitions, relations, exemples et erreurs
+    fréquentes.
+  - organes
+  - systèmes
+  - anatomie humaine
+  - anatomy
+  physiologie:
+  - Notions fondamentales de physiologie avec définitions, relations, exemples et
+    erreurs fréquentes.
+  - fonctionnement des organes
+  - homéostasie
+  - physiology
+  sante_publique:
+  - Notions fondamentales de santé publique avec définitions, relations, exemples
+    et erreurs fréquentes.
+  - prévention
+  - épidémiologie
+  - population
+  - prévention sanitaire
+knowledge:
+  sources:
+  - sante/anatomie
+  - sante/physiologie
+  - sante/sante_publique

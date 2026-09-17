@@ -196,6 +196,7 @@ async def run_agent_stream(
     user_id: str,
     thread_id: str,
     message: str,
+    model: str | None = None,
 ) -> AsyncIterator[dict]:
     """Exécute un run complet en streamant les événements du pipeline.
 
@@ -203,8 +204,11 @@ async def run_agent_stream(
       RUN_START → STATE_LOAD → USER_MESSAGE →
       (ROUTING → CONTEXT_BUILD → PROMPT_BUILD → LLM → TOOLS …) →
       ASSISTANT_MESSAGE → CHECKPOINT_SAVED → RUN_END
+
+    Mission Assistant UI : "model" optionnel (ModelSelector) —
+    sélectionne l'instance d'agent correspondante (graph.get_agent).
     """
-    agent = get_agent()
+    agent = get_agent(model or None)
     config = _config_for(thread_id, user_id)
     context = _runtime_context(user_id, thread_id)
 
@@ -399,9 +403,17 @@ async def run_agent_stream(
     }
 
 
-def run_agent(user_id: str, thread_id: str, message: str) -> dict:
-    """Mode synchrone (POST /api/chat) — même pipeline, sans stream."""
-    agent = get_agent()
+def run_agent(
+    user_id: str,
+    thread_id: str,
+    message: str,
+    model: str | None = None,
+) -> dict:
+    """Mode synchrone (POST /api/chat) — même pipeline, sans stream.
+
+    Mission Assistant UI : "model" optionnel (ModelSelector).
+    """
+    agent = get_agent(model or None)
     config = _config_for(thread_id, user_id)
     context = _runtime_context(user_id, thread_id)
 

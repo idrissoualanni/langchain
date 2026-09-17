@@ -1,46 +1,104 @@
 id: biology
 name: Biologie
 domain: sciences
-description: >
-  Science du vivant : cellule, génétique, écologie.
+description: 'Science du vivant : cellule, génétique, écologie.
+
+  '
 teaching_style:
-  - visuel
-  - analogies
+- visuel
+- analogies
 pedagogical_guidelines:
-  - utiliser des schémas décrits
-  - relier structure et fonction
+- utiliser des schémas décrits
+- relier structure et fonction
 capabilities:
-  - explain
-  - quiz
-  - evaluate
+- explain
+- quiz
+- evaluate
 tools:
   common:
-    - create_exercise
-    - evaluate_answer
-    - give_hint
-    - create_quiz
-    - assess_understanding
-    - propose_review
-  specialized: []  # mission intégration §25 : analyze_diagram non
-                   # implémenté retiré — le Tool Registry ne doit
-                   # déclarer QUE des tools réels (§39 : jamais de
-                   # faux tool exposé au LLM)
+  - create_exercise
+  - evaluate_answer
+  - give_hint
+  - create_quiz
+  - assess_understanding
+  - propose_review
+  specialized: []
 knowledge:
   sources:
-    - sciences/biologie/cell
-    - sciences/biologie/genetics
+  - sciences/biologie/cell
+  - sciences/biologie/genetics
+  - biology/cellule
+  - biology/genetique
+  - biology/ecologie_evolution
 topics:
-  - cellule
-  - membrane
-  - mitochondrie
-  - noyau
-  - genetique
-  - adn
-  - ecologie
+- cellule
+- membrane
+- mitochondrie
+- noyau
+- genetique
+- adn
+- ecologie
+- ecologie_evolution
 aliases:
-  - biologie
-  - biology
-  - science du vivant
+- biologie
+- biology
+- science du vivant
+- sciences de la vie
+- membrane
+- organite
+- ADN
+- cellule
+- gène
+- chromosome
+- hérédité
+- mutation
+- écosystème
+- population
+- sélection naturelle
+- biodiversité
+semantic_terms:
+  cellule:
+  - cellule unite du vivant organite membrane
+  - cell unit of life organelle membrane
+  - Notions fondamentales de cellule avec définitions, relations, exemples et erreurs
+    fréquentes.
+  - membrane
+  - organite
+  - ADN
+  - cellule
+  - cell biology
+  membrane:
+  - membrane plasmique passage des substances
+  - plasma membrane transport of substances
+  mitochondrie:
+  - mitochondrie energie production atp
+  - mitochondria energy production atp
+  noyau:
+  - noyau adn information genetique
+  - nucleus dna genetic information
+  genetique:
+  - genetique heredite transmission des caracteres
+  - genetics heredity inheritance of traits
+  - Notions fondamentales de génétique avec définitions, relations, exemples et erreurs
+    fréquentes.
+  - gène
+  - chromosome
+  - hérédité
+  - mutation
+  - genetics
+  adn:
+  - adn molecule support de l information genetique
+  - dna molecule genetic information
+  ecologie:
+  - ecologie ecosystemes interactions especes
+  - ecology ecosystems species interactions
+  ecologie_evolution:
+  - Notions fondamentales de écologie et évolution avec définitions, relations, exemples
+    et erreurs fréquentes.
+  - écosystème
+  - population
+  - sélection naturelle
+  - biodiversité
 model:
   provider: ollama
   name: qwen2.5

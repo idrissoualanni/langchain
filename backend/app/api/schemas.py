@@ -28,6 +28,13 @@ class UserOut(BaseModel):
     user_id: str
     name: str
     created_at: str
+    # Mission Identité — infos session (optionnelles)
+    clerk_user_id: str | None = None
+    role: str = "user"
+    # MODE DEV UNIQUEMENT : token de session simulée pour les
+    # suites de régression ("dev:<internal_user_id>"). Jamais
+    # renseigné en mode clerk.
+    dev_token: str | None = None
 
 
 class ThreadCreate(BaseModel):
@@ -48,10 +55,31 @@ class ThreadOut(BaseModel):
     created_at: str
 
 
+class ThreadRename(BaseModel):
+    """PUT /api/threads/{thread_id} — renommage (assistant-ui)."""
+    name: str = Field(..., min_length=1, max_length=150)
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Le nom du thread ne peut pas être vide")
+        return v.strip()
+
+
 class ChatRequest(BaseModel):
+    # Mission Identité : user_id/thread_id restent au contrat pour
+    # la rétrocompatibilité du format, MAIS l'identité vient du
+    # Bearer token (get_current_user). Le user_id fourni ici est
+    # VÉRIFIÉ contre l'utilisateur courant (403 si usurpation) —
+    # il ne définit JAMAIS qui est l'utilisateur.
     user_id: str
     thread_id: str
     message: str = Field(..., min_length=1, max_length=10_000)
+    # Mission Assistant UI (ModelSelector) : modèle Ollama optionnel.
+    # None/absent → modèle par défaut (MODEL_NAME, env). Aucun autre
+    # comportement backend ne dépend de ce champ.
+    model: str | None = Field(default=None, max_length=100)
 
     @field_validator("user_id")
     @classmethod
@@ -69,6 +97,14 @@ class ChatRequest(BaseModel):
         if not v.strip():
             raise ValueError("Le message ne peut pas être vide")
         return v.strip()
+
+    @field_validator("model")
+    @classmethod
+    def valid_model(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        return v or None
 
 
 class ChatResponse(BaseModel):

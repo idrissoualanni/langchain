@@ -69,3 +69,56 @@ def thread_belongs_to_user(thread_id: str, user_id: str) -> bool:
         (thread_id, user_id),
     ).fetchone()
     return row is not None
+
+
+def rename_thread(thread_id: str, name: str) -> dict | None:
+    """Renomme un thread. None si le thread n'existe pas.
+
+    Mission Assistant UI (priorité 6) : renommage persistant côté
+    backend — le ThreadList officiel d'assistant-ui appelle
+    PUT /api/threads/{id} via l'adaptateur frontend.
+    """
+    thread = get_thread(thread_id)
+    if thread is None:
+        return None
+
+    get_conn().execute(
+        "UPDATE threads SET name = ? WHERE thread_id = ?",
+        (name, thread_id),
+    )
+    # commit via get_conn (connexion partagée)
+    get_conn().commit()
+
+    log_event(
+        "THREAD_RENAME",
+        message=f"Thread renamed: {name}",
+        user_id=thread["user_id"],
+        thread_id=thread_id,
+    )
+
+    return {**thread, "name": name}
+
+
+def delete_thread(thread_id: str) -> bool:
+    """Supprime un thread. False si le thread n'existe pas.
+
+    Mission Assistant UI : suppression depuis le ThreadList officiel —
+    DELETE /api/threads/{id} via l'adaptateur frontend.
+    """
+    thread = get_thread(thread_id)
+    if thread is None:
+        return False
+
+    get_conn().execute(
+        "DELETE FROM threads WHERE thread_id = ?", (thread_id,)
+    )
+    get_conn().commit()
+
+    log_event(
+        "THREAD_DELETE",
+        message=f"Thread deleted: {thread['name']}",
+        user_id=thread["user_id"],
+        thread_id=thread_id,
+    )
+
+    return True

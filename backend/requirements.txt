@@ -5,3 +5,5 @@ fastapi
 uvicorn[standard]
 sse-starlette
 pydantic
+pyjwt
+cryptography

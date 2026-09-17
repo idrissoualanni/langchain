@@ -108,12 +108,12 @@ export function CodeEditor({ userId, threadId, initialCode }: CodeEditorProps) {
   // ----- État vide : pas de thread sélectionné (le run-code EST thread-scoped) -----
   if (!threadId) {
     return (
-      <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-[#26323d] p-6 text-center">
-        <Terminal size={24} className="text-[#94a3b8]/30" />
-        <p className="font-mono text-[11px] text-[#94a3b8]">
+      <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border] p-6 text-center">
+        <Terminal size={24} className="text-muted-foreground]/30" />
+        <p className="font-mono text-[11px] text-muted-foreground]">
           Sélectionnez un thread pour pratiquer le code.
         </p>
-        <p className="font-mono text-[10px] text-[#94a3b8]/50">
+        <p className="font-mono text-[10px] text-muted-foreground]/50">
           l'exécution est attachée au thread courant (sandbox isolée)
         </p>
       </div>
@@ -126,11 +126,11 @@ export function CodeEditor({ userId, threadId, initialCode }: CodeEditorProps) {
     <div className="flex flex-col gap-3">
       {/* Barre d'outils : badge langage + boutons */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="flex items-center gap-1.5 rounded-md border border-[#6c63ff]/30 bg-[#6c63ff]/15 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wide text-[#6c63ff]">
+        <span className="flex items-center gap-1.5 rounded-md border border-live]/30 bg-live]/15 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-wide text-live]">
           <Terminal size={11} strokeWidth={2} />
           python
         </span>
-        <span className="font-mono text-[10px] text-[#94a3b8]/50">
+        <span className="font-mono text-[10px] text-muted-foreground]/50">
           {lineCount} ligne{lineCount > 1 ? 's' : ''}
         </span>
 
@@ -139,7 +139,7 @@ export function CodeEditor({ userId, threadId, initialCode }: CodeEditorProps) {
             type="button"
             onClick={handleClear}
             disabled={running || (code.length === 0 && !result && !error)}
-            className="flex items-center gap-1.5 rounded-lg border border-[#26323d] bg-[#18212b] px-2.5 py-1.5 font-mono text-[11px] text-[#94a3b8] transition-colors hover:text-[#f5f7fa] disabled:opacity-40"
+            className="flex items-center gap-1.5 rounded-lg border border-border] bg-muted] px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground] transition-colors hover:text-foreground] disabled:opacity-40"
             title="Effacer l'éditeur et les résultats"
           >
             <Eraser size={12} />
@@ -149,7 +149,7 @@ export function CodeEditor({ userId, threadId, initialCode }: CodeEditorProps) {
             type="button"
             onClick={() => void handleRun()}
             disabled={!canRun}
-            className="flex items-center gap-1.5 rounded-lg bg-[#6c63ff] px-3 py-1.5 font-mono text-[11px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+            className="flex items-center gap-1.5 rounded-lg bg-live] px-3 py-1.5 font-mono text-[11px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             title="Exécuter dans la sandbox isolée (10s max)"
           >
             {running ? (
@@ -163,11 +163,11 @@ export function CodeEditor({ userId, threadId, initialCode }: CodeEditorProps) {
       </div>
 
       {/* Éditeur mono avec numéros de ligne */}
-      <div className="flex overflow-hidden rounded-lg border border-[#26323d] bg-[#0b0f14] focus-within:border-[#6c63ff]/50">
+      <div className="flex overflow-hidden rounded-lg border border-border] bg-background] focus-within:border-live]/50">
         <div
           ref={gutterRef}
           aria-hidden="true"
-          className="max-h-[420px] select-none overflow-hidden border-r border-[#26323d]/60 bg-[#0d1117] px-2 py-2.5 text-right font-mono text-[11px] leading-relaxed text-[#94a3b8]/40"
+          className="max-h-[420px] select-none overflow-hidden border-r border-border]/60 bg-background] px-2 py-2.5 text-right font-mono text-[11px] leading-relaxed text-muted-foreground]/40"
         >
           {Array.from({ length: lineCount }, (_, i) => (
             <div key={i}>{i + 1}</div>
@@ -183,13 +183,13 @@ export function CodeEditor({ userId, threadId, initialCode }: CodeEditorProps) {
           spellCheck={false}
           placeholder="# votre code python…"
           rows={12}
-          className="max-h-[420px] min-h-[200px] w-full resize-none overflow-auto bg-transparent px-3 py-2.5 font-mono text-[11px] leading-relaxed text-[#f5f7fa] placeholder:text-[#94a3b8]/40 focus:outline-none disabled:opacity-60"
+          className="max-h-[420px] min-h-[200px] w-full resize-none overflow-auto bg-transparent px-3 py-2.5 font-mono text-[11px] leading-relaxed text-foreground] placeholder:text-muted-foreground]/40 focus:outline-none disabled:opacity-60"
         />
       </div>
 
       {/* Erreur API (400 code interdit, 403 isolation, réseau…) */}
       {error && (
-        <div className="flex items-start gap-2 rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 px-3 py-2.5 font-mono text-[11px] leading-relaxed text-[#ef4444]">
+        <div className="flex items-start gap-2 rounded-lg border border-destructive]/30 bg-destructive]/10 px-3 py-2.5 font-mono text-[11px] leading-relaxed text-destructive]">
           <ShieldAlert size={14} className="mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>

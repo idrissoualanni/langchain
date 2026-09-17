@@ -1,0 +1,56 @@
+id: mecanique_ingenierie
+name: Mécanique et ingénierie
+domain: ingenierie
+description: Base pédagogique structurée pour Mécanique et ingénierie. Contenu introductif
+  et intermédiaire, conçu pour l'apprentissage, le raisonnement et la révision.
+aliases:
+- mécanique
+- engineering
+- mechanical engineering
+- équilibre
+- forces
+- moments
+- free body diagram
+- accélération
+- force
+- masse
+- mouvement
+- contrainte
+- déformation
+- traction
+- flexion
+topics:
+- statique
+- dynamique
+- resistance_materiaux
+semantic_terms:
+  statique:
+  - Notions fondamentales de statique avec définitions, relations, exemples et erreurs
+    fréquentes.
+  - équilibre
+  - forces
+  - moments
+  - free body diagram
+  - statics
+  dynamique:
+  - Notions fondamentales de dynamique avec définitions, relations, exemples et erreurs
+    fréquentes.
+  - accélération
+  - force
+  - masse
+  - mouvement
+  - dynamics
+  resistance_materiaux:
+  - Notions fondamentales de résistance des matériaux avec définitions, relations,
+    exemples et erreurs fréquentes.
+  - contrainte
+  - déformation
+  - traction
+  - flexion
+  - torsion
+  - materials
+knowledge:
+  sources:
+  - mecanique_ingenierie/statique
+  - mecanique_ingenierie/dynamique
+  - mecanique_ingenierie/resistance_materiaux

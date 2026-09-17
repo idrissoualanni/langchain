@@ -1,0 +1,30 @@
+id: astronomy
+name: Astronomie
+domain: sciences
+description: >
+  Science des astres et du cosmos.
+teaching_style:
+  - visuel
+pedagogical_guidelines:
+  - utiliser des analogies d echelle
+capabilities:
+  - explain
+  - quiz
+tools:
+  common:
+    - create_exercise
+    - evaluate_answer
+    - give_hint
+  specialized: []
+knowledge:
+  sources:
+    - sciences/astronomie/star_life
+topics:
+  - etoiles
+  - planetes
+  - cosmos
+aliases:
+  - astronomie
+model:
+  provider: ollama
+  name: qwen2.5

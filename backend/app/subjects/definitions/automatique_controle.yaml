@@ -1,0 +1,57 @@
+id: automatique_controle
+name: Automatique et contrôle
+domain: ingenierie
+description: Base pédagogique structurée pour Automatique et contrôle. Contenu introductif
+  et intermédiaire, conçu pour l'apprentissage, le raisonnement et la révision.
+aliases:
+- automatique
+- contrôle
+- régulation
+- control systems
+- système dynamique
+- modèle
+- entrée
+- sortie
+- boucle fermée
+- erreur
+- consigne
+- feedback
+- proportionnel
+- intégral
+- dérivé
+- PID
+topics:
+- modelisation_systemes
+- asservissement
+- pid
+semantic_terms:
+  modelisation_systemes:
+  - Notions fondamentales de modélisation des systèmes avec définitions, relations,
+    exemples et erreurs fréquentes.
+  - système dynamique
+  - modèle
+  - entrée
+  - sortie
+  - fonction de transfert
+  asservissement:
+  - Notions fondamentales de asservissement avec définitions, relations, exemples
+    et erreurs fréquentes.
+  - boucle fermée
+  - erreur
+  - consigne
+  - feedback
+  - closed loop
+  pid:
+  - Notions fondamentales de régulateur pid avec définitions, relations, exemples
+    et erreurs fréquentes.
+  - proportionnel
+  - intégral
+  - dérivé
+  - PID
+  - tuning
+  - regulation
+knowledge:
+  sources:
+  - automatique_controle/modelisation_systemes
+  - automatique_controle/asservissement
+  - automatique_controle/pid

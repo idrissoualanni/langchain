@@ -1,0 +1,56 @@
+id: sciences_humaines_communication
+name: Sciences humaines et communication
+domain: sciences_humaines
+description: Base pédagogique structurée pour Sciences humaines et communication.
+  Contenu introductif et intermédiaire, conçu pour l'apprentissage, le raisonnement
+  et la révision.
+aliases:
+- histoire
+- géographie
+- sociologie
+- psychologie
+- philosophie
+- communication
+- chronologie
+- événements
+- sources historiques
+- territoire
+- population
+- espace
+- environnement
+- message
+- média
+- argumentation
+- communication interpersonnelle
+topics:
+- histoire
+- geographie
+- communication
+semantic_terms:
+  histoire:
+  - Notions fondamentales de histoire avec définitions, relations, exemples et erreurs
+    fréquentes.
+  - chronologie
+  - événements
+  - sources historiques
+  - histoire
+  geographie:
+  - Notions fondamentales de géographie avec définitions, relations, exemples et erreurs
+    fréquentes.
+  - territoire
+  - population
+  - espace
+  - environnement
+  - geography
+  communication:
+  - Notions fondamentales de communication avec définitions, relations, exemples et
+    erreurs fréquentes.
+  - message
+  - média
+  - argumentation
+  - communication interpersonnelle
+knowledge:
+  sources:
+  - sciences_humaines_communication/histoire
+  - sciences_humaines_communication/geographie
+  - sciences_humaines_communication/communication

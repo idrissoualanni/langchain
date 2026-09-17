@@ -50,12 +50,57 @@ topics:
   - decorators
   - modules
   - async
+  - recursion
 aliases:
   - python
   - langage python
   - closures
   - decorateurs
   - generateurs
+# V7.1 §8 : description sémantique PAR TOPIC — voie déclarative
+# des paraphrases. L'auteur de la matière décrit le CONCEPT en
+# langage naturel ; le semantic layer embedde ces phrases. ZÉRO
+# synonyme codé en Python (mission §3/§24).
+semantic_terms:
+  variables:
+    - stocker une valeur dans une variable affecter nommer
+    - variable assignment store value name
+  fonctions:
+    - definir une fonction reusable parametres def
+    - function definition def parameters reusable
+  functions:
+    - definir une fonction reusable parametres def
+    - function definition def parameters reusable
+  return:
+    - retourner renvoyer le resultat d une fonction valeur de retour
+    - return value result of a function give back
+  boucles:
+    - repeter une action plusieurs fois iterer boucle for while
+    - repeat an action multiple times iterate loop
+  loops:
+    - repeter une action plusieurs fois iterer boucle for while
+    - repeat an action multiple times iterate loop
+  classes:
+    - classe objet instance oriente objet attributs methodes
+    - class object instance attributes methods
+  heritages:
+    - heritage classe parente heriter reutiliser classe fille
+    - inheritance parent class subclass extend
+  oop:
+    - oriente objet encapsulation abstraction classes objets
+    - object oriented programming encapsulation abstraction
+  decorators:
+    - decorateur envelopper une fonction modifier son comportement
+    - decorator wrap a function modify behavior
+  modules:
+    - module importer librairie organisation du code import
+    - module import library code organization
+  async:
+    - asynchrone await async concurrent ne pas bloquer
+    - asynchronous await async concurrency non blocking
+  recursion:
+    - recursivite fonction qui s appelle elle-meme fonction qui se rappelle elle-meme
+    - recursion function that calls itself recursive definition
 model:
   provider: ollama
   name: qwen2.5

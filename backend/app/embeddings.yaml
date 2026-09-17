@@ -1,0 +1,60 @@
+# Embedding Registry V7.1 — source déclarative UNIQUE des
+# embeddings (ADDENDUM modèle d'embeddings).
+#
+# RÈGLES :
+#   - « active » = provider d'embeddings par défaut du système ;
+#   - EMBEDDING_PROVIDER (env) surcharge « active » (tests, ops) ;
+#   - le modèle de GÉNÉRATION (models.yaml, env MODEL_OLLAMA)
+#     reste INDÉPENDANT du modèle d'embeddings (addendum) ;
+#   - remplacer le modèle = éditer UNE entrée ici, JAMAIS le
+#     SemanticRetriever ni le code métier.
+#
+# Providers disponibles :
+#   ACTIF = qwen3-embedding:0.6b (présent localement, testé :
+#   paraphrase 0.767 / recursion 0.830 / return 0.860).
+#   CIBLE DE RÉFÉRENCE (addendum) = qwen3-embedding:4b — non
+#   installable sur cette machine (disque saturé) ; pour
+#   l'activer : remplacer « active » ci-dessous par ollama-4b
+#   après « ollama pull qwen3-embedding:4b ». ZÉRO code à changer.
+active: ollama-0-6b
+
+providers:
+  # RÉFÉRENCE V7.1 — Qwen3-Embedding 4B via Ollama (addendum).
+  # Indisponible (non pullé / service KO) → le retriever
+  # sémantique passe en status unavailable et le routing
+  # retombe sur le lexical (fail-safe, test §25).
+  ollama-4b:
+    provider_type: ollama
+    model: qwen3-embedding:4b
+    dim: 2560
+    timeout_s: 10
+    # Host embeddings DÉDIÉ (local) — découplé du host de
+    # GÉNÉRATION OLLAMA_HOST (cloud). Modifiable sans toucher au code.
+    host: http://localhost:11434
+    num_ctx: 512
+
+  # ACTIF — Qwen3-Embedding 0.6B (installé localement, dim 1024).
+  ollama-0-6b:
+    provider_type: ollama
+    model: qwen3-embedding:0.6b
+    dim: 1024
+    timeout_s: 10
+    host: http://localhost:11434
+    num_ctx: 512
+
+  # Fallback déterministe local — zéro service externe. Toujours
+  # disponible ; utilisé par défaut si ollama est absent.
+  local-hash:
+    provider_type: local-hash
+
+  # Autres remplacements futurs (aucune ligne de code à changer) :
+  ollama-8b:
+    provider_type: ollama
+    model: qwen3-embedding:8b
+    dim: 4096
+    timeout_s: 15
+  bge-m3:
+    provider_type: ollama
+    model: bge-m3
+    dim: 1024
+    timeout_s: 10

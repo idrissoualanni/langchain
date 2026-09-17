@@ -1,7 +1,12 @@
 # Route Logs — GET /api/logs (backfill)
-from fastapi import APIRouter, Query
+#
+# Mission Identité (§22) : les logs techniques complets ( messages
+# d'utilisateurs inclus ) sont réservés à l'ADMIN. Un user ne
+# peut plus lire les logs d'un autre via cette route.
+from fastapi import APIRouter, Depends, Query
 
 from app.api.schemas import HealthResponse  # noqa: F401 (réutilisation types)
+from app.auth.resolver import CurrentUser, require_admin
 from app.logging.events import read_log_file
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])
@@ -13,8 +18,9 @@ def api_logs(
     level: str | None = None,
     event: str | None = None,
     thread_id: str | None = None,
+    current: CurrentUser = Depends(require_admin),
 ):
-    """Lecture des logs structurés (agent.log, JSON-lines).
+    """Lecture des logs structurés (agent.log, JSON-lines) — ADMIN.
 
     Filtres optionnels : level (INFO/WARNING/ERROR), event, thread_id.
     Retour : plus anciens d'abord, borné par limit.

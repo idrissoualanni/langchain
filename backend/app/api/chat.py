@@ -1,27 +1,41 @@
 # Routes Chat — POST /api/chat + GET /api/chat/stream (SSE)
+#
+# Mission Identité :
+#   - l'identité vient du Bearer token ( get_current_user )
+#   - le user_id du BODY n'est plus une source d'identité : il est
+#     VÉRIFIÉ contre l'utilisateur courant ( 403 si usurpation )
+#   - SSE : user_id/thread_id/messages restent en query ( identité
+#     via Authorization header — JAMAIS de token en URL , §17 )
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
 from app.agent.runner import run_agent, run_agent_stream
 from app.api.schemas import ChatRequest, ChatResponse
+from app.auth.resolver import CurrentUser, get_current_user
 from app.db.connections import init_db
 from app.db.threads import get_thread, thread_belongs_to_user
-from app.db.users import get_user
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
-def _validate_chat(payload: ChatRequest) -> None:
-    """Validation : user existe, thread existe, thread appartient au user."""
+def _validate_chat(
+    payload: ChatRequest, current: CurrentUser
+) -> None:
+    """Validation : user existe, thread existe, thread au user.
+
+    Mission Identité : le user_id du payload doit être CELUI DE LA
+    SESSION ( anti-usurpation ) — un user_id d'autrui → 403.
+    """
     init_db()
 
-    if get_user(payload.user_id) is None:
+    # Anti-usurpation (§10) : le body ne définit pas l'identité
+    if not current.is_admin and payload.user_id != current.user_id:
         raise HTTPException(
-            status_code=404,
-            detail="Utilisateur introuvable",
+            status_code=403,
+            detail="user_id ne correspond pas à la session",
         )
 
     thread = get_thread(payload.thread_id)
@@ -42,13 +56,17 @@ def _validate_chat(payload: ChatRequest) -> None:
 
 
 @router.post("", response_model=ChatResponse)
-def api_chat(payload: ChatRequest) -> ChatResponse:
+def api_chat(
+    payload: ChatRequest,
+    current: CurrentUser = Depends(get_current_user),
+) -> ChatResponse:
     """Envoyer un message — réponse complète après le run."""
-    _validate_chat(payload)
+    _validate_chat(payload, current)
     result = run_agent(
         user_id=payload.user_id,
         thread_id=payload.thread_id,
         message=payload.message,
+        model=payload.model,
     )
     return ChatResponse(**result)
 
@@ -58,8 +76,15 @@ async def api_chat_stream(
     user_id: str,
     thread_id: str,
     message: str,
+    model: str | None = None,
+    current: CurrentUser = Depends(get_current_user),
 ):
     """Envoyer un message — stream SSE des événements du pipeline.
+
+    Mission Identité (§17) : l'identité vient du HEADER
+    Authorization Bearer ( JAMAIS du query param ). user_id en
+    query n'est qu'une VÉRIFICATION anti-usurpation — 403 s'il ne
+    correspond pas à la session.
 
     Événements : RUN_START, STATE_LOAD, USER_MESSAGE, ASSISTANT_MESSAGE,
     CHECKPOINT_SAVED, RUN_END (+ TOOL_START/TOOL_END/TOOL_ERROR temps réel
@@ -70,6 +95,7 @@ async def api_chat_stream(
             user_id=user_id,
             thread_id=thread_id,
             message=message,
+            model=model,
         )
     except ValidationError as exc:
         raise HTTPException(
@@ -77,13 +103,14 @@ async def api_chat_stream(
             detail=json.loads(exc.json())[0]["msg"],
         )
 
-    _validate_chat(payload)
+    _validate_chat(payload, current)
 
     async def gen():
         async for event in run_agent_stream(
             user_id=payload.user_id,
             thread_id=payload.thread_id,
             message=payload.message,
+            model=payload.model,
         ):
             # Format SSE textuel : event: X\ndata: {...}\n\n
             yield (

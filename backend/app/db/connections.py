@@ -26,6 +26,34 @@ CREATE TABLE IF NOT EXISTS threads (
 CREATE INDEX IF NOT EXISTS idx_threads_user ON threads(user_id);
 """
 
+# Mission Identité — migrations ADDITIVES idempotentes (§6/§7) :
+#   + users.clerk_user_id TEXT UNIQUE  (liaison identité externe)
+#   + users.role TEXT DEFAULT 'user'    (rôles user/admin)
+# AUCUNE donnée existante n'est modifiée ou supprimée : les users
+# actuels gardent clerk_user_id NULL (jamais rattachés arbitrairement)
+# et role NULL → résolu en 'user' par le resolver.
+MIGRATIONS = [
+    (
+        "ALTER TABLE users ADD COLUMN clerk_user_id TEXT",
+        "clerk_user_id",
+    ),
+    (
+        "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'",
+        "role",
+    ),
+]
+
+UNIQUE_INDEX = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_clerk
+ON users(clerk_user_id) WHERE clerk_user_id IS NOT NULL;
+"""
+
+
+def _columns(conn: sqlite3.Connection) -> set:
+    return {
+        r[1] for r in conn.execute("PRAGMA table_info(users)")
+    }
+
 
 def get_conn() -> sqlite3.Connection:
     """Connexion SQLite par thread (thread-safe pour FastAPI threadpool)."""
@@ -39,12 +67,20 @@ def get_conn() -> sqlite3.Connection:
 
 
 def init_db() -> None:
-    """Crée le schema users/threads si nécessaire (idempotent)."""
+    """Crée le schema users/threads + migrations identité (idempotent)."""
     global _initialized
     with _init_lock:
         if _initialized:
             return
         conn = get_conn()
         conn.executescript(SCHEMA)
+        conn.commit()
+        # Migrations additives — idempotentes et non destructives
+        cols = _columns(conn)
+        for stmt, col in MIGRATIONS:
+            if col not in cols:
+                conn.execute(stmt)
+                conn.commit()
+        conn.execute(UNIQUE_INDEX)
         conn.commit()
         _initialized = True

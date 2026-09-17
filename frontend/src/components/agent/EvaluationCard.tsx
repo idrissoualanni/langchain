@@ -6,19 +6,17 @@ import { CheckCircle2, RotateCcw } from 'lucide-react';
 import type { EvaluationData } from '../../types/agentResponse';
 
 const STATUS_STYLE: Record<string, string> = {
-  completed: 'border-[#22c55e]/25 bg-[#22c55e]/[0.05]',
-  waiting_for_user: 'border-[#f59e0b]/25 bg-[#f59e0b]/[0.05]',
-  cancelled: 'border-[#94a3b8]/25 bg-[#94a3b8]/[0.05]',
-  running: 'border-[#6c63ff]/25 bg-[#6c63ff]/[0.05]',
-  error: 'border-[#ef4444]/25 bg-[#ef4444]/[0.05]',
+  completed: 'border-success/25 bg-success/[0.05]',
+  waiting_for_user: 'border-warning/25 bg-warning/[0.05]',
+  cancelled: 'border-border bg-muted/40',
+  running: 'border-live/25 bg-live/[0.05]',
+  error: 'border-destructive/25 bg-destructive/[0.05]',
 };
 
 export function EvaluationCard({
-  message,
   data,
   status,
 }: {
-  message: string;
   data: EvaluationData;
   status: string;
 }) {
@@ -27,26 +25,23 @@ export function EvaluationCard({
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`rounded-xl border p-3.5 ${
+      className={`rounded-[var(--radius-surface)] border p-3.5 ${
         STATUS_STYLE[status] ?? STATUS_STYLE.completed
       }`}
     >
-      <div className="mb-2 flex items-center gap-2">
-        <CheckCircle2 size={14} className="text-[#22c55e]" />
-        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[#94a3b8]">
+      <div className="flex items-center gap-2">
+        <CheckCircle2 size={14} className="text-success" />
+        <span className="font-mono text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
           évaluation
           {typeof data.score === 'number'
             ? ` · ${Math.round(data.score * 100)}%`
             : ''}
         </span>
         {retry && (
-          <span className="ml-auto flex items-center gap-1 font-mono text-[10px] text-[#f59e0b]">
+          <span className="ml-auto flex items-center gap-1 font-mono text-[10px] text-warning">
             <RotateCcw size={11} /> à retravailler
           </span>
         )}
-      </div>
-      <div className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-[#f5f7fa]/90">
-        {message}
       </div>
     </motion.div>
   );

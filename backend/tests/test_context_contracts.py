@@ -654,14 +654,34 @@ check(
     "priorité activité respectée",
 )
 
+# K4 — scénario "mastery faible → review" construit EXPLICITEMENT.
+#
+# bc_real route "explique moi les fonctions python" en AMBIGUOUS :
+# l'alias "fonctions" est déclaré dans 3 YAML du Subject Registry
+# (informatique, mathematics, python) → égalité 2.0/2.0/2.0 → tie
+# → §18 ambiguous. Le mock V7 priorise routing.ambiguous → clarify
+# AVANT la branche learning → la copie seule de `learning` (basée
+# sur bc_real) donnerait "clarify" au lieu de "review".
+#
+# CAR CAS B (test, pas données) : la mission §14 interdit de
+# modifier le Subject Registry (sauf régression liée à l'auth —
+# ce n'est pas le cas ici). Le scénario pédagogique doit donc être
+# déterministe : routing=supported explicite → la branche learning
+# (mastery<0.4) est atteinte sans dépendre de bc_real.
 bc_low = bc_real.model_copy(
     update={
+        "routing": RoutingResult(
+            status="supported",
+            subject="python",
+            topic="functions",
+            confidence=0.9,
+        ),
         "learning": LearningContextInfo(
             status="active",
             subject="python",
             topic="functions",
             mastery=0.25,
-        )
+        ),
     }
 )
 d4 = engine.decide(bc_low)

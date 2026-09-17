@@ -1,49 +1,116 @@
 id: computer_networks
 name: Réseaux informatiques
 domain: informatique
-description: >
-  Réseaux : modèle OSI, TCP/IP, protocoles.
+description: 'Réseaux : modèle OSI, TCP/IP, protocoles.
+
+  '
 teaching_style:
-  - progressif
-  - couche par couche
+- progressif
+- couche par couche
 pedagogical_guidelines:
-  - partir du concret
-  - remonter le modèle en couches
+- partir du concret
+- remonter le modèle en couches
 capabilities:
-  - explain
-  - quiz
-  - evaluate
+- explain
+- quiz
+- evaluate
 tools:
   common:
-    - create_exercise
-    - evaluate_answer
-    - give_hint
-    - create_quiz
-    - assess_understanding
-    - propose_review
+  - create_exercise
+  - evaluate_answer
+  - give_hint
+  - create_quiz
+  - assess_understanding
+  - propose_review
   specialized: []
 knowledge:
   sources:
-    - informatique/reseaux/osi_model
-    - informatique/reseaux/tcp_ip
+  - informatique/reseaux/osi_model
+  - informatique/reseaux/tcp_ip
+  - computer_networks/modele_osi_tcpip
+  - computer_networks/routage_services_reseau
+  - computer_networks/cybersecurite_fondamentaux
 topics:
-  - osi
-  - tcp
-  - ip
-  - protocoles
-  - couches
-  - dns
+- osi
+- tcp
+- ip
+- protocoles
+- couches
+- dns
+- modele_osi_tcpip
+- routage_services_reseau
+- cybersecurite_fondamentaux
 aliases:
-  - reseaux informatiques
-  - computer networks
-  - osi
-  - tcp/ip
-  - tcp ip
-  - protocole
-  - dns
-  - communication entre ordinateurs
-  - communiquer entre ordinateurs
-  - ordinateurs communiquent
+- reseaux informatiques
+- computer networks
+- osi
+- tcp/ip
+- tcp ip
+- protocole
+- dns
+- communication entre ordinateurs
+- communiquer entre ordinateurs
+- ordinateurs communiquent
+- réseaux
+- networking
+- cybersécurité
+- cybersecurity
+- OSI
+- TCP
+- IP
+- UDP
+- routeur
+- adresse IP
+- DNS
+- DHCP
+- confidentialité
+- intégrité
+- disponibilité
+- authentification
+semantic_terms:
+  osi:
+  - modele en couches osi couche application transport reseau
+  - osi layers application transport network
+  tcp:
+  - tcp connexion fiable transmission de donnees
+  - tcp reliable connection data transmission
+  ip:
+  - adresse ip routage des paquets internet
+  - ip address packet routing internet
+  protocoles:
+  - protocole regles de communication entre machines
+  - protocol communication rules between machines
+  couches:
+  - empilement de couches modele en couches abstraction
+  - layer stack layered model abstraction
+  dns:
+  - dns traduction nom de domaine en adresse
+  - dns domain name resolution address
+  modele_osi_tcpip:
+  - Notions fondamentales de osi et tcp/ip avec définitions, relations, exemples et
+    erreurs fréquentes.
+  - OSI
+  - TCP
+  - IP
+  - UDP
+  - couche réseau
+  - protocols
+  routage_services_reseau:
+  - Notions fondamentales de routage et services réseau avec définitions, relations,
+    exemples et erreurs fréquentes.
+  - routeur
+  - adresse IP
+  - DNS
+  - DHCP
+  - routing
+  cybersecurite_fondamentaux:
+  - Notions fondamentales de fondamentaux de cybersécurité avec définitions, relations,
+    exemples et erreurs fréquentes.
+  - confidentialité
+  - intégrité
+  - disponibilité
+  - authentification
+  - sécurité
 model:
   provider: ollama
   name: qwen2.5

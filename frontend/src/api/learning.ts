@@ -1,6 +1,12 @@
 // API Learning V6 — Learning Profile (lecture seule : les tools
 // LLM restent la voie d'écriture)
-import type { LearningProfileData, TopicLearningData } from '../types/learning';
+import type {
+  LearningGoalData,
+  LearningObservationData,
+  LearningProfileData,
+  LearningTopicsResponse,
+  TopicLearningData,
+} from '../types/learning';
 import { apiFetch } from './base';
 
 export async function getLearningProfile(
@@ -11,14 +17,12 @@ export async function getLearningProfile(
   );
 }
 
-export async function getLearningTopics(userId: string): Promise<{
-  status: string;
-  subjects: Record<
-    string,
-    { mastery: number | null; topics: Record<string, TopicLearningData> }
-  >;
-}> {
-  return apiFetch(`/api/learning/${userId}/topics`);
+export async function getLearningTopics(
+  userId: string
+): Promise<LearningTopicsResponse> {
+  return apiFetch<LearningTopicsResponse>(
+    `/api/learning/${userId}/topics`
+  );
 }
 
 export async function getLearningTopic(
@@ -31,15 +35,19 @@ export async function getLearningTopic(
 
 export async function getLearningObservations(
   userId: string,
-  limit = 50
-): Promise<Array<Record<string, unknown>>> {
+  opts: { limit?: number; subject?: string; topic?: string } = {}
+): Promise<LearningObservationData[]> {
+  const params = new URLSearchParams();
+  params.set('limit', String(opts.limit ?? 50));
+  if (opts.subject) params.set('subject', opts.subject);
+  if (opts.topic) params.set('topic', opts.topic);
   return apiFetch(
-    `/api/learning/${userId}/observations?limit=${limit}`
+    `/api/learning/${userId}/observations?${params.toString()}`
   );
 }
 
 export async function getLearningGoals(
   userId: string
-): Promise<Array<Record<string, unknown>>> {
+): Promise<LearningGoalData[]> {
   return apiFetch(`/api/learning/${userId}/goals`);
 }

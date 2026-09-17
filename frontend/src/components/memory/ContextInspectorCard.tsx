@@ -22,58 +22,58 @@ interface ContextInspectorCardProps {
 }
 
 const STATUS_TONES: Record<RouterStatus, string> = {
-  supported: 'bg-[#22c55e]/15 text-[#22c55e] border-[#22c55e]/30',
-  ambiguous: 'bg-[#f59e0b]/15 text-[#f59e0b] border-[#f59e0b]/30',
-  unsupported: 'bg-[#f59e0b]/15 text-[#f59e0b] border-[#f59e0b]/30',
-  unknown: 'bg-[#94a3b8]/15 text-[#94a3b8] border-[#94a3b8]/30',
-  multi_domain: 'bg-[#6c63ff]/15 text-[#6c63ff] border-[#6c63ff]/30',
+  supported: 'bg-success/15 text-success border-success/30',
+  ambiguous: 'bg-warning/15 text-warning border-warning/30',
+  unsupported: 'bg-warning/15 text-warning border-warning/30',
+  unknown: 'bg-muted-foreground/15 text-muted-foreground border-muted-foreground/30',
+  multi_domain: 'bg-live/15 text-live border-live/30',
 };
 
 const KNOWLEDGE_TONES: Record<string, string> = {
-  found: 'text-[#22c55e]',
-  insufficient: 'text-[#f59e0b]',
-  unavailable: 'text-[#94a3b8]',
+  found: 'text-success',
+  insufficient: 'text-warning',
+  unavailable: 'text-muted-foreground',
 };
 
 const SEARCH_TONES: Record<string, string> = {
-  found: 'text-[#22c55e]',
-  insufficient: 'text-[#f59e0b]',
-  unavailable: 'text-[#94a3b8]',
-  error: 'text-[#ef4444]',
+  found: 'text-success',
+  insufficient: 'text-warning',
+  unavailable: 'text-muted-foreground',
+  error: 'text-destructive',
 };
 
 // V6.8 §54 — couleurs de statut budget
 const BUDGET_TONES: Record<string, string> = {
-  ok: 'text-[#22c55e]',
-  near_limit: 'text-[#f59e0b]',
-  compressed: 'text-[#f59e0b]',
-  exceeded: 'text-[#ef4444]',
-  unknown: 'text-[#94a3b8]',
+  ok: 'text-success',
+  near_limit: 'text-warning',
+  compressed: 'text-warning',
+  exceeded: 'text-destructive',
+  unknown: 'text-muted-foreground',
 };
 
 // V6.6 §54 — couleurs d'action fallback
 const FALLBACK_TONES: Record<string, string> = {
-  use_local_knowledge: 'text-[#22c55e]',
-  use_web_search: 'text-[#22d3ee]',
-  ask_clarification: 'text-[#f59e0b]',
-  use_general_tutor: 'text-[#94a3b8]',
-  continue_without_external_search: 'text-[#94a3b8]',
+  use_local_knowledge: 'text-success',
+  use_web_search: 'text-live',
+  ask_clarification: 'text-warning',
+  use_general_tutor: 'text-muted-foreground',
+  continue_without_external_search: 'text-muted-foreground',
 };
 
 // V7 §47 — couleurs d'action pédagogique (Learning Engine)
 const STRATEGY_TONES: Record<string, string> = {
-  answer: 'text-[#94a3b8]',
-  explain: 'text-[#6c63ff]',
-  practice: 'text-[#22c55e]',
-  hint: 'text-[#22d3ee]',
-  evaluate: 'text-[#f59e0b]',
-  quiz: 'text-[#f59e0b]',
-  review: 'text-[#f59e0b]',
-  deepen: 'text-[#6c63ff]',
-  advance_topic: 'text-[#22c55e]',
-  clarify: 'text-[#f59e0b]',
-  continue_activity: 'text-[#22d3ee]',
-  complete_activity: 'text-[#22c55e]',
+  answer: 'text-muted-foreground',
+  explain: 'text-live',
+  practice: 'text-success',
+  hint: 'text-live',
+  evaluate: 'text-warning',
+  quiz: 'text-warning',
+  review: 'text-warning',
+  deepen: 'text-live',
+  advance_topic: 'text-success',
+  clarify: 'text-warning',
+  continue_activity: 'text-live',
+  complete_activity: 'text-success',
 };
 
 function Section({
@@ -90,22 +90,22 @@ function Section({
   badge?: string;
 }) {
   return (
-    <div className="rounded-lg border border-[#26323d] bg-[#18212b]">
+    <div className="rounded-lg border border-border bg-muted">
       <button
         onClick={onToggle}
         className="flex w-full items-center justify-between px-3 py-2 text-left"
       >
-        <span className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-[#94a3b8]">
+        <span className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           {title}
           {badge && (
-            <span className="rounded bg-[#111820] px-1.5 py-0.5 font-mono text-[9px] text-[#f5f7fa]/70">
+            <span className="rounded bg-card px-1.5 py-0.5 font-mono text-[9px] text-foreground/70">
               {badge}
             </span>
           )}
         </span>
         <ChevronDown
           size={13}
-          className={`text-[#94a3b8]/60 transition-transform ${
+          className={`text-muted-foreground/60 transition-transform ${
             open ? 'rotate-180' : ''
           }`}
         />
@@ -119,7 +119,7 @@ function Section({
             transition={{ duration: 0.15 }}
             className="overflow-hidden"
           >
-            <div className="border-t border-[#26323d] px-3 py-2.5">
+            <div className="border-t border-border px-3 py-2.5">
               {children}
             </div>
           </motion.div>
@@ -175,15 +175,15 @@ export function ContextInspectorCard({
   const subject = preview?.subject ?? null;
 
   return (
-    <div className="rounded-xl border border-[#26323d] bg-[#111820]">
+    <div className="rounded-xl border border-border bg-card">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-[#26323d] px-4 py-3">
-        <Layers size={15} className="text-[#6c63ff]" strokeWidth={1.8} />
+      <div className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3">
+        <Layers size={15} className="text-live" strokeWidth={1.8} />
         <div>
-          <div className="text-[13px] font-semibold tracking-tight text-[#f5f7fa]">
+          <div className="text-[13px] font-semibold tracking-tight text-foreground">
             Context Inspector
           </div>
-          <div className="font-mono text-[10px] text-[#94a3b8]">
+          <div className="font-mono text-[10px] text-muted-foreground">
             routing · context · prompt
           </div>
         </div>
@@ -209,12 +209,12 @@ export function ContextInspectorCard({
             onKeyDown={(e) => e.key === 'Enter' && runPreview()}
             disabled={!userId || loading}
             placeholder="Question à router…"
-            className="min-w-0 flex-1 rounded-lg border border-[#26323d] bg-[#0b0f14] px-3 py-2 text-xs text-[#f5f7fa] placeholder:text-[#94a3b8]/40 focus:border-[#6c63ff]/50 focus:outline-none disabled:opacity-50"
+            className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/40 focus:border-live/50 focus:outline-none disabled:opacity-50"
           />
           <button
             onClick={runPreview}
             disabled={!userId || loading || !query.trim()}
-            className="flex items-center gap-1.5 rounded-lg bg-[#6c63ff] px-3 py-2 font-mono text-[11px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg bg-live px-3 py-2 font-mono text-[11px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {loading ? (
               <Loader2 size={13} className="animate-spin" />
@@ -226,20 +226,20 @@ export function ContextInspectorCard({
         </div>
 
         {!userId && (
-          <div className="rounded-lg border border-dashed border-[#26323d] py-6 text-center font-mono text-[11px] text-[#94a3b8]/60">
+          <div className="rounded-lg border border-dashed border-border py-6 text-center font-mono text-[11px] text-muted-foreground/60">
             Sélectionnez un utilisateur pour inspecter le contexte.
           </div>
         )}
 
         {error && (
-          <div className="rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 px-3 py-2 font-mono text-[11px] text-[#ef4444]">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 font-mono text-[11px] text-destructive">
             {error}
           </div>
         )}
 
         {loading && (
-          <div className="flex items-center justify-center gap-2 py-8 font-mono text-[11px] text-[#94a3b8]">
-            <Loader2 size={14} className="animate-spin text-[#6c63ff]" />
+          <div className="flex items-center justify-center gap-2 py-8 font-mono text-[11px] text-muted-foreground">
+            <Loader2 size={14} className="animate-spin text-live" />
             routing → context → prompt…
           </div>
         )}
@@ -252,28 +252,28 @@ export function ContextInspectorCard({
             className="space-y-3"
           >
             {/* Current Subject — Domain/Subject/Topic/Confidence/Status */}
-            <div className="rounded-lg border border-[#26323d] bg-[#18212b] p-3">
-              <div className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-[#94a3b8]">
+            <div className="rounded-lg border border-border bg-muted p-3">
+              <div className="mb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 current subject
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-[11px]">
-                <div className="text-[#94a3b8]/70">domain</div>
-                <div className="truncate text-[#f5f7fa]">
+                <div className="text-muted-foreground/70">domain</div>
+                <div className="truncate text-foreground">
                   {subject?.domain ?? '—'}
                 </div>
-                <div className="text-[#94a3b8]/70">subject</div>
-                <div className="truncate text-[#f5f7fa]">
+                <div className="text-muted-foreground/70">subject</div>
+                <div className="truncate text-foreground">
                   {subject?.name ?? router.subject ?? '—'}
                 </div>
-                <div className="text-[#94a3b8]/70">topic</div>
-                <div className="truncate text-[#f5f7fa]">
+                <div className="text-muted-foreground/70">topic</div>
+                <div className="truncate text-foreground">
                   {router.topic ?? '—'}
                 </div>
-                <div className="text-[#94a3b8]/70">confidence</div>
-                <div className="text-[#6c63ff]">
+                <div className="text-muted-foreground/70">confidence</div>
+                <div className="text-live">
                   {(router.confidence * 100).toFixed(0)}%
                 </div>
-                <div className="text-[#94a3b8]/70">status</div>
+                <div className="text-muted-foreground/70">status</div>
                 <div>
                   <span
                     className={`rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
@@ -290,7 +290,7 @@ export function ContextInspectorCard({
                     {router.candidates.map((c) => (
                       <span
                         key={c}
-                        className="rounded bg-[#f59e0b]/15 px-1.5 py-0.5 font-mono text-[10px] text-[#f59e0b]"
+                        className="rounded bg-warning/15 px-1.5 py-0.5 font-mono text-[10px] text-warning"
                       >
                         ? {c}
                       </span>
@@ -308,27 +308,27 @@ export function ContextInspectorCard({
             >
               {subject ? (
                 <div className="space-y-1.5 font-mono text-[10.5px]">
-                  <div className="text-[#f5f7fa]/85">
+                  <div className="text-foreground/85">
                     {subject.description}
                   </div>
                   {subject.teaching_style.length > 0 && (
-                    <div className="text-[#94a3b8]">
+                    <div className="text-muted-foreground">
                       style : {subject.teaching_style.join(', ')}
                     </div>
                   )}
                   {subject.pedagogical_guidelines.map((g, i) => (
-                    <div key={i} className="text-[#94a3b8]">
+                    <div key={i} className="text-muted-foreground">
                       - {g}
                     </div>
                   ))}
                   {subject.capabilities.length > 0 && (
-                    <div className="pt-1 text-[#6c63ff]">
+                    <div className="pt-1 text-live">
                       capabilities : {subject.capabilities.join(', ')}
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="font-mono text-[10.5px] text-[#94a3b8]/60">
+                <div className="font-mono text-[10.5px] text-muted-foreground/60">
                   Aucune matière sélectionnée (tuteur général).
                 </div>
               )}
@@ -349,7 +349,7 @@ export function ContextInspectorCard({
                 <div
                   className={`font-mono text-[10.5px] ${
                     KNOWLEDGE_TONES[preview.knowledge.status] ??
-                    'text-[#94a3b8]'
+                    'text-muted-foreground'
                   }`}
                 >
                   status : {preview.knowledge.status} · sources parcourues :{' '}
@@ -358,17 +358,17 @@ export function ContextInspectorCard({
                 {preview.knowledge.items.map((item, i) => (
                   <div
                     key={i}
-                    className="rounded-lg border border-[#26323d] bg-[#0b0f14] p-2.5"
+                    className="rounded-lg border border-border bg-background p-2.5"
                   >
                     <div className="flex items-center justify-between font-mono text-[10px]">
-                      <span className="text-[#6c63ff]">
+                      <span className="text-live">
                         {item.source} / {item.topic}
                       </span>
-                      <span className="text-[#94a3b8]">
+                      <span className="text-muted-foreground">
                         {(item.relevance * 100).toFixed(0)}%
                       </span>
                     </div>
-                    <div className="mt-1.5 line-clamp-4 text-[11px] leading-relaxed text-[#f5f7fa]/75">
+                    <div className="mt-1.5 line-clamp-4 text-[11px] leading-relaxed text-foreground/75">
                       {item.content}
                     </div>
                   </div>
@@ -392,43 +392,43 @@ export function ContextInspectorCard({
                 <div className="space-y-2">
                   <div
                     className={`font-mono text-[10.5px] ${
-                      SEARCH_TONES[preview.web.status] ?? 'text-[#94a3b8]'
+                      SEARCH_TONES[preview.web.status] ?? 'text-muted-foreground'
                     }`}
                   >
                     web : {preview.web.status} · query :{' '}
-                    <span className="text-[#f5f7fa]/70">
+                    <span className="text-foreground/70">
                       {preview.web.query}
                     </span>
                   </div>
                   {preview.web.results.map((r, i) => (
                     <div
                       key={i}
-                      className="rounded-lg border border-[#26323d] bg-[#0b0f14] p-2.5"
+                      className="rounded-lg border border-border bg-background p-2.5"
                     >
                       <div className="flex items-center justify-between gap-2 font-mono text-[10px]">
-                        <span className="min-w-0 truncate text-[#6c63ff]">
+                        <span className="min-w-0 truncate text-live">
                           {r.title || r.source}
                         </span>
-                        <span className="shrink-0 text-[#94a3b8]">
+                        <span className="shrink-0 text-muted-foreground">
                           best {(r.relevance * 100).toFixed(0)}%
                         </span>
                       </div>
                       {r.url && (
-                        <div className="mt-1 truncate font-mono text-[9.5px] text-[#94a3b8]/70">
+                        <div className="mt-1 truncate font-mono text-[9.5px] text-muted-foreground/70">
                           {r.url}
                         </div>
                       )}
                       {r.snippet && (
-                        <div className="mt-1.5 line-clamp-3 text-[11px] leading-relaxed text-[#f5f7fa]/75">
+                        <div className="mt-1.5 line-clamp-3 text-[11px] leading-relaxed text-foreground/75">
                           {r.snippet}
                         </div>
                       )}
                     </div>
                   ))}
                   {preview.web.results.length === 0 && (
-                    <div className="rounded-lg border border-[#f59e0b]/30 bg-[#f59e0b]/10 px-2.5 py-2 font-mono text-[10.5px] text-[#f59e0b]">
+                    <div className="rounded-lg border border-warning/30 bg-warning/10 px-2.5 py-2 font-mono text-[10.5px] text-warning">
                       Web search {preview.web.status}
-                      <span className="text-[#94a3b8]">
+                      <span className="text-muted-foreground">
                         {' '}
                         → fallback: General Tutor
                       </span>
@@ -445,11 +445,11 @@ export function ContextInspectorCard({
               onToggle={() => setOpenTools(!openTools)}
             >
               <div className="space-y-1.5 font-mono text-[10.5px]">
-                <div className="text-[#22c55e]">
+                <div className="text-success">
                   disponibles : {preview.tools.available.join(', ') || '—'}
                 </div>
                 {preview.tools.unavailable.length > 0 && (
-                  <div className="text-[#f59e0b]">
+                  <div className="text-warning">
                     déclarés non enregistrés (non exposés au modèle) :{' '}
                     {preview.tools.unavailable.join(', ')}
                   </div>
@@ -463,7 +463,7 @@ export function ContextInspectorCard({
               open={openUser}
               onToggle={() => setOpenUser(!openUser)}
             >
-              <pre className="max-h-[280px] overflow-auto whitespace-pre-wrap rounded-lg bg-[#0b0f14] p-2.5 font-mono text-[10.5px] leading-relaxed text-[#f5f7fa]/80">
+              <pre className="max-h-[280px] overflow-auto whitespace-pre-wrap rounded-lg bg-background p-2.5 font-mono text-[10.5px] leading-relaxed text-foreground/80">
                 {preview.user.text || '— vide —'}
               </pre>
             </Section>
@@ -474,7 +474,7 @@ export function ContextInspectorCard({
               open={openThread}
               onToggle={() => setOpenThread(!openThread)}
             >
-              <pre className="whitespace-pre-wrap rounded-lg bg-[#0b0f14] p-2.5 font-mono text-[10.5px] leading-relaxed text-[#f5f7fa]/80">
+              <pre className="whitespace-pre-wrap rounded-lg bg-background p-2.5 font-mono text-[10.5px] leading-relaxed text-foreground/80">
                 {preview.thread.text || '— vide —'}
               </pre>
             </Section>
@@ -493,13 +493,13 @@ export function ContextInspectorCard({
               >
                 {preview.learning.status === 'active' ? (
                   <div className="space-y-1 font-mono text-[10.5px]">
-                    <div className="text-[#f5f7fa]/85">
+                    <div className="text-foreground/85">
                       mastery :{' '}
                       {preview.learning.mastery === null
                         ? '— (jamais évalué)'
                         : `${Math.round(preview.learning.mastery * 100)}%`}
                       {preview.learning.confidence !== null && (
-                        <span className="text-[#94a3b8]">
+                        <span className="text-muted-foreground">
                           {' '}
                           (conf.{' '}
                           {Math.round(
@@ -509,29 +509,29 @@ export function ContextInspectorCard({
                         </span>
                       )}
                     </div>
-                    <div className="text-[#94a3b8]">
+                    <div className="text-muted-foreground">
                       attempts : {preview.learning.attempts}
                     </div>
                     {preview.learning.weak_points.length > 0 && (
-                      <div className="text-[#f59e0b]">
+                      <div className="text-warning">
                         weak :{' '}
                         {preview.learning.weak_points.join(', ')}
                       </div>
                     )}
                     {preview.learning.strengths.length > 0 && (
-                      <div className="text-[#22c55e]">
+                      <div className="text-success">
                         strengths :{' '}
                         {preview.learning.strengths.join(', ')}
                       </div>
                     )}
                     {preview.learning.goal && (
-                      <div className="text-[#6c63ff]">
+                      <div className="text-live">
                         goal : {preview.learning.goal.description}
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="font-mono text-[10.5px] text-[#94a3b8]/60">
+                  <div className="font-mono text-[10.5px] text-muted-foreground/60">
                     {preview.learning.status === 'not_started'
                       ? 'Pas encore de progression suivie (cas normal).'
                       : 'Indisponible (erreur de lecture — fallback silencieux).'}
@@ -549,11 +549,11 @@ export function ContextInspectorCard({
                 onToggle={() => setOpenBudget(!openBudget)}
               >
                 <div className="space-y-1.5 font-mono text-[10.5px]">
-                  <div className="text-[#f5f7fa]/85">
+                  <div className="text-foreground/85">
                     {preview.budget.estimated_input_tokens != null
                       ? `${(preview.budget.estimated_input_tokens / 1000).toFixed(1)}k`
                       : '—'}{' '}
-                    <span className="text-[#94a3b8]">/</span>{' '}
+                    <span className="text-muted-foreground">/</span>{' '}
                     {preview.budget.context_window != null
                       ? `${(preview.budget.context_window / 1000).toFixed(0)}k window`
                       : 'window ? (inconnue)'}
@@ -561,14 +561,14 @@ export function ContextInspectorCard({
                       className={
                         BUDGET_TONES[
                           preview.budget.budget_status
-                        ] ?? 'text-[#94a3b8]'
+                        ] ?? 'text-muted-foreground'
                       }
                     >
                       {' '}
                       · {preview.budget.budget_status}
                     </span>
                   </div>
-                  <div className="text-[#94a3b8]">
+                  <div className="text-muted-foreground">
                     output réservé :{' '}
                     {preview.budget.reserved_output_tokens} tok ·
                     available :{' '}
@@ -576,11 +576,11 @@ export function ContextInspectorCard({
                       ? `${preview.budget.available_input_tokens}`
                       : 'assumé (fallback conservateur)'}
                   </div>
-                  <div className="text-[#94a3b8]">
+                  <div className="text-muted-foreground">
                     sources : {preview.budget.sources_used} used ·{' '}
                     {preview.budget.sources_dropped} dropped
                     {preview.budget.sources_dropped > 0 && (
-                      <span className="text-[#f59e0b]">
+                      <span className="text-warning">
                         {' '}
                         (compression P4→P3→P2, P0 intact)
                       </span>
@@ -599,20 +599,20 @@ export function ContextInspectorCard({
                 onToggle={() => setOpenFallback(!openFallback)}
               >
                 <div className="space-y-1.5 font-mono text-[10.5px]">
-                  <div className="text-[#f5f7fa]/85">
+                  <div className="text-foreground/85">
                     action :{' '}
                     <span
                       className={
                         FALLBACK_TONES[
                           preview.fallback.action
-                        ] ?? 'text-[#94a3b8]'
+                        ] ?? 'text-muted-foreground'
                       }
                     >
                       {preview.fallback.action}
                     </span>
                   </div>
                   <div
-                    className="text-[#94a3b8]"
+                    className="text-muted-foreground"
                     title={preview.fallback.reason}
                   >
                     raison :{' '}
@@ -620,7 +620,7 @@ export function ContextInspectorCard({
                       ? `${preview.fallback.reason.slice(0, 90)}…`
                       : preview.fallback.reason}
                   </div>
-                  <div className="text-[#94a3b8]">
+                  <div className="text-muted-foreground">
                     états : {preview.fallback.source_status || '—'} ·
                     conf.{' '}
                     {Math.round(
@@ -633,7 +633,7 @@ export function ContextInspectorCard({
                       {preview.fallback.candidates.map((c) => (
                         <span
                           key={c}
-                          className="rounded bg-[#111820] px-1.5 py-0.5 text-[9.5px] text-[#a5f3fc]"
+                          className="rounded bg-card px-1.5 py-0.5 text-[9.5px] text-live"
                         >
                           {c}
                         </span>
@@ -653,33 +653,33 @@ export function ContextInspectorCard({
                 onToggle={() => setOpenStrategy(!openStrategy)}
               >
                 <div className="space-y-1.5 font-mono text-[10.5px]">
-                  <div className="text-[#f5f7fa]/85">
+                  <div className="text-foreground/85">
                     action :{' '}
                     <span
                       className={
                         STRATEGY_TONES[
                           preview.learning_strategy.action
-                        ] ?? 'text-[#94a3b8]'
+                        ] ?? 'text-muted-foreground'
                       }
                     >
                       {preview.learning_strategy.action}
                     </span>
                     {(preview.learning_strategy.subject ||
                       preview.learning_strategy.topic) && (
-                      <span className="text-[#94a3b8]">
+                      <span className="text-muted-foreground">
                         {' '}
                         · {preview.learning_strategy.subject ?? '?'}/
                         {preview.learning_strategy.topic ?? '?'}
                       </span>
                     )}
                   </div>
-                  <div className="text-[#94a3b8]">
+                  <div className="text-muted-foreground">
                     raison :{' '}
                     {preview.learning_strategy.reason.length > 110
                       ? `${preview.learning_strategy.reason.slice(0, 110)}…`
                       : preview.learning_strategy.reason}
                   </div>
-                  <div className="text-[#94a3b8]">
+                  <div className="text-muted-foreground">
                     conf.{' '}
                     {Math.round(
                       preview.learning_strategy.confidence * 100
@@ -688,10 +688,10 @@ export function ContextInspectorCard({
                     {preview.learning_strategy.priority}/10
                   </div>
                   {preview.learning_strategy.recommended_tool && (
-                    <div className="text-[#6c63ff]">
+                    <div className="text-live">
                       outil recommandé :{' '}
                       {preview.learning_strategy.recommended_tool}
-                      <span className="text-[#94a3b8]">
+                      <span className="text-muted-foreground">
                         {' '}
                         (le tuteur choisit — jamais exécuté d'office)
                       </span>
@@ -707,7 +707,7 @@ export function ContextInspectorCard({
               open={openPrompt}
               onToggle={() => setOpenPrompt(!openPrompt)}
             >
-              <pre className="max-h-[400px] overflow-auto whitespace-pre-wrap rounded-lg bg-[#0b0f14] p-2.5 font-mono text-[10px] leading-relaxed text-[#94a3b8]">
+              <pre className="max-h-[400px] overflow-auto whitespace-pre-wrap rounded-lg bg-background p-2.5 font-mono text-[10px] leading-relaxed text-muted-foreground">
                 {preview.prompt_preview}
               </pre>
             </Section>

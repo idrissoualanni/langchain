@@ -1,6 +1,12 @@
 // ResponseRenderer V6.7 (§27) — rend une AgentResponse selon
 // response.type. Le frontend ne PARSE JAMAIS le texte (§18) :
 // la nature de la réponse vient du contrat structuré backend.
+//
+// Le TEXTE de la réponse est rendu par le part text officiel
+// (MessagePrimitive.Parts → MarkdownText assistant-ui), pas ici :
+// les types 'text'/inconnus ne produisent donc aucun rendu
+// (sinon le message apparaîtrait deux fois). Les cartes ne
+// rendent que leur contenu STRUCTURÉ.
 import type {
   AgentResponse,
   CodeData,
@@ -18,7 +24,6 @@ import { ExerciseCard } from './ExerciseCard';
 import { HintCard } from './HintCard';
 import { QuizCard } from './QuizCard';
 import { SearchResultCard } from './SearchResultCard';
-import { TextResponse } from './TextResponse';
 
 export function ResponseRenderer({
   response,
@@ -33,16 +38,16 @@ export function ResponseRenderer({
   threadId?: string | null;
   userId?: string | null;
 }) {
-  const { type, status, message, data, actions } = response;
+  const { type, status, data, actions } = response;
 
   switch (type) {
     case 'text':
-      return <TextResponse message={message} />;
+      // Texte rendu par le part text officiel.
+      return null;
 
     case 'exercise':
       return (
         <ExerciseCard
-          message={message}
           data={data as unknown as ExerciseData}
           actions={actions}
           onAction={onAction}
@@ -50,34 +55,22 @@ export function ResponseRenderer({
       );
 
     case 'quiz':
-      return (
-        <QuizCard
-          message={message}
-          data={data as unknown as QuizData}
-        />
-      );
+      return <QuizCard data={data as unknown as QuizData} />;
 
     case 'evaluation':
       return (
         <EvaluationCard
-          message={message}
           data={data as unknown as EvaluationData}
           status={status}
         />
       );
 
     case 'hint':
-      return (
-        <HintCard
-          message={message}
-          data={data as unknown as HintData}
-        />
-      );
+      return <HintCard data={data as unknown as HintData} />;
 
     case 'code':
       return (
         <CodeActivityCard
-          message={message}
           data={data as unknown as CodeData}
           threadId={threadId ?? null}
           userId={userId ?? null}
@@ -85,30 +78,19 @@ export function ResponseRenderer({
       );
 
     case 'search':
-      return (
-        <SearchResultCard
-          message={message}
-          data={data as unknown as SearchData}
-        />
-      );
+      return <SearchResultCard data={data as unknown as SearchData} />;
 
     case 'clarification':
       return (
-        <ClarificationCard
-          message={message}
-          actions={actions}
-          onAction={onOption}
-        />
+        <ClarificationCard actions={actions} onAction={onOption} />
       );
 
     case 'error':
-      return <ErrorCard message={message} />;
+      return <ErrorCard />;
 
-    default: {
-      // Défense : type inconnu → texte (jamais de crash UI).
-      // L'union AgentResponseType est exhaustive ; ce cas ne
-      // sert qu'à la résilience runtime (payload backend futur).
-      return <TextResponse message={message} />;
-    }
+    default:
+      // Défense : type inconnu → rien (le texte est déjà rendu
+      // par le part text officiel ; jamais de crash UI).
+      return null;
   }
 }

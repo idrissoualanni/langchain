@@ -9,8 +9,13 @@
 # Les tools LLM (record_learning_observation) restent la voie
 # d'écriture principale — ces routes sont en LECTURE pour
 # l'affichage (§35/§36 : progression + raw inspector).
-from fastapi import APIRouter, HTTPException, Query
+#
+# Mission Identité : le user_id du chemin doit être celui de la
+# SESSION ( 403 sinon ; admin excepté ) — le profil learning
+# d'autrui n'est plus lisible ( ferme la faille de l'audit ).
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.auth.resolver import CurrentUser, get_current_user
 from app.db.connections import init_db
 from app.db.users import get_user
 from app.learning.learning_profile import (
@@ -22,8 +27,21 @@ from app.logging.events import log_event
 router = APIRouter(prefix="/api/learning", tags=["learning"])
 
 
-def _require_user(user_id: str) -> None:
+def _require_user(
+    user_id: str, current: CurrentUser
+) -> None:
+    """User existe + user_id == session (ou admin)."""
     init_db()
+    if not current.is_admin and user_id != current.user_id:
+        target = get_user(user_id)
+        if target is None:
+            raise HTTPException(
+                status_code=404, detail="Utilisateur introuvable"
+            )
+        raise HTTPException(
+            status_code=403,
+            detail="Accès refusé : ressource d'un autre utilisateur",
+        )
     if get_user(user_id) is None:
         raise HTTPException(
             status_code=404, detail="Utilisateur introuvable"
@@ -31,13 +49,16 @@ def _require_user(user_id: str) -> None:
 
 
 @router.get("/{user_id}/profile")
-def api_learning_profile(user_id: str) -> dict:
+def api_learning_profile(
+    user_id: str,
+    current: CurrentUser = Depends(get_current_user),
+) -> dict:
     """Learning Profile complet (§36 — raw inspector).
 
     Retourne {"status": "not_started"} si aucun profil (§26 —
     cas normal, pas une erreur).
     """
-    _require_user(user_id)
+    _require_user(user_id, current)
     profile = read_learning_profile(user_id)
     if profile is None:
         return {"status": "not_started", "user_id": user_id}
@@ -52,17 +73,20 @@ def api_learning_observations(
     subject: str | None = Query(default=None),
     topic: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
+    current: CurrentUser = Depends(get_current_user),
 ) -> list[dict]:
     """Historique des observations (§33), filtrable."""
-    _require_user(user_id)
+    _require_user(user_id, current)
     obs = list_observations(user_id, subject=subject, topic=topic)
     return obs[-limit:]
 
 
 @router.get("/{user_id}/topics")
-def api_learning_topics(user_id: str) -> dict:
+def api_learning_topics(user_id: str,
+    current: CurrentUser = Depends(get_current_user),
+) -> dict:
     """Tous les états de topics travaillés, groupés par matière (§35)."""
-    _require_user(user_id)
+    _require_user(user_id, current)
     profile = read_learning_profile(user_id)
     if profile is None:
         return {"status": "not_started", "subjects": {}}
@@ -81,10 +105,11 @@ def api_learning_topics(user_id: str) -> dict:
 
 @router.get("/{user_id}/{subject}/{topic}")
 def api_learning_topic(
-    user_id: str, subject: str, topic: str
+    user_id: str, subject: str, topic: str,
+    current: CurrentUser = Depends(get_current_user),
 ) -> dict:
     """État d'apprentissage d'UN topic (§21)."""
-    _require_user(user_id)
+    _require_user(user_id, current)
     profile = read_learning_profile(user_id)
     if profile is None:
         return {
@@ -126,9 +151,11 @@ def api_learning_topic(
 
 
 @router.get("/{user_id}/goals")
-def api_learning_goals(user_id: str) -> list[dict]:
+def api_learning_goals(user_id: str,
+    current: CurrentUser = Depends(get_current_user),
+) -> list[dict]:
     """Objectifs d'apprentissage de l'étudiant (§29)."""
-    _require_user(user_id)
+    _require_user(user_id, current)
     profile = read_learning_profile(user_id)
     if profile is None:
         return []

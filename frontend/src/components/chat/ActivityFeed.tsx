@@ -91,7 +91,7 @@ function statusTone(status: string): string {
     s.includes('abandoned') ||
     s.includes('failed')
   ) {
-    return 'bg-[#ef4444]/15 text-[#ef4444] border-[#ef4444]/30';
+    return 'bg-destructive]/15 text-destructive] border-destructive]/30';
   }
   if (
     s === 'completed' ||
@@ -100,7 +100,7 @@ function statusTone(status: string): string {
     s === 'done' ||
     s === 'good'
   ) {
-    return 'bg-[#22c55e]/15 text-[#22c55e] border-[#22c55e]/30';
+    return 'bg-success]/15 text-success] border-success]/30';
   }
   if (
     s.includes('waiting') ||
@@ -109,9 +109,9 @@ function statusTone(status: string): string {
     s.includes('partial') ||
     s.includes('retry')
   ) {
-    return 'bg-[#f59e0b]/15 text-[#f59e0b] border-[#f59e0b]/30';
+    return 'bg-warning]/15 text-warning] border-warning]/30';
   }
-  return 'bg-[#94a3b8]/15 text-[#94a3b8] border-[#94a3b8]/30';
+  return 'bg-muted-foreground]/15 text-muted-foreground] border-muted-foreground]/30';
 }
 
 /** Badge de statut d'activité lisible. */
@@ -148,9 +148,9 @@ function CurrentActivitySummaryCard({
       : null;
 
   return (
-    <div className="rounded-lg border border-[#6c63ff]/30 bg-[#6c63ff]/[0.07] p-3">
+    <div className="rounded-lg border border-live]/30 bg-live]/[0.07] p-3">
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[#6c63ff]">
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-live]">
           activité en cours
         </span>
         <span
@@ -161,30 +161,30 @@ function CurrentActivitySummaryCard({
       </div>
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-[11px]">
-        <div className="text-[#94a3b8]/70">type</div>
-        <div className="truncate text-[#f5f7fa]">
+        <div className="text-muted-foreground]/70">type</div>
+        <div className="truncate text-foreground]">
           {summary.activity_type ?? '—'}
         </div>
-        <div className="text-[#94a3b8]/70">sujet</div>
-        <div className="truncate text-[#f5f7fa]">
+        <div className="text-muted-foreground]/70">sujet</div>
+        <div className="truncate text-foreground]">
           {summary.subject && summary.topic
             ? `${summary.subject}/${summary.topic}`
             : (summary.subject ?? summary.topic ?? '—')}
         </div>
-        <div className="text-[#94a3b8]/70">tentatives</div>
-        <div className="text-[#f5f7fa]">{summary.attempts}</div>
+        <div className="text-muted-foreground]/70">tentatives</div>
+        <div className="text-foreground]">{summary.attempts}</div>
         {summary.hint_level > 0 && (
           <>
-            <div className="text-[#94a3b8]/70">indice</div>
-            <div className="text-[#f59e0b]">
+            <div className="text-muted-foreground]/70">indice</div>
+            <div className="text-warning]">
               niveau {summary.hint_level}
             </div>
           </>
         )}
         {summary.expected_response_type && (
           <>
-            <div className="text-[#94a3b8]/70">réponse attendue</div>
-            <div className="text-[#f5f7fa]">
+            <div className="text-muted-foreground]/70">réponse attendue</div>
+            <div className="text-foreground]">
               {summary.expected_response_type}
             </div>
           </>
@@ -193,14 +193,14 @@ function CurrentActivitySummaryCard({
 
       {/* Progression quiz si présente (jamais les réponses attendues) */}
       {isQuiz && quizProgress && (
-        <div className="mt-2 flex items-center gap-1.5 rounded-md bg-[#0b0f14] px-2.5 py-1.5 font-mono text-[10.5px]">
-          <Trophy size={11} className="text-[#f59e0b]" />
-          <span className="text-[#f5f7fa]">{quizProgress}</span>
+        <div className="mt-2 flex items-center gap-1.5 rounded-md bg-background] px-2.5 py-1.5 font-mono text-[10.5px]">
+          <Trophy size={11} className="text-warning]" />
+          <span className="text-foreground]">{quizProgress}</span>
         </div>
       )}
 
       {summary.question_preview && (
-        <div className="mt-2 line-clamp-2 rounded-md bg-[#0b0f14] px-2.5 py-1.5 text-[11px] leading-relaxed text-[#f5f7fa]/80">
+        <div className="mt-2 line-clamp-2 rounded-md bg-background] px-2.5 py-1.5 text-[11px] leading-relaxed text-foreground]/80">
           {summary.question_preview}
         </div>
       )}
@@ -263,12 +263,12 @@ export function ActivityFeed({ userId, threadId }: ActivityFeedProps) {
   // ----- État vide : pas de thread (le feed est thread-scoped §50) -----
   if (!threadId) {
     return (
-      <div className="rounded-lg border border-dashed border-[#26323d] px-3 py-8 text-center">
-        <ActivityIcon size={24} className="mx-auto mb-2 text-[#94a3b8]/30" />
-        <p className="font-mono text-[11px] text-[#94a3b8]">
+      <div className="rounded-lg border border-dashed border-border] px-3 py-8 text-center">
+        <ActivityIcon size={24} className="mx-auto mb-2 text-muted-foreground]/30" />
+        <p className="font-mono text-[11px] text-muted-foreground]">
           Sélectionnez un thread pour voir son fil d'activité.
         </p>
-        <p className="mt-1 font-mono text-[10px] text-[#94a3b8]/50">
+        <p className="mt-1 font-mono text-[10px] text-muted-foreground]/50">
           l'activité pédagogique est attachée au thread courant (§50)
         </p>
       </div>
@@ -289,7 +289,7 @@ export function ActivityFeed({ userId, threadId }: ActivityFeedProps) {
 
       {/* Erreur API (403 isolation, thread supprimé, réseau…) */}
       {error && (
-        <div className="rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 px-3 py-2 font-mono text-[11px] text-[#ef4444]">
+        <div className="rounded-lg border border-destructive]/30 bg-destructive]/10 px-3 py-2 font-mono text-[11px] text-destructive]">
           {error}
         </div>
       )}
@@ -297,18 +297,18 @@ export function ActivityFeed({ userId, threadId }: ActivityFeedProps) {
       {/* Fil chronologique */}
       <div className="flex min-h-0 flex-col">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[#94a3b8]">
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground]">
             journal d'activité · {log.length} événement{log.length > 1 ? 's' : ''}
           </span>
           <span className="flex items-center gap-2">
-            <span className="font-mono text-[10px] text-[#94a3b8]/50">
+            <span className="font-mono text-[10px] text-muted-foreground]/50">
               {interactionCount} interaction{interactionCount > 1 ? 's' : ''}
             </span>
             <button
               type="button"
               onClick={() => void refresh()}
               disabled={loading || !userId || !threadId}
-              className="flex items-center gap-1.5 rounded-md border border-[#26323d] bg-[#18212b] px-2.5 py-1 font-mono text-[10px] text-[#94a3b8] transition-colors hover:text-[#f5f7fa] disabled:opacity-40"
+              className="flex items-center gap-1.5 rounded-md border border-border] bg-muted] px-2.5 py-1 font-mono text-[10px] text-muted-foreground] transition-colors hover:text-foreground] disabled:opacity-40"
               title="Rafraîchir l'activité du thread (30s auto)"
             >
               <RefreshCw
@@ -322,12 +322,12 @@ export function ActivityFeed({ userId, threadId }: ActivityFeedProps) {
 
         <div className="max-h-[380px] overflow-y-auto pr-1">
           {loading && log.length === 0 ? (
-            <div className="flex items-center justify-center gap-2 py-8 font-mono text-[11px] text-[#94a3b8]">
-              <Loader2 size={13} className="animate-spin text-[#6c63ff]" />
+            <div className="flex items-center justify-center gap-2 py-8 font-mono text-[11px] text-muted-foreground]">
+              <Loader2 size={13} className="animate-spin text-live]" />
               chargement de l'activité…
             </div>
           ) : log.length === 0 ? (
-            <div className="py-8 text-center font-mono text-[11px] text-[#94a3b8]/60">
+            <div className="py-8 text-center font-mono text-[11px] text-muted-foreground]/60">
               Aucune activité pédagogique dans ce thread — demandez un
               exercice, un quiz ou une vérification de compréhension
               au tuteur.
@@ -350,17 +350,17 @@ export function ActivityFeed({ userId, threadId }: ActivityFeedProps) {
                   >
                     {/* Colonne vertébrale chronologique */}
                     {i < log.length - 1 && (
-                      <div className="absolute left-[5px] top-7 h-full w-px bg-[#26323d]" />
+                      <div className="absolute left-[5px] top-7 h-full w-px bg-border]" />
                     )}
-                    <div className="relative mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md border border-[#26323d] bg-[#18212b]">
-                      <Icon size={11} className="text-[#6c63ff]" strokeWidth={2} />
+                    <div className="relative mt-0.5 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md border border-border] bg-muted]">
+                      <Icon size={11} className="text-live]" strokeWidth={2} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                        <span className="font-mono text-[10px] text-[#94a3b8]/50">
+                        <span className="font-mono text-[10px] text-muted-foreground]/50">
                           {time}
                         </span>
-                        <span className="font-mono text-[11px] font-semibold text-[#f5f7fa]/90">
+                        <span className="font-mono text-[11px] font-semibold text-foreground]/90">
                           {label}
                         </span>
                         {entry.status && (
@@ -372,7 +372,7 @@ export function ActivityFeed({ userId, threadId }: ActivityFeedProps) {
                         )}
                       </div>
                       {entry.detail && (
-                        <div className="mt-0.5 line-clamp-2 font-mono text-[10px] leading-relaxed text-[#94a3b8]/80">
+                        <div className="mt-0.5 line-clamp-2 font-mono text-[10px] leading-relaxed text-muted-foreground]/80">
                           {entry.detail}
                         </div>
                       )}

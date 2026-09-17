@@ -6,12 +6,10 @@ import { CodeEditor } from '../chat/CodeEditor';
 import type { CodeData } from '../../types/agentResponse';
 
 export function CodeActivityCard({
-  message,
   data,
   threadId,
   userId,
 }: {
-  message: string;
   data: CodeData;
   threadId: string | null;
   userId: string | null;
@@ -20,16 +18,13 @@ export function CodeActivityCard({
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-2.5 rounded-xl border border-[#26323d] bg-[#111820] p-3.5"
+      className="space-y-2.5 rounded-[var(--radius-surface)] border border-border bg-card p-3.5"
     >
       <div className="flex items-center gap-2">
-        <Terminal size={14} className="text-[#22d3ee]" />
-        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[#22d3ee]">
+        <Terminal size={14} className="text-live" />
+        <span className="font-mono text-[10px] font-semibold tracking-[0.14em] text-live uppercase">
           pratique du code · {data.language || 'python'}
         </span>
-      </div>
-      <div className="whitespace-pre-wrap text-[13px] leading-relaxed text-[#f5f7fa]/85">
-        {message}
       </div>
       <CodeEditor
         threadId={threadId}

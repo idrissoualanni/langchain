@@ -1,41 +1,32 @@
-// Contexte de sélection — user/thread courants, persistés
+// Contexte de sélection — thread courant du contexte actif
+//
+// Mission Cleanup : la PARTIE UTILISATEUR a été supprimée (l'identité
+// vient de Clerk/useCurrentUser — jamais du localStorage, cf. §6).
+// Ne reste que currentThread, lu par MemoryPage pour afficher le
+// contexte actif ; la valeur est écrite localement par
+// assistant-ui/store.ts (sélection uniquement, source de vérité = backend).
 import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
-import type { Thread, User } from '../types/agent';
+import type { Thread } from '../types/agent';
 
 interface SelectionContextValue {
-  currentUser: User | null;
   currentThread: Thread | null;
-  threads: Thread[];
-  setUsers: (users: User[]) => void;
-  selectUser: (user: User | null) => void;
   selectThread: (thread: Thread | null) => void;
-  setThreads: (threads: Thread[]) => void;
 }
 
 const SelectionContext = createContext<SelectionContextValue | null>(
   null
 );
 
-const LS_USER = 'dsh_current_user';
 const LS_THREAD = 'dsh_current_thread';
 
 export function SelectionProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(LS_USER) ?? 'null');
-    } catch {
-      return null;
-    }
-  });
-
   const [currentThread, setCurrentThread] = useState<Thread | null>(
     () => {
       try {
@@ -46,86 +37,16 @@ export function SelectionProvider({ children }: { children: ReactNode }) {
     }
   );
 
-  const [threads, setThreadsState] = useState<Thread[]>([]);
-
-  // Persistance localStorage
-  useEffect(() => {
-    if (currentUser)
-      localStorage.setItem(LS_USER, JSON.stringify(currentUser));
-    else localStorage.removeItem(LS_USER);
-  }, [currentUser]);
-
-  useEffect(() => {
-    if (currentThread)
-      localStorage.setItem(LS_THREAD, JSON.stringify(currentThread));
-    else localStorage.removeItem(LS_THREAD);
-  }, [currentThread]);
-
-  const selectUser = useCallback((user: User | null) => {
-    setCurrentUser(user);
-    // Changer d'utilisateur invalide toujours le thread courant
-    // (jamais conserver le thread d'un autre user)
-    setCurrentThread(null);
-    setThreadsState([]);
-  }, []);
-
   const selectThread = useCallback((thread: Thread | null) => {
     setCurrentThread(thread);
-  }, []);
-
-  const setThreads = useCallback((threads: Thread[]) => {
-    setThreadsState(threads);
-    // Auto-sélection : si aucun thread actif (ex: user vient de changer)
-    // et que le user courant possède des threads, prendre le plus récent.
-    setCurrentThread((prevThread) => {
-      if (prevThread) {
-        // Vérifie que le thread courant appartient toujours au user actif
-        const stillValid = threads.some(
-          (t) => t.thread_id === prevThread.thread_id
-        );
-        return stillValid ? prevThread : null;
-      }
-      if (threads.length > 0 && currentUser) {
-        const owned = threads.filter(
-          (t) => t.user_id === currentUser.user_id
-        );
-        return owned[0] ?? null;
-      }
-      return null;
-    });
-  }, [currentUser]);
-
-  const setUsers = useCallback((users: User[]) => {
-    // Si le user courant a disparu (DB reset), désélectionner
-    setCurrentUser((prev) => {
-      if (prev && !users.some((u) => u.user_id === prev.user_id)) {
-        setCurrentThread(null);
-        setThreadsState([]);
-        return null;
-      }
-      return prev;
-    });
+    if (thread)
+      localStorage.setItem(LS_THREAD, JSON.stringify(thread));
+    else localStorage.removeItem(LS_THREAD);
   }, []);
 
   const value = useMemo(
-    () => ({
-      currentUser,
-      currentThread,
-      threads,
-      setUsers,
-      selectUser,
-      selectThread,
-      setThreads,
-    }),
-    [
-      currentUser,
-      currentThread,
-      threads,
-      setUsers,
-      selectUser,
-      selectThread,
-      setThreads,
-    ]
+    () => ({ currentThread, selectThread }),
+    [currentThread, selectThread]
   );
 
   return (

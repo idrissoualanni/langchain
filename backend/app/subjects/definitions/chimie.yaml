@@ -1,0 +1,55 @@
+id: chimie
+name: Chimie
+domain: sciences
+description: Base pédagogique structurée pour Chimie. Contenu introductif et intermédiaire,
+  conçu pour l'apprentissage, le raisonnement et la révision.
+aliases:
+- chimie
+- chemistry
+- chimie générale
+- atome
+- mole
+- liaison
+- réaction
+- carbone
+- hydrocarbures
+- fonctions organiques
+- organic chemistry
+- enthalpie
+- entropie
+- équilibre chimique
+- constante
+topics:
+- chimie_generale
+- chimie_organique
+- thermochimie_equilibre
+semantic_terms:
+  chimie_generale:
+  - Notions fondamentales de chimie générale avec définitions, relations, exemples
+    et erreurs fréquentes.
+  - atome
+  - mole
+  - liaison
+  - réaction
+  - périodicité
+  - general chemistry
+  chimie_organique:
+  - Notions fondamentales de chimie organique avec définitions, relations, exemples
+    et erreurs fréquentes.
+  - carbone
+  - hydrocarbures
+  - fonctions organiques
+  - organic chemistry
+  thermochimie_equilibre:
+  - Notions fondamentales de thermochimie et équilibre avec définitions, relations,
+    exemples et erreurs fréquentes.
+  - enthalpie
+  - entropie
+  - équilibre chimique
+  - constante
+  - thermochemistry
+knowledge:
+  sources:
+  - chimie/chimie_generale
+  - chimie/chimie_organique
+  - chimie/thermochimie_equilibre

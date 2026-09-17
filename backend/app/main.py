@@ -14,6 +14,7 @@ from app.api import (
     learning,
     logs,
     memory,
+    models,
     subjects,
     threads,
     users,
@@ -79,6 +80,7 @@ app.add_middleware(
 app.include_router(users.router)
 app.include_router(threads.router)
 app.include_router(chat.router)
+app.include_router(models.router)
 app.include_router(memory.router)
 app.include_router(logs.router)
 app.include_router(health.router)

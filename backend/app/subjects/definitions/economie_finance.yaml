@@ -1,0 +1,56 @@
+id: economie_finance
+name: Économie et finance
+domain: sciences_sociales
+description: Base pédagogique structurée pour Économie et finance. Contenu introductif
+  et intermédiaire, conçu pour l'apprentissage, le raisonnement et la révision.
+aliases:
+- économie
+- finance
+- economics
+- finance
+- offre
+- demande
+- prix
+- marché
+- PIB
+- inflation
+- chômage
+- croissance
+- trésorerie
+- investissement
+- risque
+- bilan
+topics:
+- microeconomie
+- macroeconomie
+- finance_entreprise
+semantic_terms:
+  microeconomie:
+  - Notions fondamentales de microéconomie avec définitions, relations, exemples et
+    erreurs fréquentes.
+  - offre
+  - demande
+  - prix
+  - marché
+  - microeconomics
+  macroeconomie:
+  - Notions fondamentales de macroéconomie avec définitions, relations, exemples et
+    erreurs fréquentes.
+  - PIB
+  - inflation
+  - chômage
+  - croissance
+  - politique économique
+  finance_entreprise:
+  - Notions fondamentales de finance d’entreprise avec définitions, relations, exemples
+    et erreurs fréquentes.
+  - trésorerie
+  - investissement
+  - risque
+  - bilan
+  - corporate finance
+knowledge:
+  sources:
+  - economie_finance/microeconomie
+  - economie_finance/macroeconomie
+  - economie_finance/finance_entreprise

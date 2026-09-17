@@ -23,10 +23,21 @@ frontend/dist/
 
 # Env — ne jamais commit les clés
 .env
+.env.*
+!.env.example
 backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
 
 # Logs volumineux (l'historique peut être conservé si souhaité)
 logs/*.log
+*.log
+frontend/vite_dev.out
+frontend/vite_dev.err
+frontend/v
 
 # OS
 .DS_Store

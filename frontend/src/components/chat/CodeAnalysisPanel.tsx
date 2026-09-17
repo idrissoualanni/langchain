@@ -61,15 +61,15 @@ const DETECTED_RULES: Array<{ rule: string; severity: CodeAnalysisIssue['severit
 const SEVERITY_TONES: Record<CodeAnalysisIssue['severity'], { icon: string; badge: string }> = {
   error: {
     icon: '✗',
-    badge: 'bg-[#ef4444]/15 text-[#ef4444] border-[#ef4444]/30',
+    badge: 'bg-destructive]/15 text-destructive] border-destructive]/30',
   },
   warning: {
     icon: '⚠',
-    badge: 'bg-[#f59e0b]/15 text-[#f59e0b] border-[#f59e0b]/30',
+    badge: 'bg-warning]/15 text-warning] border-warning]/30',
   },
   info: {
     icon: 'ℹ',
-    badge: 'bg-[#6c63ff]/15 text-[#6c63ff] border-[#6c63ff]/30',
+    badge: 'bg-live]/15 text-live] border-live]/30',
   },
 };
 
@@ -80,19 +80,19 @@ export function CodeAnalysisPanel({ analysis }: CodeAnalysisPanelProps) {
       {analysis ? (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <FileSearch size={13} className="text-[#6c63ff]" strokeWidth={1.8} />
-            <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[#94a3b8]">
+            <FileSearch size={13} className="text-live]" strokeWidth={1.8} />
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground]">
               analyse · {analysis.status}
             </span>
             {analysis.issues.length > 0 && (
-              <span className="rounded bg-[#111820] px-1.5 py-0.5 font-mono text-[9px] text-[#f5f7fa]/70">
+              <span className="rounded bg-card] px-1.5 py-0.5 font-mono text-[9px] text-foreground]/70">
                 {analysis.issues.length} observation{analysis.issues.length > 1 ? 's' : ''}
               </span>
             )}
           </div>
 
           {analysis.issues.length === 0 ? (
-            <div className="rounded-lg border border-[#22c55e]/30 bg-[#22c55e]/10 px-3 py-3 font-mono text-[11px] leading-relaxed text-[#22c55e]">
+            <div className="rounded-lg border border-success]/30 bg-success]/10 px-3 py-3 font-mono text-[11px] leading-relaxed text-success]">
               Aucun problème détecté — le code compile et suit les règles
               de style de base.
             </div>
@@ -103,7 +103,7 @@ export function CodeAnalysisPanel({ analysis }: CodeAnalysisPanelProps) {
                 return (
                   <li
                     key={i}
-                    className="flex items-start gap-2 rounded-lg border border-[#26323d] bg-[#18212b] px-2.5 py-2"
+                    className="flex items-start gap-2 rounded-lg border border-border] bg-muted] px-2.5 py-2"
                   >
                     <span
                       className={`mt-0.5 shrink-0 rounded border px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wide ${tone.badge}`}
@@ -111,10 +111,10 @@ export function CodeAnalysisPanel({ analysis }: CodeAnalysisPanelProps) {
                       {tone.icon} {issue.severity}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <div className="font-mono text-[10px] text-[#6c63ff]">
+                      <div className="font-mono text-[10px] text-live]">
                         {issue.rule}
                       </div>
-                      <div className="text-[11px] leading-relaxed text-[#f5f7fa]/80">
+                      <div className="text-[11px] leading-relaxed text-foreground]/80">
                         {issue.message}
                       </div>
                     </div>
@@ -128,12 +128,12 @@ export function CodeAnalysisPanel({ analysis }: CodeAnalysisPanelProps) {
         /* État d'aide V1 : ce que l'agent détecte (règles réelles) */
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <FileSearch size={13} className="text-[#6c63ff]" strokeWidth={1.8} />
-            <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-[#94a3b8]">
+            <FileSearch size={13} className="text-live]" strokeWidth={1.8} />
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground]">
               analyse de code · règles détectées
             </span>
           </div>
-          <p className="font-mono text-[10.5px] leading-relaxed text-[#94a3b8]">
+          <p className="font-mono text-[10.5px] leading-relaxed text-muted-foreground]">
             Demandez au tuteur d'analyser votre code dans le chat — voici
             ce qu'il détecte (analyze_code, §29) :
           </p>
@@ -143,7 +143,7 @@ export function CodeAnalysisPanel({ analysis }: CodeAnalysisPanelProps) {
               return (
                 <li
                   key={r.rule}
-                  className="flex items-start gap-2 rounded-lg border border-[#26323d] bg-[#18212b] px-2.5 py-1.5"
+                  className="flex items-start gap-2 rounded-lg border border-border] bg-muted] px-2.5 py-1.5"
                 >
                   <span
                     className={`mt-0.5 shrink-0 rounded border px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wide ${tone.badge}`}
@@ -151,10 +151,10 @@ export function CodeAnalysisPanel({ analysis }: CodeAnalysisPanelProps) {
                     {tone.icon} {r.severity}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <span className="font-mono text-[10px] text-[#6c63ff]">
+                    <span className="font-mono text-[10px] text-live]">
                       {r.rule}
                     </span>
-                    <span className="text-[11px] leading-relaxed text-[#f5f7fa]/75">
+                    <span className="text-[11px] leading-relaxed text-foreground]/75">
                       {' — '}
                       {r.description}
                     </span>
@@ -167,9 +167,9 @@ export function CodeAnalysisPanel({ analysis }: CodeAnalysisPanelProps) {
       )}
 
       {/* Principe pédagogique permanent (§31) */}
-      <div className="mt-auto flex items-start gap-2 rounded-lg border border-[#6c63ff]/25 bg-[#6c63ff]/10 px-3 py-2.5">
-        <GraduationCap size={14} className="mt-0.5 shrink-0 text-[#6c63ff]" strokeWidth={1.8} />
-        <p className="font-mono text-[10.5px] leading-relaxed text-[#f5f7fa]/75">
+      <div className="mt-auto flex items-start gap-2 rounded-lg border border-live]/25 bg-live]/10 px-3 py-2.5">
+        <GraduationCap size={14} className="mt-0.5 shrink-0 text-live]" strokeWidth={1.8} />
+        <p className="font-mono text-[10.5px] leading-relaxed text-foreground]/75">
           Le tuteur ne corrige jamais le code à votre place : il
           identifie le problème, questionne, oriente avec un indice —
           c'est vous qui corrigez et réexécutez.

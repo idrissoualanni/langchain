@@ -1,0 +1,56 @@
+id: robotique_mecatronique
+name: Robotique et mécatronique
+domain: ingenierie
+description: Base pédagogique structurée pour Robotique et mécatronique. Contenu introductif
+  et intermédiaire, conçu pour l'apprentissage, le raisonnement et la révision.
+aliases:
+- robotique
+- mécatronique
+- robotics
+- mechatronics
+- articulations
+- degrés de liberté
+- transformation
+- forward kinematics
+- capteur
+- moteur
+- servo
+- encodeur
+- Arduino
+- microcontrôleur
+- temps réel
+- robot autonome
+topics:
+- cinematique_robotique
+- capteurs_actionneurs
+- systemes_embarques_robotique
+semantic_terms:
+  cinematique_robotique:
+  - Notions fondamentales de cinématique robotique avec définitions, relations, exemples
+    et erreurs fréquentes.
+  - articulations
+  - degrés de liberté
+  - transformation
+  - forward kinematics
+  capteurs_actionneurs:
+  - Notions fondamentales de capteurs et actionneurs avec définitions, relations,
+    exemples et erreurs fréquentes.
+  - capteur
+  - moteur
+  - servo
+  - encodeur
+  - actuator
+  - sensor
+  systemes_embarques_robotique:
+  - Notions fondamentales de systèmes embarqués et robotique avec définitions, relations,
+    exemples et erreurs fréquentes.
+  - Arduino
+  - microcontrôleur
+  - temps réel
+  - robot autonome
+  - embedded robotics
+knowledge:
+  sources:
+  - robotique_mecatronique/cinematique_robotique
+  - robotique_mecatronique/capteurs_actionneurs
+  - robotique_mecatronique/systemes_embarques_robotique

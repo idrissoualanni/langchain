@@ -1,6 +1,7 @@
 # Tests d'intégration V5 — serveur réel : chat LLM avec Runtime
 # Context + dynamic_prompt natif + régression V3/V4 complète
 import json
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -26,20 +27,34 @@ def check(label, cond, detail=""):
     )
 
 
-def api(path, method="GET", body=None):
-    data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(
-        f"{BASE}{path}",
-        data=data,
-        method=method,
-        headers={"Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=300) as resp:
-        return json.loads(resp.read().decode())
+TOKENS = {}  # user_id -> dev token ( session simulée mode dev )
+LAST_TOKEN = [None]
+
+
+def api(path, method="GET", body=None, token=None):
+    import json as _json
+    import urllib.request as _rq
+    data = _json.dumps(body).encode() if body is not None else None
+    headers = {"Content-Type": "application/json"}
+    # token explicite > token du user dans l'URL > dernier actif
+    if token is None:
+        m = re.search(r"/api/users/([^/]+)", path)
+        if m and m.group(1) in TOKENS:
+            token = TOKENS[m.group(1)]
+    if token is None and LAST_TOKEN[0]:
+        token = LAST_TOKEN[0]
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    req = _rq.Request(BASE + path, data=data, method=method, headers=headers)
+    with _rq.urlopen(req, timeout=300) as resp:
+        return _json.loads(resp.read().decode())
 
 
 def new_user(name):
-    return api("/api/users", "POST", {"name": name})["user_id"]
+    u = api("/api/users", "POST", {"name": name})
+    TOKENS[u["user_id"]] = u.get("dev_token", "dev:" + u["user_id"])
+    LAST_TOKEN[0] = TOKENS[u["user_id"]]
+    return u["user_id"]
 
 
 def new_thread(user_id, name):

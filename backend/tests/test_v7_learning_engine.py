@@ -508,17 +508,27 @@ else:
     import json  # noqa: E402
     import urllib.request  # noqa: E402
 
-    def api(path, method="GET", payload=None):
+    def api(path, method="GET", payload=None, token=None):
+        # Mission Identité : session simulée ( mode dev ) — le
+        # user_id du path/body est TOUJOURS le sien ( pas d'autre
+        # user dans cette suite ).
+        if token is None:
+            token = _V7_TOKEN[0]
+        headers = {"Content-Type": "application/json"}
+        if token:
+            headers["Authorization"] = "Bearer " + token
         req = urllib.request.Request(
             base + path,
             method=method,
             data=(
                 json.dumps(payload).encode() if payload else None
             ),
-            headers={"Content-Type": "application/json"},
+            headers=headers,
         )
         with urllib.request.urlopen(req, timeout=300) as r:
             return json.loads(r.read().decode())
+
+    _V7_TOKEN = [None]
 
     try:
         api("/api/health")
@@ -533,9 +543,11 @@ else:
 
         # Étudiant python, mastery faible semée, question fonctions
         # → le moteur doit décider, le LLM exécuter naturellement.
-        user_id = api(
+        _u = api(
             "/api/users", "POST", {"name": "V7-Learning-" + uuid.uuid4().hex[:4]}
-        )["user_id"]
+        )
+        user_id = _u["user_id"]
+        _V7_TOKEN[0] = _u.get("dev_token", "dev:" + user_id)
         for s in (0.35, 0.40):
             update_profile_from_observation(
                 user_id,

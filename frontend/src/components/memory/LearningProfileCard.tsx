@@ -1,8 +1,8 @@
-// LearningProfileCard V6 — progression pédagogique de l'étudiant
-// Source de vérité : SqliteStore namespace ("users", "learning",
-// user_id) — cross-thread, indépendant de la conversation.
-// Deux modes : progression lisible (§35) et Raw Learning Profile
-// (§36 — inspecteur dev : JSON réellement stocké).
+﻿// LearningProfileCard V6 â€” progression pÃ©dagogique de l'Ã©tudiant
+// Source de vÃ©ritÃ© : SqliteStore namespace ("users", "learning",
+// user_id) â€” cross-thread, indÃ©pendant de la conversation.
+// Deux modes : progression lisible (Â§35) et Raw Learning Profile
+// (Â§36 â€” inspecteur dev : JSON rÃ©ellement stockÃ©).
 import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -20,26 +20,26 @@ import type {
   LearningProfileData,
   TopicLearningData,
 } from '../../types/learning';
-import { Card } from '../ui/Card';
+import { Card } from '../ui/card';
 
 interface LearningProfileCardProps {
   userId: string | null;
 }
 
 function MasteryBar({ mastery }: { mastery: number | null }) {
-  // Barre §35 : ███░░ 43% — null = jamais évalué (barre vide)
+  // Barre Â§35 : â–ˆâ–ˆâ–ˆâ–‘â–‘ 43% â€” null = jamais Ã©valuÃ© (barre vide)
   const pct = mastery === null ? 0 : Math.round(mastery * 100);
   const filled = Math.round(pct / 12.5); // 8 blocs
   return (
     <div className="flex items-center gap-2">
-      <span className="font-mono text-[11px] tracking-tighter text-[#f5f7fa]/90">
-        {'█'.repeat(filled)}
-        <span className="text-[#26323d]">
-          {'░'.repeat(8 - filled)}
+      <span className="font-mono text-[11px] tracking-tighter text-foreground/90">
+        {'â–ˆ'.repeat(filled)}
+        <span className="text-border">
+          {'â–‘'.repeat(8 - filled)}
         </span>
       </span>
-      <span className="font-mono text-[11px] font-semibold text-[#6c63ff]">
-        {mastery === null ? '—' : `${pct}%`}
+      <span className="font-mono text-[11px] font-semibold text-live">
+        {mastery === null ? 'â€”' : `${pct}%`}
       </span>
     </div>
   );
@@ -53,15 +53,15 @@ function TopicRow({
   topic: TopicLearningData;
 }) {
   return (
-    <div className="rounded-lg border border-[#26323d] bg-[#18212b] p-2.5">
+    <div className="rounded-lg border border-border bg-muted p-2.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-[11px] font-semibold text-[#f5f7fa]">
+        <span className="font-mono text-[11px] font-semibold text-foreground">
           {topicId}
         </span>
         <MasteryBar mastery={topic.mastery} />
       </div>
 
-      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[9.5px] text-[#94a3b8]">
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[9.5px] text-muted-foreground">
         <span>attempts: {topic.attempts}</span>
         {topic.confidence !== null && (
           <span>
@@ -70,7 +70,7 @@ function TopicRow({
         )}
         {topic.last_assessed_at && (
           <span>
-            évalué le {topic.last_assessed_at.split('T')[0]}
+            Ã©valuÃ© le {topic.last_assessed_at.split('T')[0]}
           </span>
         )}
       </div>
@@ -80,7 +80,7 @@ function TopicRow({
           {topic.strengths.slice(0, 3).map((s, i) => (
             <div
               key={i}
-              className="flex items-center gap-1.5 text-[10.5px] text-[#22c55e]/90"
+              className="flex items-center gap-1.5 text-[10.5px] text-success/90"
             >
               <Check size={10} strokeWidth={2.5} />
               {s}
@@ -93,9 +93,9 @@ function TopicRow({
           {topic.weak_points.slice(0, 3).map((w, i) => (
             <div
               key={i}
-              className="flex items-center gap-1.5 text-[10.5px] text-[#f59e0b]/90"
+              className="flex items-center gap-1.5 text-[10.5px] text-warning/90"
             >
-              <span className="font-bold">⚠</span>
+              <span className="font-bold">âš </span>
               {w}
             </div>
           ))}
@@ -147,10 +147,10 @@ export function LearningProfileCard({ userId }: LearningProfileCardProps) {
       <Card className="p-10 text-center">
         <GraduationCap
           size={32}
-          className="mx-auto mb-3 text-[#94a3b8]/30"
+          className="mx-auto mb-3 text-muted-foreground/30"
         />
-        <div className="text-sm text-[#94a3b8]">
-          Sélectionnez un utilisateur pour voir sa progression
+        <div className="text-sm text-muted-foreground">
+          SÃ©lectionnez un utilisateur pour voir sa progression
           d'apprentissage.
         </div>
       </Card>
@@ -161,11 +161,11 @@ export function LearningProfileCard({ userId }: LearningProfileCardProps) {
 
   return (
     <Card>
-      <div className="flex flex-row items-center justify-between border-b border-[#26323d] px-4 py-3">
-        <div className="flex items-center gap-2 text-[13px] font-semibold text-[#f5f7fa]">
+      <div className="flex flex-row items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
           <GraduationCap
             size={14}
-            className="text-[#6c63ff]"
+            className="text-live"
             strokeWidth={1.8}
           />
           Learning Profile
@@ -175,17 +175,17 @@ export function LearningProfileCard({ userId }: LearningProfileCardProps) {
             onClick={() => setShowRaw(!showRaw)}
             className={`rounded-md px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors ${
               showRaw
-                ? 'bg-[#6c63ff] text-white'
-                : 'bg-[#18212b] text-[#94a3b8] hover:text-[#f5f7fa]'
+                ? 'bg-live text-white'
+                : 'bg-muted text-muted-foreground hover:text-foreground'
             }`}
-            title="Raw Learning Profile (§36)"
+            title="Raw Learning Profile (Â§36)"
           >
             <Code2 size={11} className="inline" /> raw
           </button>
           <button
             onClick={() => void refresh()}
-            className="rounded-md bg-[#18212b] px-2 py-1 text-[#94a3b8] transition-colors hover:text-[#f5f7fa]"
-            title="Rafraîchir"
+            className="rounded-md bg-muted px-2 py-1 text-muted-foreground transition-colors hover:text-foreground"
+            title="RafraÃ®chir"
           >
             <RefreshCw
               size={11}
@@ -203,22 +203,22 @@ export function LearningProfileCard({ userId }: LearningProfileCardProps) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-lg bg-[#0b0f14] p-3 font-mono text-[10.5px] leading-relaxed text-[#94a3b8]"
+              className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-lg bg-background p-3 font-mono text-[10.5px] leading-relaxed text-muted-foreground"
             >
               {JSON.stringify(profile, null, 2)}
             </motion.pre>
           ) : loading ? (
-            <div className="py-8 text-center font-mono text-[11px] text-[#94a3b8]">
-              chargement…
+            <div className="py-8 text-center font-mono text-[11px] text-muted-foreground">
+              chargementâ€¦
             </div>
           ) : profile === null || profile.status === 'not_started' ? (
-            <div className="py-8 text-center font-mono text-[11px] text-[#94a3b8]">
-              Aucun profil d'apprentissage — l'étudiant n'a encore
-              jamais été évalué (cas normal, pas une erreur).
+            <div className="py-8 text-center font-mono text-[11px] text-muted-foreground">
+              Aucun profil d'apprentissage â€” l'Ã©tudiant n'a encore
+              jamais Ã©tÃ© Ã©valuÃ© (cas normal, pas une erreur).
             </div>
           ) : subjectIds.length === 0 ? (
-            <div className="py-8 text-center font-mono text-[11px] text-[#94a3b8]">
-              Profil présent mais aucune progression enregistrée.
+            <div className="py-8 text-center font-mono text-[11px] text-muted-foreground">
+              Profil prÃ©sent mais aucune progression enregistrÃ©e.
             </div>
           ) : (
             <motion.div
@@ -234,7 +234,7 @@ export function LearningProfileCard({ userId }: LearningProfileCardProps) {
                 return (
                   <div key={sid}>
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="text-[12px] font-semibold uppercase tracking-wide text-[#f5f7fa]">
+                      <span className="text-[12px] font-semibold uppercase tracking-wide text-foreground">
                         {sid}
                       </span>
                       <MasteryBar mastery={s.mastery} />
@@ -252,9 +252,9 @@ export function LearningProfileCard({ userId }: LearningProfileCardProps) {
                 );
               })}
 
-              {profile.goals.length > 0 && (
-                <div className="border-t border-[#26323d] pt-3">
-                  <div className="mb-1.5 flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-[#94a3b8]">
+              {profile.goals && profile.goals.length > 0 && (
+                <div className="border-t border-border pt-3">
+                  <div className="mb-1.5 flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     <Activity size={11} /> Objectifs
                   </div>
                   {profile.goals.map((g) => (
@@ -265,19 +265,19 @@ export function LearningProfileCard({ userId }: LearningProfileCardProps) {
                       <span
                         className={`rounded px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase ${
                           g.status === 'active'
-                            ? 'bg-[#6c63ff]/15 text-[#6c63ff]'
+                            ? 'bg-live/15 text-live'
                             : g.status === 'completed'
-                              ? 'bg-[#22c55e]/15 text-[#22c55e]'
-                              : 'bg-[#94a3b8]/15 text-[#94a3b8]'
+                              ? 'bg-success/15 text-success'
+                              : 'bg-muted-foreground/15 text-muted-foreground'
                         }`}
                       >
                         {g.status}
                       </span>
-                      <span className="text-[#f5f7fa]/85">
+                      <span className="text-foreground/85">
                         {g.description}
                       </span>
-                      <span className="font-mono text-[9px] text-[#94a3b8]/60">
-                        {g.subject}/{g.topic ?? '—'}
+                      <span className="font-mono text-[9px] text-muted-foreground/60">
+                        {g.subject}/{g.topic ?? 'â€”'}
                       </span>
                     </div>
                   ))}

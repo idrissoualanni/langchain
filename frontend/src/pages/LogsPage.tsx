@@ -17,48 +17,48 @@ import type { LogEntry } from '../types/agent';
 import { cn } from '../lib/utils';
 
 const LEVEL_TONES: Record<string, string> = {
-  INFO: 'text-[#6c63ff]',
-  WARNING: 'text-[#f59e0b]',
-  ERROR: 'text-[#ef4444]',
+  INFO: 'text-live',
+  WARNING: 'text-warning',
+  ERROR: 'text-destructive',
 };
 
 const EVENT_TONES: Record<string, string> = {
-  TOOL_START: 'text-[#6c63ff]',
-  TOOL_END: 'text-[#22c55e]',
-  TOOL_ERROR: 'text-[#ef4444]',
-  MEMORY_READ: 'text-[#6c63ff]',
-  MEMORY_WRITE: 'text-[#22c55e]',
-  MEMORY_UPDATE: 'text-[#22c55e]',
-  MEMORY_DELETE: 'text-[#f59e0b]',
-  MEMORY_SEARCH: 'text-[#6c63ff]',
-  MEMORY_DEDUP: 'text-[#f59e0b]',
-  MEMORY_SKIP: 'text-[#94a3b8]',
-  MEMORY_READ_ERROR: 'text-[#ef4444]',
-  MEMORY_WRITE_ERROR: 'text-[#ef4444]',
-  MEMORY_UPDATE_ERROR: 'text-[#ef4444]',
-  MEMORY_DELETE_ERROR: 'text-[#ef4444]',
-  MEMORY_SEARCH_ERROR: 'text-[#ef4444]',
-  MEMORY_STORE_INIT: 'text-[#f59e0b]',
-  CONTEXT_BUILD_START: 'text-[#6c63ff]',
-  CONTEXT_BUILD_END: 'text-[#22c55e]',
-  CONTEXT_BUILD_ERROR: 'text-[#ef4444]',
-  ROUTING_START: 'text-[#6c63ff]',
-  ROUTING_END: 'text-[#22c55e]',
-  SUBJECT_CONTEXT_SELECTED: 'text-[#6c63ff]',
-  KNOWLEDGE_SEARCH: 'text-[#6c63ff]',
-  KNOWLEDGE_SELECTED: 'text-[#22c55e]',
-  TOOLS_SELECTED: 'text-[#6c63ff]',
-  SUBJECT_REGISTRY_LOADED: 'text-[#f59e0b]',
-  SUBJECT_REGISTRY_ERROR: 'text-[#ef4444]',
-  PROMPT_BUILD: 'text-[#22c55e]',
-  USER_MEMORY_SELECTED: 'text-[#6c63ff]',
-  THREAD_CONTEXT_SELECTED: 'text-[#6c63ff]',
-  CHECKPOINT_SAVED: 'text-[#22c55e]',
-  RUN_START: 'text-[#6c63ff]',
-  RUN_END: 'text-[#22c55e]',
-  ASSISTANT_MESSAGE: 'text-[#22c55e]',
-  USER_MESSAGE: 'text-[#6c63ff]',
-  ERROR: 'text-[#ef4444]',
+  TOOL_START: 'text-live',
+  TOOL_END: 'text-success',
+  TOOL_ERROR: 'text-destructive',
+  MEMORY_READ: 'text-live',
+  MEMORY_WRITE: 'text-success',
+  MEMORY_UPDATE: 'text-success',
+  MEMORY_DELETE: 'text-warning',
+  MEMORY_SEARCH: 'text-live',
+  MEMORY_DEDUP: 'text-warning',
+  MEMORY_SKIP: 'text-muted-foreground',
+  MEMORY_READ_ERROR: 'text-destructive',
+  MEMORY_WRITE_ERROR: 'text-destructive',
+  MEMORY_UPDATE_ERROR: 'text-destructive',
+  MEMORY_DELETE_ERROR: 'text-destructive',
+  MEMORY_SEARCH_ERROR: 'text-destructive',
+  MEMORY_STORE_INIT: 'text-warning',
+  CONTEXT_BUILD_START: 'text-live',
+  CONTEXT_BUILD_END: 'text-success',
+  CONTEXT_BUILD_ERROR: 'text-destructive',
+  ROUTING_START: 'text-live',
+  ROUTING_END: 'text-success',
+  SUBJECT_CONTEXT_SELECTED: 'text-live',
+  KNOWLEDGE_SEARCH: 'text-live',
+  KNOWLEDGE_SELECTED: 'text-success',
+  TOOLS_SELECTED: 'text-live',
+  SUBJECT_REGISTRY_LOADED: 'text-warning',
+  SUBJECT_REGISTRY_ERROR: 'text-destructive',
+  PROMPT_BUILD: 'text-success',
+  USER_MEMORY_SELECTED: 'text-live',
+  THREAD_CONTEXT_SELECTED: 'text-live',
+  CHECKPOINT_SAVED: 'text-success',
+  RUN_START: 'text-live',
+  RUN_END: 'text-success',
+  ASSISTANT_MESSAGE: 'text-success',
+  USER_MESSAGE: 'text-live',
+  ERROR: 'text-destructive',
 };
 
 function LogLine({ entry }: { entry: LogEntry }) {
@@ -67,15 +67,15 @@ function LogLine({ entry }: { entry: LogEntry }) {
       initial={{ opacity: 0, x: -4 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.12 }}
-      className="flex items-baseline gap-3 whitespace-nowrap px-4 py-[3px] font-mono text-[11.5px] leading-[1.5] hover:bg-[#18212b]/60"
+      className="flex items-baseline gap-3 whitespace-nowrap px-4 py-[3px] font-mono text-[11.5px] leading-[1.5] hover:bg-muted/60"
     >
-      <span className="shrink-0 text-[#94a3b8]/50">
+      <span className="shrink-0 text-muted-foreground/50">
         {entry.timestamp?.split('T')[1]?.slice(0, 8) ?? '--:--:--'}
       </span>
       <span
         className={cn(
           'w-[52px] shrink-0 font-semibold',
-          LEVEL_TONES[entry.level] ?? 'text-[#94a3b8]'
+          LEVEL_TONES[entry.level] ?? 'text-muted-foreground'
         )}
       >
         {entry.level}
@@ -83,24 +83,24 @@ function LogLine({ entry }: { entry: LogEntry }) {
       <span
         className={cn(
           'w-[170px] shrink-0 truncate',
-          EVENT_TONES[entry.event] ?? 'text-[#94a3b8]'
+          EVENT_TONES[entry.event] ?? 'text-muted-foreground'
         )}
         title={entry.event}
       >
         {entry.event}
       </span>
       {entry.tool_name && (
-        <span className="shrink-0 text-[#f59e0b]">[{entry.tool_name}]</span>
+        <span className="shrink-0 text-warning">[{entry.tool_name}]</span>
       )}
       {entry.thread_id && (
         <span
-          className="hidden shrink-0 text-[#94a3b8]/40 md:inline"
+          className="hidden shrink-0 text-muted-foreground/40 md:inline"
           title={entry.thread_id}
         >
           {entry.thread_id.slice(0, 8)}
         </span>
       )}
-      <span className="min-w-0 truncate text-[#f5f7fa]/85" title={entry.message}>
+      <span className="min-w-0 truncate text-foreground/85" title={entry.message}>
         {entry.message}
       </span>
     </motion.div>
@@ -154,21 +154,21 @@ export function LogsPage() {
   return (
     <div className="flex h-full flex-col">
       {/* Barre d'outils */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-[#26323d] bg-[#111820]/50 px-6 py-3">
+      <div className="flex flex-wrap items-center gap-3 border-b border-border bg-card/50 px-6 py-3">
         <div>
-          <h1 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-[#f5f7fa]">
-            <Terminal size={16} className="text-[#6c63ff]" strokeWidth={1.8} />
+          <h1 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-foreground">
+            <Terminal size={16} className="text-live" strokeWidth={1.8} />
             Logs
           </h1>
-          <p className="flex items-center gap-1.5 font-mono text-[10px] text-[#94a3b8]">
+          <p className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
             {connected ? (
               <>
-                <Wifi size={10} className="text-[#22c55e]" />
+                <Wifi size={10} className="text-success" />
                 sse stream · live
               </>
             ) : (
               <>
-                <WifiOff size={10} className="text-[#ef4444]" />
+                <WifiOff size={10} className="text-destructive" />
                 déconnecté
               </>
             )}
@@ -179,13 +179,13 @@ export function LogsPage() {
           <div className="relative">
             <Search
               size={12}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#94a3b8]"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
             />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="rechercher…"
-              className="h-8 w-44 rounded-lg border border-[#26323d] bg-[#18212b] pl-7 pr-3 font-mono text-[11px] text-[#f5f7fa] placeholder:text-[#94a3b8]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6c63ff]/50"
+              className="h-8 w-44 rounded-lg border border-border bg-muted pl-7 pr-3 font-mono text-[11px] text-foreground placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-live/50"
             />
           </div>
 
@@ -196,23 +196,23 @@ export function LogsPage() {
               className={cn(
                 'rounded-full border px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors',
                 activeGroups.has(group)
-                  ? 'border-[#6c63ff]/50 bg-[#6c63ff]/15 text-[#6c63ff]'
-                  : 'border-[#26323d] bg-[#18212b] text-[#94a3b8] hover:text-[#f5f7fa]'
+                  ? 'border-live/50 bg-live/15 text-live'
+                  : 'border-border bg-muted text-muted-foreground hover:text-foreground'
               )}
             >
               {group}
             </button>
           ))}
 
-          <div className="mx-1 h-6 w-px bg-[#26323d]" />
+          <div className="mx-1 h-6 w-px bg-border" />
 
           <button
             onClick={() => (paused ? resume() : setPaused(true))}
             className={cn(
               'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-mono text-[11px] font-medium transition-colors',
               paused
-                ? 'border-[#f59e0b]/40 bg-[#f59e0b]/10 text-[#f59e0b]'
-                : 'border-[#26323d] bg-[#18212b] text-[#f5f7fa] hover:border-[#364553]'
+                ? 'border-warning/40 bg-warning/10 text-warning'
+                : 'border-border bg-muted text-foreground hover:border-live'
             )}
           >
             {paused ? <Play size={11} /> : <Pause size={11} />}
@@ -224,8 +224,8 @@ export function LogsPage() {
             className={cn(
               'rounded-lg border px-3 py-1.5 font-mono text-[11px] font-medium transition-colors',
               autoScroll
-                ? 'border-[#22c55e]/40 bg-[#22c55e]/10 text-[#22c55e]'
-                : 'border-[#26323d] bg-[#18212b] text-[#94a3b8]'
+                ? 'border-success/40 bg-success/10 text-success'
+                : 'border-border bg-muted text-muted-foreground'
             )}
           >
             auto-scroll
@@ -233,7 +233,7 @@ export function LogsPage() {
 
           <button
             onClick={clearDisplay}
-            className="flex items-center gap-1.5 rounded-lg border border-[#26323d] bg-[#18212b] px-3 py-1.5 font-mono text-[11px] font-medium text-[#94a3b8] transition-colors hover:border-[#ef4444]/40 hover:text-[#ef4444]"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-muted px-3 py-1.5 font-mono text-[11px] font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive"
             title="Efface l'affichage — le fichier serveur est conservé"
           >
             <Eraser size={11} />
@@ -245,11 +245,11 @@ export function LogsPage() {
       {/* Console */}
       <div
         ref={containerRef}
-        className="min-h-0 flex-1 overflow-auto bg-[#0b0f14] py-2"
+        className="min-h-0 flex-1 overflow-auto bg-background py-2"
       >
         <AnimatePresence initial={false}>
           {filtered.length === 0 ? (
-            <div className="py-12 text-center font-mono text-[11px] text-[#94a3b8]/50">
+            <div className="py-12 text-center font-mono text-[11px] text-muted-foreground/50">
               {paused
                 ? '⏸ en pause — les événements arrivent en arrière-plan'
                 : "en attente d'événements…"}
@@ -266,13 +266,13 @@ export function LogsPage() {
       </div>
 
       {/* Pied */}
-      <div className="flex items-center justify-between border-t border-[#26323d] bg-[#111820] px-6 py-1.5 font-mono text-[10px] text-[#94a3b8]/70">
+      <div className="flex items-center justify-between border-t border-border bg-card px-6 py-1.5 font-mono text-[10px] text-muted-foreground/70">
         <span>
           {filtered.length} / {logs.length} lines
         </span>
         <span className="flex items-center gap-2">
           {paused ? '⏸ paused' : '● live'}
-          <span className="text-[#94a3b8]/40">logs/agent.log</span>
+          <span className="text-muted-foreground/40">logs/agent.log</span>
         </span>
       </div>
     </div>

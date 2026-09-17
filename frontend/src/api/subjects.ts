@@ -10,6 +10,18 @@ export async function getSubject(id: string): Promise<SubjectInfo> {
   return apiFetch<SubjectInfo>(`/api/subjects/${id}`);
 }
 
+export interface SubjectTopic {
+  id: string;
+  subject_id: string;
+  name: string;
+}
+
+export async function getSubjectTopics(
+  id: string
+): Promise<SubjectTopic[]> {
+  return apiFetch<SubjectTopic[]>(`/api/subjects/${id}/topics`);
+}
+
 export async function previewContext(payload: {
   user_id: string;
   thread_id?: string;

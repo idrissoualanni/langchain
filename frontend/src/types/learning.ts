@@ -25,9 +25,32 @@ export interface LearningGoalData {
 export interface LearningProfileData {
   status: 'active' | 'not_started';
   user_id: string;
+  subjects?: Record<string, SubjectLearningData>;
+  goals?: LearningGoalData[];
+  updated_at?: string;
+}
+
+export interface LearningTopicsResponse {
+  status: 'active' | 'not_started';
   subjects: Record<string, SubjectLearningData>;
-  goals: LearningGoalData[];
-  updated_at: string;
+}
+
+// Observation d'apprentissage (GET /api/learning/{uid}/observations)
+export type ObservationType =
+  | 'exercise'
+  | 'quiz'
+  | 'assessment'
+  | 'teacher_feedback';
+
+export interface LearningObservationData {
+  subject: string;
+  topic: string;
+  type: ObservationType;
+  score: number | null;
+  strengths: string[];
+  weak_points: string[];
+  confidence: number | null;
+  created_at: string;
 }
 
 // Sélection learning dans le ContextPreview (BuiltContext.learning)

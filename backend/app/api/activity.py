@@ -3,7 +3,11 @@
 #
 # Sécurité (§51 cross-user) : chaque endpoint valide que le thread
 # appartient à l'utilisateur AVANT toute lecture du state.
-from fastapi import APIRouter, HTTPException
+#
+# Mission Identité : ownership dérivé de la SESSION — le user_id
+# ( query / body ) est vérifié contre l'utilisateur courant , pas
+# cru sur parole ( 403 si usurpation ).
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.agent.activity_state import summarize_activity
 from app.agent.code_tools import (
@@ -17,6 +21,7 @@ from app.api.schemas import (
     CodeRunResponse,
     ThreadActivityResponse,
 )
+from app.auth.resolver import CurrentUser, get_current_user
 from app.db.connections import init_db
 from app.db.threads import get_thread, thread_belongs_to_user
 from app.logging.events import log_event
@@ -25,20 +30,31 @@ router = APIRouter(prefix="/api/threads", tags=["activity"])
 
 
 def _validate_thread_access(
-    thread_id: str, user_id: str
+    thread_id: str, user_id: str, current: CurrentUser
 ) -> dict:
-    """Valide l'accès : thread existe ET appartient au user (§51)."""
+    """Valide l'accès : thread existe ET appartient au user (§51).
+
+    Mission Identité : user_id doit correspondre à la session ( le
+    paramètre reste pour rétrocompatibilité mais ne peut JAMAIS
+    désigner autrui ).
+    """
     init_db()
     thread = get_thread(thread_id)
     if thread is None:
         raise HTTPException(
             status_code=404, detail="Thread introuvable"
         )
-    if not thread_belongs_to_user(thread_id, user_id):
-        raise HTTPException(
-            status_code=403,
-            detail="Ce thread n'appartient pas à cet utilisateur",
-        )
+    if not current.is_admin:
+        if not thread_belongs_to_user(thread_id, current.user_id):
+            raise HTTPException(
+                status_code=403,
+                detail="Ce thread n'appartient pas à cet utilisateur",
+            )
+        if user_id != current.user_id:
+            raise HTTPException(
+                status_code=403,
+                detail="user_id ne correspond pas à la session",
+            )
     return thread
 
 
@@ -47,15 +63,17 @@ def _validate_thread_access(
     response_model=ThreadActivityResponse,
 )
 def api_thread_activity(
-    thread_id: str, user_id: str
+    thread_id: str,
+    user_id: str,
+    current: CurrentUser = Depends(get_current_user),
 ) -> ThreadActivityResponse:
     """État de l'activité pédagogique en cours dans CE thread.
 
     Thread-local (§50) : l'activité du thread A n'est jamais
-    visible depuis le thread B. Le user_id est REQUIS — un user ne
-    peut pas lire l'activité d'un autre (§51).
+    visible depuis le thread B. Le user_id est REQUIS et doit
+    correspondre à la session (§51).
     """
-    _validate_thread_access(thread_id, user_id)
+    _validate_thread_access(thread_id, user_id, current)
 
     state = get_thread_state(user_id, thread_id) or {}
 
@@ -91,7 +109,9 @@ def api_thread_activity(
     response_model=CodeRunResponse,
 )
 def api_run_code(
-    thread_id: str, payload: CodeRunRequest
+    thread_id: str,
+    payload: CodeRunRequest,
+    current: CurrentUser = Depends(get_current_user),
 ) -> CodeRunResponse:
     """Exécute le code du Code Editor dans la sandbox isolée.
 
@@ -100,7 +120,7 @@ def api_run_code(
     (env purgé, réseau/fichiers bloqués, timeout dur). Les
     événements CODE_EXECUTION_* émis sont réels (§33).
     """
-    _validate_thread_access(thread_id, payload.user_id)
+    _validate_thread_access(thread_id, payload.user_id, current)
 
     if not payload.code or not payload.code.strip():
         raise HTTPException(

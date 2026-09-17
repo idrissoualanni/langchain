@@ -43,15 +43,15 @@ export function Dialog({
       {/* Panel */}
       <div
         className={cn(
-          'relative w-full max-w-md rounded-xl border border-[#26323d] bg-[#111820] shadow-2xl',
+          'relative w-full max-w-md rounded-xl border border-border bg-card shadow-2xl',
           className
         )}
       >
-        <div className="flex items-center justify-between border-b border-[#26323d] px-5 py-4">
-          <h2 className="text-sm font-semibold text-[#f5f7fa]">{title}</h2>
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
           <button
             onClick={onClose}
-            className="text-[#94a3b8] transition-colors hover:text-[#f5f7fa]"
+            className="text-muted-foreground transition-colors hover:text-foreground"
           >
             <X size={16} />
           </button>

@@ -5,11 +5,11 @@ import { cn } from '../../lib/utils';
 type Tone = 'default' | 'success' | 'warning' | 'error' | 'accent';
 
 const toneClasses: Record<Tone, string> = {
-  default: 'bg-[#18212b] text-[#94a3b8] border-[#26323d]',
-  success: 'bg-[#22c55e]/10 text-[#22c55e] border-[#22c55e]/30',
-  warning: 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30',
-  error: 'bg-[#ef4444]/10 text-[#ef4444] border-[#ef4444]/30',
-  accent: 'bg-[#6c63ff]/10 text-[#6c63ff] border-[#6c63ff]/30',
+  default: 'bg-muted text-muted-foreground border-border',
+  success: 'bg-success/10 text-success border-success/30',
+  warning: 'bg-warning/10 text-warning border-warning/30',
+  error: 'bg-destructive/10 text-destructive border-destructive/30',
+  accent: 'bg-live/10 text-live border-live/30',
 };
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {

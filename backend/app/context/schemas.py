@@ -105,6 +105,47 @@ class RoutingResult(BaseModel):
         default_factory=list,
         description="Matières des domaines si multi_domain",
     )
+    # --- V7.1 (mission §9/§13/§14) : extension COMPATIBLE ---
+    # match_type : quelle couche a porté la décision (Literal
+    # Pydantic §9). Default "lexical" = comportement V6.5 pur.
+    match_type: Literal[
+        "exact",
+        "lexical",
+        "morphological",
+        "semantic",
+        "hybrid",
+    ] = Field(
+        default="lexical",
+        description="Type de match V7.1 : exact (alias/topic "
+        "plein), lexical (tokens), morphological (variantes "
+        "singulier/pluriel), semantic (embedding seul), hybrid "
+        "(lexical+semantic)",
+    )
+    # semantic_status : état de la couche sémantique pour CE
+    # routing (§19). Default "unavailable" = honnête : aucune
+    # tentative sémantique n'a été faite (cas lexical V6.5 pur,
+    # hint explicite, tests V5/V6 non modifiés).
+    semantic_status: Literal[
+        "available",
+        "unavailable",
+        "error",
+    ] = Field(
+        default="unavailable",
+        description="État de la couche sémantique V7.1 : "
+        "available (candidates scorées), unavailable (pas de "
+        "tententative/provider absent), error (exception → "
+        "lexical fallback)",
+    )
+    # topic_candidates : candidats HYBRIDES avec scores (§11 —
+    # jamais « premier du YAML »). list[dict] pour rester
+    # sérialisable directement ; vide = pas de ranking hybride
+    # (comportement V6.5 pur).
+    topic_candidates: list[dict] = Field(
+        default_factory=list,
+        description="Candidats hybrides [{subject, topic, score, "
+        "lexical_score, semantic_score, match_type}] triés par "
+        "score décroissant (§11) — Inspector/dev uniquement",
+    )
 
 
 # ------------------------------------------------------------------

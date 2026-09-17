@@ -17,6 +17,9 @@ class SubjectConfig:
     topics: list[str] = field(default_factory=list)   # topics connus (routing)
     aliases: list[str] = field(default_factory=list)  # déclencheurs router (normalisés)
     model: dict = field(default_factory=dict)         # {"provider", "name"} — réservé
+    # V7.1 : description sémantique PAR TOPIC — voie déclarative
+    # des paraphrases (mission §8) : {topic: [termes FR/EN...]}
+    semantic_terms: dict = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict) -> "SubjectConfig":
@@ -33,6 +36,7 @@ class SubjectConfig:
             topics=data.get("topics", []),
             aliases=data.get("aliases", []),
             model=data.get("model", {}),
+            semantic_terms=data.get("semantic_terms", {}) or {},
         )
 
 
