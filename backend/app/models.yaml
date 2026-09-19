@@ -1,28 +1,29 @@
-# Model Capability Registry — V6.8 (§37-§39)
-#
-# Source déclarative UNIQUE des capacités des modèles. Valeurs
-# RÉELLES du système actuel — rien d'inventé :
-#   - context_window: null → fenêtre INCONNUE (modèle cloud non
-#     documenté côté projet) → le budget applique un fallback
-#     conservateur documenté (budget.py, CONSERVATIVE_ASSUMED_WINDOW)
-#   - supports_tools: true → l'agent appelle réellement des tools
-#     avec ce modèle (V4+)
-#   - supports_structured_output: false → aucun structured output
-#     natif utilisé → chemin Response Normalizer (§33/§50)
-#   - supports_vision/audio: false → pas implémenté (§49 : graceful
-#     fallback, la vision réelle est une phase suivante)
-#
-# Le nom du modèle ACTIF vient de l'env (MODEL_OLLAMA) via
-# app/config.py — ce registry décrit ses CAPACITÉS, pas le choix
-# du modèle : jamais trois sources contradictoires (§38).
 models:
   default:
-    provider: ollama
-    model: gemma4:31b-cloud
-    context_window: null      # inconnue — fallback conservateur
-    reserved_output_tokens: 2048
+    context_window: null
     max_output_tokens: null
-    supports_tools: true
-    supports_structured_output: false
-    supports_vision: false
+    model: gemma4:31b-cloud
+    provider: ollama
+    reserved_output_tokens: 2048
     supports_audio: false
+    supports_structured_output: false
+    supports_tools: true
+    supports_vision: false
+  disabled-test-model:
+    display_name: Disabled Test
+    enabled: false
+    model: test
+    provider: ollama
+    supports_audio: false
+    supports_structured_output: false
+    supports_tools: false
+    supports_vision: false
+  test-model:
+    display_name: Test Model
+    enabled: true
+    model: gemma2:9b
+    provider: ollama
+    supports_audio: false
+    supports_structured_output: false
+    supports_tools: false
+    supports_vision: false

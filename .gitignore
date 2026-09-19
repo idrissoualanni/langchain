@@ -1,52 +1,54 @@
+```gitignore
 # Python
 __pycache__/
-*.pyc
-.venv/
-venv/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Bases de données locales
-backend/database/*.db
-backend/database/*.db-journal
-backend/database/*.db-shm
-backend/database/*.db-wal
+# Database
+*.db
+database/
 
-# Artefacts de session agent (harness)
-.omo/
-
-# Node
-node_modules/
-frontend/dist/
-
-# Cache npm/pnpm locaux (sandbox)
-.npm-cache/
-.pnpm-store/
-
-# Env — ne jamais commit les clés
+# Environment
 .env
+.env.local
 .env.*
 !.env.example
-backend/.env
-backend/.env.*
-!backend/.env.example
-frontend/.env
-frontend/.env.*
-!frontend/.env.example
 
-# Logs volumineux (l'historique peut être conservé si souhaité)
-logs/*.log
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Logs
 *.log
-frontend/vite_dev.out
-frontend/vite_dev.err
-frontend/v
 
 # OS
 .DS_Store
 Thumbs.db
-
-backend/server.err
-backend/server.log
-backend/*.out
-backend/*.err
-
-# Artefacts runtime LangGraph locaux (store pickle)
-backend/.langgraph_api/
+```

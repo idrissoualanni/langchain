@@ -210,11 +210,12 @@ check(
     route_after_workflow_router({"workflow": {"workflow": "activity"}}) == "activity",
 )
 
-# WIRED_WORKFLOWS contient uniquement une branche réellement câblée
+# WIRED_WORKFLOWS contient les branches réellement câblées
 # Phase 2 : "main" + "activity" (continuation §16) sont câblés.
+# Phase 3 : "problem" est également câblé (ProblemSubgraph §21).
 check(
-    "C: WIRED_WORKFLOWS Phase 2 = {main, activity} câblés",
-    WIRED_WORKFLOWS == {"main": "context", "activity": "activity"},
+    "C: WIRED_WORKFLOWS Phase 3 = {main, activity, problem} câblés",
+    WIRED_WORKFLOWS == {"main": "context", "activity": "activity", "problem": "problem"},
     str(WIRED_WORKFLOWS),
 )
 

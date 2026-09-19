@@ -37,7 +37,11 @@ from app.config import (
 from app.agent.middleware import build_middleware_stack
 from app.agent.prompts import SYSTEM_PROMPT
 from app.agent.state import CustomAgentState
-from app.agent.tools import all_tools
+
+# Import direct depuis tools.py (le fichier) pour éviter le cycle avec le package
+from app.agent import tools as tools_module
+
+all_tools = tools_module.all_tools
 from app.context.schemas import AgentContext
 from app.graph.main import compile_main_graph
 from app.logging.events import log_event

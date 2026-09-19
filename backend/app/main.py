@@ -13,12 +13,19 @@ from app.api import (
     documents,
     health,
     learning,
+    livekit,
     logs,
     memory,
     models,
     subjects,
     threads,
     users,
+)
+from app.api.admin import (
+    models_router as admin_models_router,
+    knowledge_router as admin_knowledge_router,
+    observability_router as admin_observability_router,
+    dashboard_router as admin_dashboard_router,
 )
 from app.db.connections import init_db
 from app.logging.events import log_event, setup_logging
@@ -90,6 +97,13 @@ app.include_router(context.router)
 app.include_router(learning.router)
 app.include_router(activity.router)
 app.include_router(documents.router)
+app.include_router(livekit.router)
+
+# Admin API — Model/Knowledge/Observability/Dashboard management (secured)
+app.include_router(admin_models_router, prefix="/api/admin", tags=["admin-models"])
+app.include_router(admin_knowledge_router, prefix="/api/admin", tags=["admin-knowledge"])
+app.include_router(admin_observability_router, prefix="/api/admin", tags=["admin-observability"])
+app.include_router(admin_dashboard_router, prefix="/api/admin", tags=["admin-dashboard"])
 
 # SSE — événements agent temps réel
 app.add_api_route(
