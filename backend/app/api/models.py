@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.config import MODEL_NAME, OLLAMA_HOST, ollama_headers
+from app.context.model_capabilities import list_configured_models
 
 router = APIRouter(prefix="/api/models", tags=["models"])
 
@@ -54,24 +55,45 @@ def _list_ollama_models() -> list[dict[str, Any]]:
 
 @router.get("", response_model=ModelsResponse)
 def api_list_models() -> ModelsResponse:
-    """Modèles disponibles + modèle actif (ModelSelector assistant-ui)."""
-    raw = _list_ollama_models()
+    """Modèles disponibles + modèle actif (ModelSelector assistant-ui).
 
-    # Déduplication par id, tri stable alphabétique
+    Source : `models.yaml` (Model Capability Registry, §38) — la
+    liste reflète les modèles CONFIGURÉS (source déclarative),
+    mappés sur leur nom réel Ollama. Repli sur les tags Ollama si
+    le YAML ne déclare aucun modèle (jamais de liste vide).
+    """
+    configured = list_configured_models()
+
+    # Dédoublonnage par id (source YAML), tri stable alphabétique
     seen: dict[str, dict[str, Any]] = {}
-    for m in raw:
-        if m["id"] not in seen:
-            seen[m["id"]] = m
-    ids = sorted(seen.keys())
+    for c in configured:
+        if c["id"] not in seen:
+            seen[c["id"]] = {
+                "id": c["id"],
+                "name": c["id"],
+                "description": f"{c['provider']} · configuré",
+            }
 
+    # YAML vide → repli sur les tags Ollama (comportement historique)
+    if not seen:
+        raw = _list_ollama_models()
+        for m in raw:
+            if m["id"] not in seen:
+                seen[m["id"]] = {
+                    "id": m["id"],
+                    "name": m["id"],
+                    "description": _size_label(m.get("size")),
+                }
+
+    ids = sorted(seen.keys())
     models = [
         ModelInfo(
-            id=i,
-            name=i,
-            description=_size_label(seen[i].get("size")),
-            active=(i == MODEL_NAME),
+            id=entry["id"],
+            name=entry["name"],
+            description=entry.get("description", ""),
+            active=(entry["id"] == MODEL_NAME),
         )
-        for i in ids
+        for entry in (seen[i] for i in ids)
     ]
 
     # Le modèle actif doit toujours être sélectionnable, même si

@@ -583,6 +583,11 @@ def route_subject(
     scores: dict[str, float] = {}
     topic_by_subject: dict[str, str | None] = {}
     match_kind: dict[str, str] = {}
+    # V6.5 (correction) : nombre de SIGNAUX distincts couverts par
+    # le sujet (un alias matché + tous ses topics présents dans la
+    # question). Utilisé UNIQUEMENT pour départager une égalité
+    # parfaite de scores au max — jamais pour inventer un sujet.
+    signals: dict[str, int] = {}
     for cfg in list_subjects():
         score = 0.0
         kind = ""
@@ -601,7 +606,17 @@ def route_subject(
                     score = max(score, 2.0)
                     kind = "word"
                     break
-        topic = _match_topic(cfg, q_words, text_norm)
+        # Topics présents dans la question : liste complète (la
+        # variante morphologique est comptée comme un topic matché).
+        matched_topics = []
+        for topic_cfg in cfg.topics:
+            t = _norm(topic_cfg)
+            if " " in t or "/" in t:
+                if t in text_norm:
+                    matched_topics.append(topic_cfg)
+            elif t and _word_in(q_words, topic_cfg):
+                matched_topics.append(topic_cfg)
+        topic = matched_topics[0] if matched_topics else None
         topic_by_subject[cfg.id] = topic
         if topic:
             score = max(score, 1.0)
@@ -609,6 +624,10 @@ def route_subject(
         if score > 0:
             scores[cfg.id] = score
             match_kind[cfg.id] = kind
+            alias_signal = (
+                1 if kind in ("word", "phrase", "tokens") else 0
+            )
+            signals[cfg.id] = alias_signal + len(matched_topics)
 
     # 3) Détection taxonomy (matières non-configurées).
     #    Anti-collision sur les HITS : une entrée taxonomy dont l'id
@@ -638,15 +657,38 @@ def route_subject(
         second = values[1] if len(values) > 1 else 0.0
         kind = match_kind.get(best_id, "")
 
-        # Égalité parfaite entre matières configurées → ambiguous
+        # Égalité parfaite de scores entre matières configurées.
+        # Correction V6.5 — départage par SIGNAL : si UN SEUL sujet
+        # de l'égalité a couvert strictement plus de signaux (alias
+        # + topics de SA config, ex. « les fonctions Python » :
+        # python aliase ET topic, informatique/mathematics aliase
+        # seul), il est retenu — l'égale est alors réelle (maths ou
+        # informatique ? → toujours ambiguous). Jamais d'invention.
+        ambiguous_result = RoutingResult(
+            status="ambiguous",
+            confidence=0.5,
+            candidates=sorted(scores.keys()),
+        )
         if len(scores) >= 2 and top == second:
-            return _emit_end(
-                RoutingResult(
-                    status="ambiguous",
-                    confidence=0.5,
-                    candidates=sorted(scores.keys()),
-                )
-            )
+            tied = [k for k, v in scores.items() if v == top]
+            if len(tied) >= 2:
+                sig_values = [signals.get(k, 0) for k in tied]
+                max_sig = max(sig_values)
+                winners = [
+                    k
+                    for k, s in zip(tied, sig_values)
+                    if s == max_sig
+                ]
+                if (
+                    len(winners) == 1
+                    and max_sig > min(sig_values)
+                ):
+                    best_id = winners[0]
+                    kind = match_kind.get(best_id, "")
+                else:
+                    return _emit_end(ambiguous_result)
+            else:
+                return _emit_end(ambiguous_result)
 
         topic = topic_by_subject.get(best_id)
         # Confiance graduée V6.5 (§10) :

@@ -316,39 +316,49 @@ async def run_agent_stream(
     activity_pre = dict(
         (new_state_pre.values or {}).get("learning_activity") or {}
     )
-    # V6.8.1 §13/§23 : enrichit le BuiltContext du registre avec
-    # le résumé d'activité (copie explicite — §17) pour que le
-    # contrat agrégé consommé par V7 soit complet.
-    try:
-        register_activity(thread_id, activity_pre)
-    except Exception:
-        pass
-    fallback_pre = None
-    search_results_pre = None
-    search_used_pre = False
-    try:
-        last_ctx = get_last_context(thread_id)
-        if last_ctx is not None:
-            fallback_pre = getattr(last_ctx, "fallback", None)
-            web_pre = getattr(last_ctx, "web", None)
-            if web_pre is not None:
-                search_results_pre = [
-                    r.model_dump() for r in web_pre.results
-                ]
-                search_used_pre = (
-                    getattr(web_pre, "status", "") == "found"
-                    and bool(web_pre.results)
-                )
-    except Exception:
-        pass
 
-    agent_response = normalize_response(
-        message=response_content,
-        activity=activity_pre or None,
-        search_results=search_results_pre,
-        search_used=search_used_pre,
-        fallback=fallback_pre,
-    ).model_dump()
+    # V7 ORCHESTRATION : si le graphe parent a produit un
+    # agent_response via le node RESPONSE (state.agent_response),
+    # il fait FOI (contrat public complet, calculé avec l'état
+    # assemblé par les nodes). Sinon → chemin historique.
+    state_agent_response = (result or {}).get("agent_response") or {}
+
+    if state_agent_response:
+        agent_response = state_agent_response
+    else:
+        # V6.8.1 §13/§23 : enrichit le BuiltContext du registre avec
+        # le résumé d'activité (copie explicite — §17) pour que le
+        # contrat agrégé consommé par V7 soit complet.
+        try:
+            register_activity(thread_id, activity_pre)
+        except Exception:
+            pass
+        fallback_pre = None
+        search_results_pre = None
+        search_used_pre = False
+        try:
+            last_ctx = get_last_context(thread_id)
+            if last_ctx is not None:
+                fallback_pre = getattr(last_ctx, "fallback", None)
+                web_pre = getattr(last_ctx, "web", None)
+                if web_pre is not None:
+                    search_results_pre = [
+                        r.model_dump() for r in web_pre.results
+                    ]
+                    search_used_pre = (
+                        getattr(web_pre, "status", "") == "found"
+                        and bool(web_pre.results)
+                    )
+        except Exception:
+            pass
+
+        agent_response = normalize_response(
+            message=response_content,
+            activity=activity_pre or None,
+            search_results=search_results_pre,
+            search_used=search_used_pre,
+            fallback=fallback_pre,
+        ).model_dump()
 
     yield {
         "event": "ASSISTANT_MESSAGE",
@@ -473,51 +483,58 @@ def run_agent(
         thread_id=thread_id,
     )
 
-    # V6.7 §26 : Response Normalizer — structures internes →
-    # AgentResponse (contrat public). Le texte brut reste
-    # disponible (rétrocompatibilité) ; agent_response est la
-    # voie structurée du frontend.
-    from app.agent.middleware import (
-        get_last_context,
-        register_activity,
-    )
-    from app.agent.normalizer import normalize_response
+    # V7 ORCHESTRATION : state.agent_response (node RESPONSE) fait
+    # foi si présent — sinon chemin historique (registre + normalize).
+    state_agent_response = (result or {}).get("agent_response") or {}
 
-    activity = dict(
-        (new_state.values or {}).get("learning_activity") or {}
-    )
-    # V6.8.1 §13/§23 : BuiltContext du registre enrichi (copie).
-    try:
-        register_activity(thread_id, activity)
-    except Exception:
-        pass
-    # FallbackDecision du run courant (registre du middleware)
-    fallback = None
-    search_results = None
-    search_used = False
-    try:
-        last_ctx = get_last_context(thread_id)
-        if last_ctx is not None:
-            fallback = getattr(last_ctx, "fallback", None)
-            web = getattr(last_ctx, "web", None)
-            if web is not None:
-                search_results = [
-                    r.model_dump() for r in web.results
-                ]
-                search_used = (
-                    getattr(web, "status", "") == "found"
-                    and bool(web.results)
-                )
-    except Exception:
-        pass
+    if state_agent_response:
+        agent_response = state_agent_response
+    else:
+        # V6.7 §26 : Response Normalizer — structures internes →
+        # AgentResponse (contrat public). Le texte brut reste
+        # disponible (rétrocompatibilité) ; agent_response est la
+        # voie structurée du frontend.
+        from app.agent.middleware import (
+            get_last_context,
+            register_activity,
+        )
+        from app.agent.normalizer import normalize_response
 
-    agent_response = normalize_response(
-        message=response_content,
-        activity=activity or None,
-        search_results=search_results,
-        search_used=search_used,
-        fallback=fallback,
-    ).model_dump()
+        activity = dict(
+            (new_state.values or {}).get("learning_activity") or {}
+        )
+        # V6.8.1 §13/§23 : BuiltContext du registre enrichi (copie).
+        try:
+            register_activity(thread_id, activity)
+        except Exception:
+            pass
+        # FallbackDecision du run courant (registre du middleware)
+        fallback = None
+        search_results = None
+        search_used = False
+        try:
+            last_ctx = get_last_context(thread_id)
+            if last_ctx is not None:
+                fallback = getattr(last_ctx, "fallback", None)
+                web = getattr(last_ctx, "web", None)
+                if web is not None:
+                    search_results = [
+                        r.model_dump() for r in web.results
+                    ]
+                    search_used = (
+                        getattr(web, "status", "") == "found"
+                        and bool(web.results)
+                    )
+        except Exception:
+            pass
+
+        agent_response = normalize_response(
+            message=response_content,
+            activity=activity or None,
+            search_results=search_results,
+            search_used=search_used,
+            fallback=fallback,
+        ).model_dump()
 
     return {
         "response": response_content,

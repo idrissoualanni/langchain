@@ -20,6 +20,7 @@ def check(label, cond, detail=""):
 from app.context.model_capabilities import (  # noqa: E402
     ModelCapabilities,
     get_model_capabilities,
+    list_configured_models,
     supports,
 )
 from app.config import MODEL_NAME  # noqa: E402
@@ -101,6 +102,32 @@ check(
     and caps_unknown.supports_structured_output is False
     and caps_unknown.model_name == "modele-inconnu",
     f"{caps_unknown.model_name} window={caps_unknown.context_window}",
+)
+
+# 14b. Listing des modèles CONFIGURÉS (models.yaml, §38) : noms
+# réels Ollama exposés (jamais la clé logique "default").
+configured = list_configured_models(path=TEST_YAML)
+check(
+    "14b. list_configured_models : noms réels + providers",
+    any(
+        c["id"] == "test-default" and c["provider"] == "ollama"
+        for c in configured
+    )
+    and any(
+        c["id"] == "big-model" and c["provider"] == "ollama"
+        for c in configured
+    )
+    and not any(
+        c["id"] == "default" for c in configured
+    ),
+    str(configured),
+)
+
+# 14c. YAML absent → liste vide (repli décidé par l'appelant)
+check(
+    "14c. list_configured_models YAML absent → []",
+    list_configured_models(path=Path("_inexistant.yaml")) == [],
+    str(list_configured_models(Path("_inexistant.yaml"))),
 )
 
 # Registre réel du projet

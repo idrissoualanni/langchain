@@ -149,6 +149,24 @@ def build_system_prompt(
             "contenu ne provient d'aucune base vérifiée."
         )
 
+    # --- USER DOCUMENTS (RAG V10 §4) — documents PERSONNELS de
+    #     l'utilisateur pertinents pour la question. Bloc déjà
+    #     formaté par le retriever (citations + source). Toujours
+    #     secondaire : on enseigne d'abord avec le cours, les
+    #     documents complètent. Jamais de bloc "vide" en fallback :
+    #     pas de documents = rien, pas d'erreur (§37/§15 fail-safe). ---
+    if context.user_documents and context.user_documents.text:
+        parts.append(
+            "## DOCUMENTS PERSONNELS DE L'ÉTUDIANT\n"
+            "Ressources propres à l'étudiant, pertinentes pour la "
+            "question. Utilise-les pour contextualiser, mais "
+            "signale à l'étudiant les éventuelles erreurs ou "
+            "incohérences que tu y vois ; ne les présente pas comme "
+            "du contenu du cours."
+            "\n\n"
+            + context.user_documents.text
+        )
+
     # --- USER CONTEXT (mémoire sélectionnée — données utiles, §36) ---
     if context.user.text:
         parts.append(
@@ -264,6 +282,16 @@ def build_system_prompt(
             "learning_action": (
                 decision.action
                 if decision is not None
+                else None
+            ),
+            "user_documents_count": (
+                context.user_documents.count
+                if context.user_documents is not None
+                else 0
+            ),
+            "user_documents_status": (
+                context.user_documents.status
+                if context.user_documents is not None
                 else None
             ),
         },

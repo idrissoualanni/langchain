@@ -193,6 +193,60 @@ def _content_tokens(content: str) -> set[str]:
     }
 
 
+def _split_document_blocks(content: str, num: int) -> list[str]:
+    """Découpe un contenu documentaire en num blocs à peu près égaux
+    (par paragraphes non vides), pour produire plusieurs questions
+    fondées sur le même document sans jamais l'inventer."""
+    blocks = [b.strip() for b in re.split(r"\n\s*\n", content or "") if b.strip()]
+    if not blocks:
+        return [content or ""]
+    if len(blocks) >= num:
+        return blocks[:num]
+    # Moins de paragraphes que de questions demandées : on garde les
+    # paragraphes réels, on complète avec le contenu complet borné
+    # (une question « synthèse » n'invente rien).
+    merged = [" ".join(blocks)]
+    return (blocks + merged)[:num]
+
+
+# Taille max du contenu de référence documentaire stocké dans
+# l'activité : le contenu vient des chunks du DocumentRetriever
+# (déjà bornés par le chunker), on borne la copie d'activité pour
+# ne pas gonfler le state (persisté par le checkpointer §16).
+MAX_DOC_REFERENCE_CHARS = 4000
+
+# Source des références documentaires — cohérente avec
+# DocumentSearchResult.source_type ("user_document", schema RAG V10).
+SOURCE_USER_DOCUMENT = "user_document"
+
+
+def _reference_section(
+    subject: str,
+    topic: str,
+    activity: dict | None = None,
+    document_context: str | None = None,
+) -> dict | None:
+    """Section de référence POUR UN CONTENU DOCUMENTAIRE.
+
+    Priorité : le document_context passé au tool AUJOURD'HUI, sinon
+    la référence stockée dans l'activité en cours (create_exercise /
+    create_quiz la copient dans activity["reference"]). Retour None
+    si aucune référence documentaire — le caller retombe alors sur
+    _find_section (base knowledge, comportement historique).
+    """
+    ref = document_context
+    if not ref and activity:
+        ref = activity.get("reference") or ""
+    ref = (ref or "").strip()
+    if not ref:
+        return None
+    return {
+        "source": SOURCE_USER_DOCUMENT,
+        "topic": topic,
+        "content": ref,
+    }
+
+
 # ------------------------------------------------------------------
 # Helpers state d'activité
 # ------------------------------------------------------------------
@@ -269,6 +323,7 @@ def _help_with(
 def create_exercise(
     subject: str,
     topic: str,
+    document_context: str | None = None,
     state: Annotated[dict | None, InjectedState] = None,
     tool_call_id: Annotated[str | None, InjectedToolCallId] = None,
     config: RunnableConfig = None,
@@ -281,8 +336,10 @@ def create_exercise(
     réponse. NE DONNE NI la solution, NI la correction, NI la question
     suivante dans le même tour.
 
-    L'exercice est construit depuis la base knowledge réelle (source,
-    topic, contenu du cours) — jamais inventé. Si le topic est
+    L'exercice est construit soit depuis la base knowledge réelle
+    (source, topic, contenu du cours), soit depuis un DOCUMENT de
+    l'étudiant lorsque document_context est fourni (contenu retrouvé
+    via search_documents) — jamais inventé. Si le topic est
     introuvable, le retour liste les topics disponibles.
 
     Args:
@@ -296,17 +353,27 @@ def create_exercise(
             demandé, sans demander à l'étudiant de choisir un
             sous-aspect. Les topics section précis (ex: "return",
             "while") fonctionnent aussi.
+        document_context: contenu d'un document de l'étudiant
+            (extrait pertinent retourné par search_documents) sur
+            lequel fonder l'exercice, en lieu et place de la base
+            knowledge. Fourni UNIQUEMENT quand l'étudiant demande
+            un exercice sur SES documents.
     """
     user_id, thread_id = _thread_ids(config)
     log_event(
         "TOOL_CALL",
-        message=f"create_exercise subject={subject} topic={topic}",
+        message=(
+            f"create_exercise subject={subject} topic={topic} "
+            f"document_context={len(document_context or '')} chars"
+        ),
         tool_name="create_exercise",
         user_id=user_id,
         thread_id=thread_id,
     )
 
-    section = _find_section(subject, topic)
+    section = _reference_section(
+        subject, topic, activity=None, document_context=document_context
+    ) or _find_section(subject, topic)
     if section is None:
         from app.subjects.registry import get_subject
 
@@ -367,6 +434,11 @@ def create_exercise(
         "awaiting_answer": True,
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
+    if document_context and document_context.strip():
+        activity["reference"] = document_context[
+            :MAX_DOC_REFERENCE_CHARS
+        ]
+        activity["source_type"] = SOURCE_USER_DOCUMENT
 
     exercise = (
         f"ACTIVITÉ OUVERTE — exercice {subject}/{section['topic']} "
@@ -451,6 +523,8 @@ def evaluate_answer(
     subject: str,
     topic: str,
     answer: str,
+    document_context: str | None = None,
+    document_only: bool = False,
     state: Annotated[dict | None, InjectedState] = None,
     tool_call_id: Annotated[str | None, InjectedToolCallId] = None,
     config: RunnableConfig = None,
@@ -462,6 +536,17 @@ def evaluate_answer(
     knowledge couverts par la réponse + retour formatif (termes
     manquants, prochaine étape). PAS une simulation : le score vient
     de la comparaison réponse ↔ base de cours.
+
+    Quand l'exercice vient d'un DOCUMENT de l'étudiant (créé avec
+    document_context), l'évaluation se fait sur CE document — la
+    référence est retrouvée dans l'activité en cours, pas besoin de
+    la repasser.
+
+    document_only : mode « évaluation DOCUMENT SEULE » — la réponse
+    n'est jugée que sur le contenu du document, jamais sur la base
+    knowledge (§20). Si la référence documentaire est absente ou
+    insuffisante, retour `insufficient_reference` : ne JAMAIS
+    inventer un contenu manquant dans le document.
 
     Après évaluation, le retour t'indique la réaction pédagogique à
     choisir :
@@ -476,6 +561,11 @@ def evaluate_answer(
         subject: id de la matière (ex: "python").
         topic: le topic évalué (ex: "return").
         answer: la réponse de l'étudiant, mot pour mot.
+        document_context: contenu du document de référence pour
+            cette évaluation (normalement superflu : la référence
+            est déjà stockée dans l'activité par create_exercise).
+        document_only: si True (défaut False), évaluer uniquement
+            sur le contenu documentaire fourni.
     """
     user_id, thread_id = _thread_ids(config)
     log_event(
@@ -503,7 +593,13 @@ def evaluate_answer(
     activity = dict((state or {}).get("learning_activity") or {})
     activity_type = activity.get("activity_type", ACTIVITY_TYPE_EXERCISE)
 
-    section = _find_section(subject, topic)
+    # Référence : priorité au document_context passé, sinon à la
+    # référence documentaire stockée dans l'activité en cours, sinon
+    # à la base knowledge (§16 RUPTURE corrigée : l'activité créée
+    # depuis un document conserve SA référence).
+    section = _reference_section(
+        subject, topic, activity=activity, document_context=document_context
+    ) or _find_section(subject, topic)
     if section is None:
         log_event(
             "TOOL_ERROR",
@@ -532,24 +628,65 @@ def evaluate_answer(
             }
         )
 
-    content_tokens = _content_tokens(section["content"])
-    answer_tokens = _content_tokens(answer or "")
-    key_terms = _key_terms(section["content"], max_terms=6)
+    # ---- Mode document_only (§20) : la référence documentaire est
+    # requise — pas d'information → insufficient_reference (jamais
+    # d'invention). Retour contrôlé, sans scoring.
+    if document_only:
+        ref_content = _reference_section(
+            subject,
+            topic,
+            activity=activity,
+            document_context=document_context,
+        )
+        if not ref_content or len(ref_content["content"].strip()) < 80:
+            log_event(
+                "DOC_EVAL_INSUFFICIENT_REFERENCE",
+                level="WARNING",
+                message=(
+                    f"evaluate_answer document_only sans référence "
+                    f"suffisante {subject}/{topic}"
+                ),
+                tool_name="evaluate_answer",
+                user_id=user_id,
+                thread_id=thread_id,
+            )
+            return Command(
+                update={
+                    "messages": [
+                        ToolMessage(
+                            content=(
+                                "Référence documentaire insuffisante "
+                                "pour évaluer cette réponse en mode "
+                                "« document seul » "
+                                "(insufficient_reference). Cherche le "
+                                "passage pertinent avec "
+                                "search_documents puis réévalue, ou "
+                                "évalue sur la base du cours."
+                            ),
+                            tool_call_id=tool_call_id or "",
+                        )
+                    ]
+                }
+            )
 
-    # Couverture des termes-clés
-    covered = [t for t in key_terms if t in answer_tokens]
-    missing = [t for t in key_terms if t not in answer_tokens]
-    coverage = len(covered) / max(1, len(key_terms))
+    # ---- Scoring DÉTERMINISTE délégué au Evaluation Engine (§18/§19) ----
+    # Formule canonique unique (evaluation.text_scoring.score_course_answer) :
+    # le tool n'encapsule plus sa propre copie du scoring. covered/missing
+    # restent disponibles pour le message de retour (mêmes valeurs).
+    from app.evaluation.engine import evaluate_activity
+    from app.evaluation.observations import emit_observation
 
-    # Richesse : tokens de cours présents dans la réponse
-    overlap = content_tokens & answer_tokens
-    richness = (
-        len(overlap) / min(20, len(content_tokens))
-        if content_tokens
-        else 0.0
+    eval_result = evaluate_activity(
+        activity_id=activity.get("activity_id", ""),
+        activity_type=activity_type,
+        answer=answer or "",
+        subject=subject,
+        topic=topic,
+        reference=section["content"],
     )
-
-    score = round(0.7 * coverage + 0.3 * min(1.0, richness), 2)
+    score = eval_result.score
+    covered = eval_result.strengths
+    missing = eval_result.weaknesses
 
     # Appréciation formative (≠ note : guidance) + guidance §11/§13
     if score >= 0.75:
@@ -593,6 +730,11 @@ def evaluate_answer(
             "covered": covered,
             "missing": missing,
         }
+        # §20 : résultat structuré stocké (activity["result"], ADDITIF) —
+        # la shape V5.2 (score/verdict/covered/missing) reste inchangée.
+        from app.evaluation.engine import update_activity_with_result
+
+        update_activity_with_result(activity, eval_result)
 
     result = (
         f"ÉVALUATION — {subject} / {section['topic']} "
@@ -624,53 +766,19 @@ def evaluate_answer(
 
     # ---- V6 : l'évaluation EST une observation pédagogique (§13) ----
     # Pipeline natif Exercise → Evaluation → LearningObservation →
-    # Profile. Déterministe : le profil learning est mis à jour à
-    # CHAQUE vraie évaluation, sans dépendre d'un second appel de
-    # tool par le LLM. Le topic de section (ex: _intro, definition)
-    # est RÉSOLU vers un topic Registry (ex: functions) — sinon
-    # l'observation est rejetée (§18), jamais de topic inventé.
-    # Un échec d'écriture ne bloque JAMAIS l'évaluation (§26).
-    if user_id:
-        try:
-            from app.learning.learning_profile import (
-                resolve_registry_topic,
-                update_profile_from_observation,
-            )
-            from app.learning.schemas import LearningObservation
-
-            registry_topic = resolve_registry_topic(
-                subject, topic, source=section.get("source")
-            )
-            if registry_topic:
-                update_profile_from_observation(
-                    user_id,
-                    LearningObservation(
-                        subject=subject,
-                        topic=registry_topic,
-                        type="exercise",
-                        score=score,
-                        strengths=covered[:3],
-                        weak_points=missing[:3],
-                        confidence=0.8,
-                    ),
-                    thread_id=thread_id or "",
-                )
-        except Exception as exc:
-            log_event(
-                "LEARNING_PROFILE_UPDATE",
-                level="WARNING",
-                message=(
-                    f"Auto-observation après evaluate_answer "
-                    f"échouée (non bloquant) : {exc}"
-                ),
-                user_id=user_id,
-                thread_id=thread_id,
-                extra={
-                    "operation": "learning_observation_auto",
-                    "subject": subject,
-                    "topic": section["topic"],
-                },
-            )
+    # Profile, via le pont CANONIQUE §18 (emit_observation) : déter-
+    # ministique, profil mis à jour à CHAQUE vraie évaluation. Le
+    # topic de section est RÉSOLU vers un topic Registry — sinon
+    # rejetée (§18), jamais de topic inventé. Échec non bloquant.
+    emit_observation(
+        user_id=user_id,
+        thread_id=thread_id,
+        result=eval_result,
+        subject=subject,
+        topic=topic,
+        observation_type="exercise",
+        section_source=section.get("source"),
+    )
 
     update: dict = {
         "messages": [
@@ -709,6 +817,7 @@ def give_hint(
     subject: str,
     topic: str,
     level: int = 0,
+    document_context: str | None = None,
     state: Annotated[dict | None, InjectedState] = None,
     tool_call_id: Annotated[str | None, InjectedToolCallId] = None,
     config: RunnableConfig = None,
@@ -722,7 +831,9 @@ def give_hint(
     level=1 puis level=2 — les niveaux sont PROGRESSIFS : ne saute
     jamais directement au niveau maximal.
 
-    Niveaux d'indices construits depuis le contenu réel du cours :
+    Niveaux d'indices construits depuis le contenu réel du cours (ou
+    du document de l'étudiant si l'activité en cours est fondée sur un
+    document) :
       0 = orienter (quelle direction regarder)
       1 = préciser (le mécanisme clé impliqué)
       2 = presque la solution (point précis à formuler)
@@ -731,6 +842,8 @@ def give_hint(
         subject: id de la matière (ex: "python").
         topic: le topic (ex: "return").
         level: 0, 1 ou 2 (défaut 0 — le moins révélant).
+        document_context: contenu du document de référence (superflu
+            en général : la référence est stockée dans l'activité).
     """
     user_id, thread_id = _thread_ids(config)
     log_event(
@@ -754,7 +867,9 @@ def give_hint(
     activity = dict((state or {}).get("learning_activity") or {})
     activity_type = activity.get("activity_type", ACTIVITY_TYPE_EXERCISE)
 
-    section = _find_section(subject, topic)
+    section = _reference_section(
+        subject, topic, activity=activity, document_context=document_context
+    ) or _find_section(subject, topic)
     if section is None:
         from app.subjects.registry import get_subject
 
@@ -877,6 +992,7 @@ def create_quiz(
     subject: str,
     topic: str,
     num_questions: int = 3,
+    document_context: str | None = None,
     state: Annotated[dict | None, InjectedState] = None,
     tool_call_id: Annotated[str | None, InjectedToolCallId] = None,
     config: RunnableConfig = None,
@@ -891,16 +1007,24 @@ def create_quiz(
     besoin), puis rappelle create_quiz avec next_question=true
     pour obtenir la question suivante.
 
+    Les questions sont fondées sur la base knowledge, ou sur un
+    DOCUMENT de l'étudiant quand document_context est fourni
+    (contenu revoyé par search_documents).
+
     Args:
         subject: id de la matière (ex: "python", "biology").
         topic: le topic du quiz (ex: "return", "membrane").
         num_questions: nombre de questions souhaitées (1-5, défaut 3).
+        document_context: contenu d'un document de l'étudiant sur
+            lequel fonder le quiz, en lieu et place de la base
+            knowledge.
     """
     return _quiz_tool_impl(
         subject,
         topic,
         num_questions,
         next_question=False,
+        document_context=document_context,
         state=state,
         tool_call_id=tool_call_id,
         config=config,
@@ -950,6 +1074,7 @@ def _quiz_tool_impl(
     state: dict | None,
     tool_call_id: str | None,
     config: RunnableConfig | None,
+    document_context: str | None = None,
 ) -> Command:
     """Implémentation partagée create_quiz / create_quiz_next."""
     user_id, thread_id = _thread_ids(config)
@@ -1098,7 +1223,9 @@ def _quiz_tool_impl(
         thread_id=thread_id,
     )
 
-    section = _find_section(subject, topic)
+    section = _reference_section(
+        subject, topic, activity=activity, document_context=document_context
+    ) or _find_section(subject, topic)
     if section is None:
         from app.subjects.registry import get_subject
 
@@ -1160,6 +1287,11 @@ def _quiz_tool_impl(
         "question_index": 0,
         "score": 0.0,
     }
+    if document_context and document_context.strip():
+        activity["reference"] = document_context[
+            :MAX_DOC_REFERENCE_CHARS
+        ]
+        activity["source_type"] = SOURCE_USER_DOCUMENT
 
     log_event(
         "QUIZ_STARTED",
@@ -1228,9 +1360,40 @@ def _build_quiz_questions(
     subject: str, section: dict, num: int
 ) -> list[dict]:
     """Construit num questions de quiz depuis les sections knowledge
-    réelles du subject (section demandée + voisines). Chaque question
-    est dérivée du contenu du cours — jamais inventée."""
+    réelles du subject (section demandée + voisines), ou depuis un
+    DOCUMENT unique quand section["source"] == "user_document".
+    Chaque question est dérivée du contenu de référence — jamais
+    inventée."""
     from app.subjects.registry import get_subject as _gs
+
+    # ---- Mode document : toutes les questions proviennent du même
+    # contenu documentaire, découpé en blocs (§15 quiz fondé sur le
+    # contenu récupéré). Pas de mélange avec la base knowledge.
+    if section.get("source") == SOURCE_USER_DOCUMENT:
+        blocks = _split_document_blocks(section.get("content", ""), num)
+        questions: list[dict] = []
+        for i, block in enumerate(blocks[:num]):
+            terms = _key_terms(block, max_terms=3)
+            ask_terms = ", ".join(terms[:2]) if terms else section["topic"]
+            questions.append(
+                {
+                    "question": (
+                        f"Question {i + 1} (document) : explique avec "
+                        f"tes mots ce qu'est « {section['topic']} » "
+                        f"d'après ce passage du document, en "
+                        f"mentionnant {ask_terms}."
+                    ),
+                    "topic": section["topic"],
+                    "source": SOURCE_USER_DOCUMENT,
+                    "expected": terms,
+                    "expected_response_type": (
+                        RESPONSE_TYPE_CODE
+                        if _is_code_subject(subject)
+                        else RESPONSE_TYPE_SHORT_ANSWER
+                    ),
+                }
+            )
+        return questions
 
     cfg = _gs(subject)
     sections: list[dict] = [section]
@@ -1281,6 +1444,7 @@ def assess_understanding(
     subject: str,
     topic: str,
     response: str,
+    document_context: str | None = None,
     state: Annotated[dict | None, InjectedState] = None,
     tool_call_id: Annotated[str | None, InjectedToolCallId] = None,
     config: RunnableConfig = None,
@@ -1306,6 +1470,8 @@ def assess_understanding(
         subject: id de la matière (ex: "python").
         topic: le topic vérifié (ex: "return").
         response: l'explication de l'étudiant, mot pour mot.
+        document_context: contenu du document de référence (superflu
+            en général : la référence est stockée dans l'activité).
     """
     user_id, thread_id = _thread_ids(config)
     log_event(
@@ -1322,7 +1488,12 @@ def assess_understanding(
     activity = dict((state or {}).get("learning_activity") or {})
     activity_type = activity.get("activity_type", "")
 
-    section = _find_section(subject, topic)
+    section = _reference_section(
+        subject,
+        topic,
+        activity=activity,
+        document_context=document_context,
+    ) or _find_section(subject, topic)
     if section is None:
         return Command(
             update={

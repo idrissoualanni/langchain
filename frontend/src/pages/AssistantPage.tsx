@@ -12,6 +12,7 @@ import {
 import { ModelSelector } from '../components/assistant-ui/elements/model-selector.aui';
 import { useModelCatalog } from '../assistant-ui/AssistantRuntimeProvider';
 import { useAgentResponseDataUI } from '../assistant-ui/AgentResponseDataUI';
+import { useToolUIs } from '../assistant-ui/tool-uis';
 import { useAssistantStore } from '../assistant-ui/store';
 import { useHealth } from '../hooks/useHealth';
 
@@ -100,6 +101,8 @@ function RunErrorBanner() {
 function AssistantRuntimeChildren() {
   // Data part "agent-response" → cartes pédagogiques (mécanisme officiel)
   useAgentResponseDataUI();
+  // Tool-calls → Tool UIs dédiés (cartes pliantes) avant le ToolFallback
+  useToolUIs();
   return (
     <div className="flex h-full min-h-0 flex-col">
       <RunErrorBanner />

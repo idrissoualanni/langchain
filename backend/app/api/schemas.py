@@ -397,3 +397,67 @@ class CodeRunResponse(BaseModel):
     stderr: str
     exit_code: int
     duration_ms: int
+
+
+# ------------------------------------------------------------------
+# V10 — Documents utilisateur (RAG / user knowledge)
+# ------------------------------------------------------------------
+
+
+class DocumentUploadCreate(BaseModel):
+    """POST /api/users/{user_id}/documents — metadata d'upload.
+
+    Convention du transport (simplicité, pas de multipart lourd) :
+      - PDF (extension .pdf ou MIME application/pdf) : `content` est
+        le fichier encodé en base64 (décodé côté backend) ;
+      - texte (md / txt / rst / …) : `content` est le texte brut.
+    `filename` sert de borne de taille + unicité d'affichage.
+    """
+
+    filename: str = Field(..., min_length=1, max_length=255)
+    content: str = Field(
+        ..., min_length=1, max_length=2_800_000
+    )  # 2 Mo binaires ≈ 2,67 M chars en base64
+    content_type: str | None = Field(
+        default="text/plain", max_length=120
+    )
+
+    @field_validator("filename")
+    @classmethod
+    def valid_filename(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Le nom de fichier ne peut pas être vide")
+        if len(v) > 255:
+            raise ValueError("Le nom de fichier est trop long")
+        return v
+
+    @field_validator("content_type")
+    @classmethod
+    def valid_content_type(cls, v: str | None) -> str | None:
+        if v is None:
+            return "text/plain"
+        v = v.strip()
+        if not v:
+            return "text/plain"
+        return v
+
+
+class DocumentOut(BaseModel):
+    """GET /api/users/{user_id}/documents — vue de UN document."""
+
+    doc_id: str
+    filename: str
+    content_type: str
+    size_bytes: int
+    chunk_count: int
+    created_at: str
+
+
+class DocumentSearchResponseOut(BaseModel):
+    """Réponse de recherche documents (statut 4-valeurs contrôlé)."""
+
+    status: str
+    query: str = ""
+    error: str = ""
+    results: list[dict] = Field(default_factory=list)

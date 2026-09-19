@@ -14,8 +14,8 @@ from app.context.builder import (
     build_system_prompt,
     build_thread_context,
     build_user_context,
+    retrieve_sources,
 )
-from app.context.prompt_builder import build_system_prompt  # noqa: F811
 from app.context.router import route_subject
 from app.context.schemas import (  # noqa: F401
     AgentContext,
@@ -28,6 +28,7 @@ from app.context.schemas import (  # noqa: F401
 
 __all__ = [
     "build_context",
+    "retrieve_sources",
     "build_system_prompt",
     "build_thread_context",
     "build_user_context",

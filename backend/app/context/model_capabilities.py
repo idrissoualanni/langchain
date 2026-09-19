@@ -110,6 +110,42 @@ def get_model_capabilities(
     return _entry_to_caps(default_entry, model_name)
 
 
+def list_configured_models(
+    path: Path | None = None,
+) -> list[dict]:
+    """Modèles RÉELLEMENT configurés dans models.yaml (§38).
+
+    Chaque entrée `models.<clé>` décrit un modèle : on expose son
+    nom réel (`.model`, la valeur envoyée à Ollama) — jamais la clé
+    logique ("default" n'est PAS un modèle Ollama). Dédoublonnage
+    par nom réel ; tri stable par nom. YAML absent/vide → liste vide
+    (l'appelant décide du repli). Conserve le principe "une seule
+    source" : on lit le même _load() que get_model_capabilities.
+    """
+    data = _load(path)
+    raw = data.get("models", {}) or {}
+    seen: dict[str, str] = {}
+    provider_by_id: dict[str, str] = {}
+    for key, entry in raw.items():
+        if not isinstance(entry, dict):
+            continue
+        model = (entry.get("model") or key or "").strip()
+        if not model:
+            continue
+        if model not in seen:
+            seen[model] = key
+            provider_by_id[model] = entry.get("provider", "ollama")
+    entries = [
+        {
+            "id": mid,
+            "key": seen[mid],
+            "provider": provider_by_id.get(mid, "ollama"),
+        }
+        for mid in sorted(seen.keys())
+    ]
+    return entries
+
+
 def supports(
     caps: ModelCapabilities,
     capability: Literal[
@@ -134,5 +170,6 @@ def supports(
 __all__ = [
     "ModelCapabilities",
     "get_model_capabilities",
+    "list_configured_models",
     "supports",
 ]

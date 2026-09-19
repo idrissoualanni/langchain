@@ -40,12 +40,17 @@ except Exception:
     ok = True
 check("S54: Literal status rejetÃ© si invalide", ok)
 
-# AmbiguÃ¯tÃ© (Â§51)
-r = route_subject("Explique-moi les reseaux.")
+# Ambiguïté (§51) — « reseaux neurones » : réellement ambigu entre
+# computer_networks et intelligence_artificielle (neural_networks
+# n'est plus un sujet configuré depuis la V7 — topic de l'IA).
+r = route_subject("Parle-moi des reseaux neurones.")
 check(
     "S51: ambiguous + candidates",
     r.status == "ambiguous"
-    and set(r.candidates) == {"computer_networks", "neural_networks"},
+    and set(r.candidates) == {
+        "computer_networks",
+        "intelligence_artificielle",
+    },
     f"{r.status}/{r.candidates}",
 )
 
@@ -72,6 +77,10 @@ KN_DIR = Path("app/knowledge")
 # Sauvegarde pour restauration
 astro_yaml = DEF_DIR / "astronomy.yaml"
 astro_kn = KN_DIR / "sciences" / "astronomie" / "star_life.md"
+
+# Capture de l'original AVANT mutation (restauré en fin de test).
+orig_yaml = astro_yaml.read_text(encoding="utf-8") if astro_yaml.exists() else None
+orig_kn = astro_kn.read_text(encoding="utf-8") if astro_kn.exists() else None
 
 astro_yaml.write_text(
     """id: astronomy
@@ -152,10 +161,13 @@ check(
 # builder/graph/runner/middleware NON modifiÃ©s â€” vÃ©rifiÃ©s par
 # le fait qu'on n'a touchÃ© Ã  aucun fichier moteur.
 
-# Â§52 â€” knowledge absent : matiÃ¨re valide SANS source knowledge
-r = route_subject("Explique-moi la geographie.")  # taxonomy: geographie
+# §52 — knowledge absent : matière valide SANS source knowledge
+# (« geographie » est configurée depuis la V6.5 dans
+# sciences_humaines_communication → remplacée par javascript,
+# toujours taxonomy-only → unsupported)
+r = route_subject("Explique-moi le javascript.")  # taxonomy: javascript
 check(
-    "S52: unsupported â†’ pas de faux knowledge",
+    "S52: unsupported → pas de faux knowledge",
     r.status == "unsupported",
 )
 
@@ -362,12 +374,14 @@ check(
     ac.user_id == "u1" and ac.thread_id == "t1",
 )
 
-# graph.py expose context_schema=AgentContext
+# graph.py expose context_schema=AgentContext — dans _build_agent
+# (get_agent est un simple cache qui délègue ; la vraie confection
+# est le facteur commun _build_agent, graph.py:105)
 import inspect
 
 import app.agent.graph as graph_mod
 
-src = inspect.getsource(graph_mod.get_agent)
+src = inspect.getsource(graph_mod._build_agent)
 check(
     "S4: graph.py passe context_schema=AgentContext",
     "context_schema=AgentContext" in src,
@@ -453,8 +467,17 @@ if fails:
     print("ECHECS:", fails)
 
 # Nettoyage astronomy (matiÃ¨re de test Â§49)
-astro_yaml.unlink(missing_ok=True)
-shutil.rmtree(astro_kn.parent, ignore_errors=True)
+# Restauration astronomy (matiere de test S49) : restaurer l'original,
+# ne jamais detruire un fichier tracke.
+if orig_yaml is None:
+    astro_yaml.unlink(missing_ok=True)
+else:
+    astro_yaml.write_text(orig_yaml, encoding="utf-8")
+if orig_kn is None:
+    shutil.rmtree(astro_kn.parent, ignore_errors=True)
+else:
+    astro_kn.parent.mkdir(parents=True, exist_ok=True)
+    astro_kn.write_text(orig_kn, encoding="utf-8")
 reg.invalidate()
 print("cleanup astronomy ok")
 if fails:

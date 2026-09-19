@@ -4,6 +4,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   Bot,
+  FileText,
   GraduationCap,
   Moon,
   ScrollText,
@@ -41,6 +42,7 @@ interface NavItem {
 const USER_NAV: NavItem[] = [
   { to: '/assistant', label: 'Assistant', icon: Bot },
   { to: '/learning', label: 'Learning', icon: GraduationCap },
+  { to: '/documents', label: 'Documents', icon: FileText },
   { to: '/profile', label: 'Profile', icon: User },
 ];
 

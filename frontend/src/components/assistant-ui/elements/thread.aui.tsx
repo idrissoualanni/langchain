@@ -16,6 +16,7 @@ import {
   ReasoningText,
   ReasoningTrigger,
 } from "@/components/assistant-ui/elements/reasoning.aui";
+import { Sources } from "@/components/assistant-ui/elements/sources.aui";
 import { ToolFallback } from "@/components/assistant-ui/elements/tool-fallback.aui";
 import {
   ToolGroupContent,
@@ -462,6 +463,12 @@ const AssistantMessage: FC = () => {
                 return (
                   <div data-slot="aui_assistant-message-image" className="py-1">
                     <Image {...part} />
+                  </div>
+                );
+              case "source":
+                return (
+                  <div data-slot="aui_assistant-message-source" className="py-1">
+                    <Sources {...part} />
                   </div>
                 );
               case "indicator":

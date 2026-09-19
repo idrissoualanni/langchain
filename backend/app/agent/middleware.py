@@ -43,6 +43,18 @@ LEARNING_TOOL_NAMES = {
     "update_learning_goal",
 }
 
+# Tools Documents V10 : user_id forcé depuis le Runtime Context.
+# Le §36 interdit d'injecter la valeur réelle du user_id dans le
+# prompt — sans forçage, le LLM ne connaît PAS la vraie identité
+# (il hallucine un identifiant) et risque de lire/écrire les
+# documents d'un autre utilisateur. Même mécanisme que la mémoire.
+DOCUMENT_TOOL_NAMES = {
+    "upload_document",
+    "search_documents",
+    "list_documents",
+    "delete_document",
+}
+
 
 def _snapshot(value, limit: int = 500) -> str:
     """Sérialise args/output de tool de façon robuste (JSON ou str)."""
@@ -174,37 +186,43 @@ def register_activity(thread_id: str, activity: dict) -> None:
         pass
 
 
-@dynamic_prompt
-def tutor_dynamic_prompt(request: ModelRequest) -> str:
-    """Dynamic prompt officiel LangChain (§8/§34).
+def _build_prompt_from_context(
+    core_prompt: str,
+    context,
+    user_id: str,
+    thread_id: str,
+    decision=None,
+) -> str:
+    """Présentation du prompt à partir d'un BuiltContext + décision.
 
-    Pipeline métier (§72) :
-      Runtime Context (user_id) → Context Builder (sélection)
-      → Prompt Builder (présentation) → prompt.
-
-    V6.6/V6.7 : le BuiltContext construit (routing/fallback/
-    web) est mis à disposition du Response Normalizer via
-    _last_context_registry (clé thread_id) — le runner lit la
-    décision de fallback après le run pour produire
-    l'AgentResponse (clarification...). Registre borné, mémoire
-    courte, thread-safe minimal (dict sous GIL, écrasement).
-
-    Fallback (§37) : toute erreur du Context Builder est loggée
-    CONTEXT_BUILD_ERROR puis le CORE PROMPT seul est utilisé —
-    jamais de crash.
+    Facteur commun (V7) : utilisé par le chemin PRÉ-CALCULÉ
+    (node CONTEXT/LEARNING) et par le chemin historique
+    (reconstruction). build_system_prompt assemble ; la LearningDecision
+    optionnelle est ajoutée via add_learning_strategy_block.
     """
-    from app.agent.prompts import CORE_PROMPT
+    from app.context import build_system_prompt
 
-    user_id, thread_id = _ids_from_runtime(request.runtime)
+    prompt = build_system_prompt(
+        core_prompt=core_prompt,
+        context=context,
+        user_id=user_id,
+        thread_id=thread_id,
+    )
+    if decision is not None:
+        from app.context.prompt_builder import (
+            add_learning_strategy_block,
+        )
 
-    if not user_id:
-        # Sans contexte user (startup, tests), Core seul
-        return CORE_PROMPT
+        prompt = add_learning_strategy_block(prompt, decision)
+    return prompt
 
-    query = _last_user_query(request)
 
+def _build_context_prompt(
+    core_prompt: str, user_id: str, thread_id: str, query: str
+) -> str:
+    """Chemin HISTORIQUE (non-orchestré) : reconstruction complète."""
     try:
-        from app.context import build_context, build_system_prompt
+        from app.context import build_context
 
         context = build_context(
             user_id=user_id,
@@ -239,19 +257,9 @@ def tutor_dynamic_prompt(request: ModelRequest) -> str:
                     "error": str(exc)[:300],
                 },
             )
-        prompt = build_system_prompt(
-            core_prompt=CORE_PROMPT,
-            context=context,
-            user_id=user_id,
-            thread_id=thread_id,
+        return _build_prompt_from_context(
+            core_prompt, context, user_id, thread_id, decision
         )
-        if decision is not None:
-            from app.context.prompt_builder import (
-                add_learning_strategy_block,
-            )
-
-            prompt = add_learning_strategy_block(prompt, decision)
-        return prompt
     except Exception as exc:
         log_event(
             "CONTEXT_BUILD_ERROR",
@@ -266,7 +274,93 @@ def tutor_dynamic_prompt(request: ModelRequest) -> str:
                 "error": str(exc)[:300],
             },
         )
+        return core_prompt
+
+
+@dynamic_prompt
+def tutor_dynamic_prompt(request: ModelRequest) -> str:
+    """Dynamic prompt officiel LangChain (§8/§34).
+
+    Pipeline métier (§72) :
+      Runtime Context (user_id) → Context Builder (sélection)
+      → Prompt Builder (présentation) → prompt.
+
+    V7 ORCHESTRATION : dans le graphe parent, le node CONTEXT a
+    déjà construit le BuiltContext (et le node LEARNING la
+    LearningDecision) — ils sont exposés par request.state (état
+    LangGraph courant). Préférence stricte : SI request.state
+    contient built_context → le CONSOMMER sans re-exécuter
+    (source de vérité : les nodes, §48). SINON → comportement
+    historique (reconstruction complète) — non-régression pour le
+    sous-graphe AGENT utilisé SEUL dans les tests (test_v52,
+    test_v11) où aucun node d'orchestration n'a tourné.
+
+    V6.6/V6.7 : le BuiltContext construit (routing/fallback/
+    web) est mis à disposition du Response Normalizer via
+    _last_context_registry (clé thread_id) — le runner lit la
+    décision de fallback après le run pour produire
+    l'AgentResponse (clarification...). Registre borné, mémoire
+    courte, thread-safe minimal (dict sous GIL, écrasement).
+
+    Fallback (§37) : toute erreur du Context Builder est loggée
+    CONTEXT_BUILD_ERROR puis le CORE PROMPT seul est utilisé —
+    jamais de crash.
+    """
+    from app.agent.prompts import CORE_PROMPT
+
+    user_id, thread_id = _ids_from_runtime(request.runtime)
+
+    if not user_id:
+        # Sans contexte user (startup, tests), Core seul
         return CORE_PROMPT
+
+    query = _last_user_query(request)
+
+    # --- V7 ORCHESTRATION : BuiltContext PRÉ-CALCULÉ par le node
+    # CONTEXT (canal du state, POC-2/POC-5 validés). Le middleware
+    # ne reconstruit JAMAIS ce qui a déjà été assemblé (§48). ---
+    try:
+        from app.context.schemas import BuiltContext
+
+        state = getattr(request, "state", None) or {}
+        precomputed = dict(state).get("built_context") or {}
+        if precomputed:
+            context = BuiltContext.model_validate(precomputed)
+            if thread_id:
+                _register_context(thread_id, context)
+            decision = None
+            try:
+                from app.learning.decision import LearningDecision
+
+                ld = dict(state).get("learning_decision") or {}
+                if ld:
+                    decision = LearningDecision.model_validate(ld)
+            except Exception:
+                decision = None  # jamais de crash : stratégie optionnelle
+            prompt = _build_prompt_from_context(
+                CORE_PROMPT, context, user_id, thread_id, decision
+            )
+            return prompt
+    except Exception as exc:
+        log_event(
+            "CONTEXT_BUILD_ERROR",
+            level="ERROR",
+            message=(
+                f"Precomputed context consumption failed, "
+                f"fallback core build: {exc}"
+            ),
+            user_id=user_id,
+            thread_id=thread_id,
+            extra={
+                "operation": "context_build",
+                "error": str(exc)[:300],
+            },
+        )
+        return CORE_PROMPT
+
+    return _build_context_prompt(
+        CORE_PROMPT, user_id, thread_id, query
+    )
 
 
 class ToolEventMiddleware(AgentMiddleware):
@@ -292,10 +386,12 @@ class ToolEventMiddleware(AgentMiddleware):
             getattr(request, "runtime", None)
         )
 
-        # --- Sécurité mémoire + learning (§23) : forcer le
-        # user_id réel du Runtime Context ---
+        # --- Sécurité mémoire + learning (§23) + documents (§9) :
+        # forcer le user_id réel du Runtime Context ---
         if (
-            name in MEMORY_TOOL_NAMES or name in LEARNING_TOOL_NAMES
+            name in MEMORY_TOOL_NAMES
+            or name in LEARNING_TOOL_NAMES
+            or name in DOCUMENT_TOOL_NAMES
         ) and user_id:
             forced_args = {**args, "user_id": user_id}
             call = {**call, "args": forced_args}

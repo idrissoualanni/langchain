@@ -1,4 +1,4 @@
-# Astronomie â€” Vie des Ã©toiles
+# Astronomie — Vie des étoiles
 
 ## etoiles
-Une Ã©toile est une boule de plasma tenant en Ã©quilibre entre sa gravitÃ© et la pression de fusion nuclÃ©aire de son cÅ“ur. L'Ã©nergie rayonnÃ©e provient de la fusion de l'hydrogÃ¨ne en hÃ©lium.
+Une étoile est une boule de plasma tenant en équilibre entre sa gravité et la pression de fusion nucléaire de son cœur. L'énergie rayonnée provient de la fusion de l'hydrogène en hélium.

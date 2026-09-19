@@ -47,3 +47,6 @@ backend/server.err
 backend/server.log
 backend/*.out
 backend/*.err
+
+# Artefacts runtime LangGraph locaux (store pickle)
+backend/.langgraph_api/

@@ -329,6 +329,22 @@ def web_search(
     results = rank_web_results(
         raw_results, web_query, topic=topic, top_k=top_k
     )
+
+    # ---- SCRAPING (§26-§34 : chaîne Search → Scrape → Extract →
+    # Clean — RUPTURE R8 corrigée). On enrichit le contenu des
+    # URLs retenues par le contenu éditorial de la page (le snippet
+    # provider reste en secours en cas d'échec partiel §32).
+    # Scraping borné : max_scrape = nombre de résultats retenus.
+    if results:
+        from app.context.web_scraper import scrape_results_snapshot
+
+        scrape_results_snapshot(
+            results,
+            max_scrape=len(results),
+            user_id=user_id,
+            thread_id=thread_id,
+        )
+
     status = "found" if results else "insufficient"
 
     log_event(

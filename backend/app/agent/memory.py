@@ -121,6 +121,15 @@ def _similarity(a: str, b: str) -> float:
 def _fact_relevance(fact_content: str, query: str) -> float:
     """Pertinence d'un fait pour une requête (scoring de recherche).
 
+    V10 — HYBRIDE : combine la vue lexicale (containment mots +
+    reformulation SequenceMatcher) ET la vue sémantique (cosine
+    sur le provider embeddings partagé), comme le hybrid_ranker
+    V7.1 (§10) avec une pondération documentée :
+       final = 0.60 * lexical + 0.40 * sémantique
+    La part sémantique est FACULTATIVE : si le provider est
+    indisponible (erreur), on retombe sur le seul lexical —
+    jamais d'exception (§15 fail-safe).
+
     - Containment des mots signifiants (≥3 chars, hors stop-words)
       de la requête présents dans le fait : 1.0 si tous y sont.
     - À défaut, reformulation complète : similarité globale ≥ 0.5
@@ -136,10 +145,37 @@ def _fact_relevance(fact_content: str, query: str) -> float:
     cw = set(nc.split())
     containment = len(qw & cw) / len(qw)
     if containment > 0:
-        return containment
-    # Pas de mot partagé → reformulation complète ou rien
-    sim = _similarity(fact_content, query)
-    return sim if sim >= 0.5 else 0.0
+        lex = containment
+    else:
+        sim = _similarity(fact_content, query)
+        lex = sim if sim >= 0.5 else 0.0
+
+    sem = _semantic_relevance(fact_content, query)
+    if sem is None:
+        return lex
+    return 0.60 * lex + 0.40 * sem
+
+
+def _semantic_relevance(
+    fact_content: str, query: str
+) -> float | None:
+    """Vue sémantique (cosine provider embeddings) — None si KO.
+
+    Import lazy : évite le cycle app.agent → app.context → memory.
+    Échec → None (fallback lexical, jamais d'exception).
+    """
+    try:
+        from app.context.semantic.provider import (
+            cosine_similarity,
+            get_embedding_provider,
+        )
+
+        provider = get_embedding_provider()
+        qv = provider.embed_text(query)
+        fv = provider.embed_text(fact_content)
+        return cosine_similarity(qv, fv)
+    except Exception:
+        return None
 
 
 def get_store() -> SqliteStore:

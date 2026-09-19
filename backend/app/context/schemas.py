@@ -461,6 +461,8 @@ class ContextStats(BaseModel):
     budget_status: str = "unknown"
     sources_used: int = 0
     sources_dropped: int = 0
+    # --- V10 : documents personnels (RAG) ---
+    user_documents_count: int = 0
 
 
 class ActivityContextInfo(BaseModel):
@@ -489,6 +491,52 @@ class ActivityContextInfo(BaseModel):
     topic: str = ""
     hint_level: int = 0
     attempts: int = 0
+
+
+class DocumentContextInfo(BaseModel):
+    """Documents PERSONNELS de l'utilisateur (RAG V10) injectés
+    dans le contexte quand pertinents pour la question.
+
+    VUE du retrieval documents (DocumentRetriever.inject_documents_context) :
+      - text : bloc formaté « citations » déjà prêt pour le prompt
+        (§34 — préambule + titre + extrait + URL local)
+      - count : nombre de résultats gardés (0 = rien d'exploité)
+      - status : found / insufficient / unavailable / error (cf.
+        SearchResponse V6.5 §3 — statut UNIQUEMENT, jamais inventé)
+      - searched_documents : documents parcourus (isolation user_id
+        via RagStore — jamais d'accès cross-user, §15)
+
+    Frontières (§5-?) : ≠ knowledge (cours Registry), ≠ web
+    (fallback externe) — c'est la base documentaire PERSONNELLE.
+    La section reste OPTIONNELLE : absente/insuffisante = le tuteur
+    garde la conduite normale, sans jamais signaler d'erreur (§37).
+    """
+
+    model_config = {"extra": "forbid"}
+
+    text: str = Field(
+        default="",
+        description="Bloc formaté prêt pour le prompt — vide si rien",
+    )
+    count: int = Field(
+        default=0,
+        ge=0,
+        description="Nombre de résultats de documents gardés",
+    )
+    status: Literal[
+        "found",
+        "insufficient",
+        "unavailable",
+        "error",
+    ] = Field(
+        default="unavailable",
+        description="Statut du retrieval documents (§3 SearchResponse)",
+    )
+    searched_documents: int = Field(
+        default=0,
+        ge=0,
+        description="Documents utilisateur parcourus (source) ",
+    )
 
 
 class BuiltContext(BaseModel):
@@ -571,6 +619,17 @@ class BuiltContext(BaseModel):
         default=None,
         description="Résumé activité pédagogique thread-locale "
         "(§13 — nulle si aucune activité en cours)",
+    )
+    # --- V10 §2 : documents PERSONNELS de l'utilisateur (RAG) ---
+    # Rempli par DocumentRetriever.inject_documents_context quand
+    # des documents pertinents existent. Sémantiquement proche de
+    # web (source externe à l'utilisateur) mais isolée : la base
+    # documentaire est PROPRE à l'user_id (§15 isolation stricte).
+    user_documents: DocumentContextInfo = Field(
+        default_factory=DocumentContextInfo,
+        description="Documents personnels pertinents (RAG V10) — "
+        "status=unavailable si aucun document indexé, jamais "
+        "d'exception propagée (§15 fail-safe)",
     )
 
     def learning_dict(self) -> dict | None:

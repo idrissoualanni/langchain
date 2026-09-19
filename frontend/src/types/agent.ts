@@ -318,8 +318,6 @@ export interface ContextPreview {
 
 // ---- V6 + V5.2 — Tools disponibles (24 avec activity/code) ----
 export const TOOL_NAMES = [
-  'additionner',
-  'calculer_longueur_texte',
   'recherche_web',
   'get_user_profile',
   'update_user_profile',

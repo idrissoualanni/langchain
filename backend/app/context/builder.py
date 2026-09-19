@@ -37,6 +37,7 @@ from app.context.schemas import (
     ActivityContextInfo,
     BuiltContext,
     ContextStats,
+    DocumentContextInfo,
     KnowledgeResult,
     KnowledgeSearchResult,
     ResolvedTools,
@@ -52,11 +53,17 @@ from app.context.web_search import web_search
 from app.learning.learning_context import get_learning_context
 from app.learning.schemas import LearningContextInfo
 from app.logging.events import log_event
+# V10 : documents personnels de l'utilisateur (RAG). Import LAZY
+# au point d'usage (fail-safe §15) : app.rag.vector_store dépend
+# d'app.context.semantic.provider, lui-même sous app.context/__init__
+# qui importe ce builder — un import top-level crée un cycle
+# vector_store → context → builder → retriever → vector_store.
 from app.subjects.registry import get_subject
 from app.subjects.tool_registry import resolve_tools_for_subject
 
 __all__ = [
     "build_context",
+    "retrieve_sources",
     "build_user_context",
     "build_thread_context",
     "build_system_prompt",
@@ -64,6 +71,44 @@ __all__ = [
 ]
 
 from app.context.prompt_builder import build_system_prompt
+
+# V11 §? (Partie C) : marqueurs lexicaux indiquant une demande qui
+# CIBLE EXPLICITEMENT un document personnel (RAG V10) plutôt qu'un
+# sujet de cours. La détection est volontairement simple et rapide
+# (règles booléennes, zéro NLP — le LLM contrôle déjà la sémantique).
+_DOCUMENT_TARGET_MARKERS = (
+    "mon document",
+    "mes documents",
+    "mon cours",
+    "mes cours",
+    "ma fiche",
+    "mes fiches",
+    "mes notes",
+    "mon pdf",
+    "ce document",
+    "ce pdf",
+    "mon fichier",
+    "les documents",
+    "mes fichiers",
+    "sur le document",
+    "ton document",
+    "le document fourni",
+)
+
+
+def _query_targets_document(query: str | None) -> bool:
+    """Détecte si la requête cible explicitement un document (V11 C).
+
+    True seulement quand la demande porte sur la base documentaire
+    personnelle (« évalue-moi sur mon document », « résume mon
+    cours »...). Utilisé pour élever la priorité de la section
+    user_documents (P2 → P1, jamais droppée §43) : le contenu du
+    document devient la source PRINCIPALE du run.
+    """
+    if not query:
+        return False
+    q = query.lower()
+    return any(m in q for m in _DOCUMENT_TARGET_MARKERS)
 
 
 def _select_memories(
@@ -128,6 +173,195 @@ def _select_memories(
     return relevant
 
 
+def retrieve_sources(
+    user_id: str,
+    thread_id: str,
+    query: str,
+    routing: RoutingResult,
+    cfg,
+    max_knowledge: int = 3,
+    knowledge: "KnowledgeSearchResult | None" = None,
+    web: "SearchResponse | None" = None,
+) -> tuple["KnowledgeSearchResult", "SearchResponse"]:
+    """Pipeline KNOWLEDGE + WEB (V6.5 §24-§26) — SOURCE DE VÉRITÉ UNIQUE.
+
+    §48 : ni build_context ni le node RETRIEVAL ne dupliquent cette
+    logique — c'est LE SEUL endroit qui décide quand le web prend
+    le relais du knowledge local.
+
+    Contexte §16/§26 : knowledge UNavailables ≠ knowledge_found ;
+    le web est une SOURCE SÉPARÉE (BuiltContext.web). Aucune
+    tentative web pour unsupported/unknown (pas d'ancrage, §36).
+
+    V7 ORCHESTRATION : knowledge/web pré-calculés optionnels. Quand
+    ils sont fournis, ils sont réutilisés tel quels (le RETRIEVAL
+    node a déjà exécuté ce pipeline) ; sinon ils sont calculés ici.
+    """
+    if knowledge is not None:
+        knowledge_result = knowledge
+    else:
+        knowledge_result = KnowledgeSearchResult(status="unavailable")
+        if cfg:
+            raw = search_knowledge(
+                cfg.id,
+                topic=routing.topic,
+                query=query,
+                limit=max_knowledge,
+            )
+            knowledge_result = KnowledgeSearchResult(
+                status=raw["status"],
+                items=[
+                    KnowledgeResult(
+                        source=i["source"],
+                        topic=i["topic"],
+                        content=i["content"],
+                        relevance=i.get("relevance", 0.0),
+                    )
+                    for i in raw["items"]
+                ],
+                searched_sources=raw.get("searched_sources", 0),
+            )
+            if knowledge_result.items:
+                log_event(
+                    "KNOWLEDGE_SELECTED",
+                    message=(
+                        f"Knowledge selected | subject={cfg.id} | "
+                        f"items={len(knowledge_result.items)} | "
+                        f"status={knowledge_result.status}"
+                    ),
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    extra={
+                        "operation": "knowledge_selected",
+                        "subject": cfg.id,
+                        "knowledge_items": [
+                            f"{i.source}/{i.topic}"
+                            for i in knowledge_result.items
+                        ],
+                        "knowledge_status": knowledge_result.status,
+                    },
+                )
+            elif knowledge_result.status == "unavailable":
+                log_event(
+                    "KNOWLEDGE_UNAVAILABLE",
+                    level="WARNING",
+                    message=(
+                        f"Knowledge unavailable | subject={cfg.id}"
+                    ),
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    extra={
+                        "operation": "knowledge_selected",
+                        "subject": cfg.id,
+                        "knowledge_status": knowledge_result.status,
+                    },
+                )
+
+    if web is not None:
+        web_response = web
+    else:
+        web_response = SearchResponse(status="unavailable")
+        if (
+            cfg
+            and not knowledge_result.items
+            and knowledge_result.status == "insufficient"
+        ):
+            log_event(
+                "SEARCH_START",
+                message=(
+                    f"Search fallback pipeline | subject={cfg.id} | "
+                    f"local=insufficient → web"
+                ),
+                user_id=user_id,
+                thread_id=thread_id,
+                extra={
+                    "operation": "search_pipeline",
+                    "subject": cfg.id,
+                    "topic": routing.topic or "",
+                    "query": (query or "")[:100],
+                    "stage": "web_fallback",
+                },
+            )
+            web_response = web_search(
+                user_query=query,
+                subject=cfg.id,
+                topic=routing.topic,
+                language="fr",
+                top_k=3,
+                user_id=user_id,
+                thread_id=thread_id,
+            )
+            log_event(
+                "SEARCH_END",
+                message=(
+                    f"Search pipeline end | subject={cfg.id} | "
+                    f"web={web_response.status} | "
+                    f"results={len(web_response.results)}"
+                ),
+                user_id=user_id,
+                thread_id=thread_id,
+                extra={
+                    "operation": "search_pipeline",
+                    "subject": cfg.id,
+                    "topic": routing.topic or "",
+                    "query": (query or "")[:100],
+                    "status": web_response.status,
+                    "result_count": len(web_response.results),
+                    "best_relevance": (
+                        web_response.results[0].relevance
+                        if web_response.results
+                        else None
+                    ),
+                },
+            )
+            # §28 : événement résultat/no-result dédié
+            if web_response.results:
+                log_event(
+                    "SEARCH_RESULT",
+                    message=(
+                        f"Search results | count="
+                        f"{len(web_response.results)} | best="
+                        f"{web_response.results[0].relevance}"
+                    ),
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    extra={
+                        "operation": "search_pipeline",
+                        "subject": cfg.id,
+                        "topic": routing.topic or "",
+                        "query": (query or "")[:100],
+                        "result_count": len(web_response.results),
+                        "best_relevance": (
+                            web_response.results[0].relevance
+                        ),
+                        "sources": [
+                            r.source for r in web_response.results
+                        ][:5],
+                    },
+                )
+            else:
+                log_event(
+                    "SEARCH_NO_RESULT",
+                    level="WARNING",
+                    message=(
+                        f"Search no result | web="
+                        f"{web_response.status} → General Tutor"
+                    ),
+                    user_id=user_id,
+                    thread_id=thread_id,
+                    extra={
+                        "operation": "search_pipeline",
+                        "subject": cfg.id,
+                        "topic": routing.topic or "",
+                        "query": (query or "")[:100],
+                        "status": web_response.status,
+                        "result_count": 0,
+                    },
+                )
+
+    return knowledge_result, web_response
+
+
 def build_context(
     user_id: str,
     thread_id: str,
@@ -137,6 +371,10 @@ def build_context(
     max_memories: int = 12,
     max_knowledge: int = 3,
     learning_activity: dict | None = None,
+    routing: "RoutingResult | None" = None,
+    knowledge: "KnowledgeSearchResult | None" = None,
+    web: "SearchResponse | None" = None,
+    fallback: "FallbackDecision | None" = None,
 ) -> BuiltContext:
     """Construit le contexte complet d'un appel LLM (V5 structuré).
 
@@ -148,6 +386,14 @@ def build_context(
     thread-local) est optionnel — le builder en expose un RÉSUMÉ
     (ActivityContextInfo) dans BuiltContext.activity, sans jamais
     y mettre les données de l'exercice (question/expected).
+
+    V7 ORCHESTRATION : routing / knowledge / web / fallback sont
+    des résultats PRÉ-CALCULÉS optionnels (sous-résultats des nodes
+    LangGraph). Quand ils sont fournis, le builder LES CONSOMME
+    sans ré-exécuter route_subject / search_knowledge / web_search
+    / decide_fallback — l'assemblage final reste ici (source de
+    vérité unique, §48). Comportement historique inchangé quand
+    aucun n'est fourni.
     """
     log_event(
         "CONTEXT_BUILD_START",
@@ -171,7 +417,10 @@ def build_context(
     )
 
     # --- 1. ROUTING (RoutingResult pydantic) ---
-    routing: RoutingResult = route_subject(query, hint_subject=subject)
+    # V7 : routing pré-calculé par le node ROUTER — réutilisé tel
+    # quel (route_subject déjà exécuté en amont), sinon appel réel.
+    if routing is None:
+        routing = route_subject(query, hint_subject=subject)
 
     # --- 2. SUBJECT CONFIG (Registry — jamais reconstruit par le LLM, §12) ---
     cfg = get_subject(routing.subject) if routing.subject else None
@@ -202,187 +451,121 @@ def build_context(
         )
 
     # --- 3. KNOWLEDGE (seulement si matière configurée) ---
-    knowledge = KnowledgeSearchResult(status="unavailable")
-    if cfg:
-        raw = search_knowledge(
-            cfg.id,
-            topic=routing.topic,
-            query=query,
-            limit=max_knowledge,
-        )
-        knowledge = KnowledgeSearchResult(
-            status=raw["status"],
-            items=[
-                KnowledgeResult(
-                    source=i["source"],
-                    topic=i["topic"],
-                    content=i["content"],
-                    relevance=i.get("relevance", 0.0),
-                )
-                for i in raw["items"]
-            ],
-            searched_sources=raw.get("searched_sources", 0),
-        )
-        if knowledge.items:
-            log_event(
-                "KNOWLEDGE_SELECTED",
-                message=(
-                    f"Knowledge selected | subject={cfg.id} | "
-                    f"items={len(knowledge.items)} | "
-                    f"status={knowledge.status}"
-                ),
-                user_id=user_id,
-                thread_id=thread_id,
-                extra={
-                    "operation": "knowledge_selected",
-                    "subject": cfg.id,
-                    "knowledge_items": [
-                        f"{i.source}/{i.topic}"
-                        for i in knowledge.items
-                    ],
-                    "knowledge_status": knowledge.status,
-                },
-            )
-        elif knowledge.status == "unavailable":
-            log_event(
-                "KNOWLEDGE_UNAVAILABLE",
-                level="WARNING",
-                message=(
-                    f"Knowledge unavailable | subject={cfg.id}"
-                ),
-                user_id=user_id,
-                thread_id=thread_id,
-                extra={
-                    "operation": "knowledge_selected",
-                    "subject": cfg.id,
-                    "knowledge_status": knowledge.status,
-                },
-            )
-
     # --- 3b. PIPELINE DE FALLBACK V6.5 (§24-§26) ---
-    # knowledge insuffisant (parcouru, rien de pertinent) ET
-    # matière SUPPORTÉE (§16 : subject_supported ≠ knowledge_found)
-    # → tentative WEB. Aucune tentative pour unsupported/unknown :
-    # pas de matière = pas d'ancrage de recherche (§36 noise).
-    # §26 : knowledge_unavailable n'est JAMAIS transformé en
-    # knowledge_found — le statut original est conservé, le web
-    # est une SOURCE SÉPARÉE (BuiltContext.web).
-    web_response = SearchResponse(status="unavailable")
-    if (
-        cfg
-        and not knowledge.items
-        and knowledge.status == "insufficient"
-    ):
-        log_event(
-            "SEARCH_START",
-            message=(
-                f"Search fallback pipeline | subject={cfg.id} | "
-                f"local=insufficient → web"
-            ),
-            user_id=user_id,
-            thread_id=thread_id,
-            extra={
-                "operation": "search_pipeline",
-                "subject": cfg.id,
-                "topic": routing.topic or "",
-                "query": (query or "")[:100],
-                "stage": "web_fallback",
-            },
-        )
-        web_response = web_search(
-            user_query=query,
-            subject=cfg.id,
-            topic=routing.topic,
-            language="fr",
-            top_k=3,
-            user_id=user_id,
-            thread_id=thread_id,
-        )
-        log_event(
-            "SEARCH_END",
-            message=(
-                f"Search pipeline end | subject={cfg.id} | "
-                f"web={web_response.status} | "
-                f"results={len(web_response.results)}"
-            ),
-            user_id=user_id,
-            thread_id=thread_id,
-            extra={
-                "operation": "search_pipeline",
-                "subject": cfg.id,
-                "topic": routing.topic or "",
-                "query": (query or "")[:100],
-                "status": web_response.status,
-                "result_count": len(web_response.results),
-                "best_relevance": (
-                    web_response.results[0].relevance
-                    if web_response.results
-                    else None
-                ),
-            },
-        )
-        # §28 : événement résultat/no-result dédié
-        if web_response.results:
-            log_event(
-                "SEARCH_RESULT",
-                message=(
-                    f"Search results | count="
-                    f"{len(web_response.results)} | best="
-                    f"{web_response.results[0].relevance}"
-                ),
-                user_id=user_id,
-                thread_id=thread_id,
-                extra={
-                    "operation": "search_pipeline",
-                    "subject": cfg.id,
-                    "topic": routing.topic or "",
-                    "query": (query or "")[:100],
-                    "result_count": len(web_response.results),
-                    "best_relevance": (
-                        web_response.results[0].relevance
-                    ),
-                    "sources": [
-                        r.source for r in web_response.results
-                    ][:5],
-                },
-            )
-        else:
-            log_event(
-                "SEARCH_NO_RESULT",
-                level="WARNING",
-                message=(
-                    f"Search no result | web="
-                    f"{web_response.status} → General Tutor"
-                ),
-                user_id=user_id,
-                thread_id=thread_id,
-                extra={
-                    "operation": "search_pipeline",
-                    "subject": cfg.id,
-                    "topic": routing.topic or "",
-                    "query": (query or "")[:100],
-                    "status": web_response.status,
-                    "result_count": 0,
-                },
-            )
+    # V7 : retrieval pré-calculé par le node RETRIEVAL (source de
+    # vérité unique — retrieve_sources, §48), sinon exécution ici.
+    knowledge, web_response = retrieve_sources(
+        user_id,
+        thread_id,
+        query,
+        routing,
+        cfg,
+        max_knowledge=max_knowledge,
+        knowledge=knowledge,
+        web=web,
+    )
 
     # --- 3c. FALLBACK DECISION (V6.6 §6) — matrice pure ---
     # Consomme routing/knowledge/web et produit UNE action
     # explicite. Testable sans LLM (decide_fallback pur).
-    fallback = decide_fallback(
-        routing_status=routing.status,
-        subject=routing.subject,
-        topic=routing.topic,
-        knowledge_status=knowledge.status,
-        web_status=web_response.status,
-        has_web_results=bool(web_response.results),
-        query=query,
-        user_id=user_id,
-        thread_id=thread_id,
-    )
+    # V7 : fallback pré-calculé par le node FALLBACK — le builder
+    # ne re-décide pas (source de vérité : les nodes, §48).
+    if fallback is not None:
+        fallback = fallback.model_copy(
+            update={"candidates": []}
+        )
+    else:
+        fallback = decide_fallback(
+            routing_status=routing.status,
+            subject=routing.subject,
+            topic=routing.topic,
+            knowledge_status=knowledge.status,
+            web_status=web_response.status,
+            has_web_results=bool(web_response.results),
+            query=query,
+            user_id=user_id,
+            thread_id=thread_id,
+        )
     if routing.status == "ambiguous":
         # §10 : candidates transmis pour la clarification
         fallback.candidates = list(routing.candidates)
+
+    # --- 3d. DOCUMENTS PERSONNELS (RAG V10 §4 + §15 fail-safe) ---
+    # Quatrième source de contexte, SÉPARÉE de knowledge/web :
+    # c'est la base documentaire PROPRE à l'user_id. Recherche sur
+    # TOUTE question (même non routée) : un utilisateur peut avoir
+    # indexé ses notes sans rapport direct avec le subject configuré.
+    # Jamais d'exception : aucun document = status unavailable →
+    # section vide (DocumentContextInfo par défaut), le tuteur
+    # garde la conduite normale (§37). Isolation user_id stricte
+    # dans RagStore.search (aucun accès cross-user, §15).
+    user_documents = DocumentContextInfo(
+        text="",
+        count=0,
+        status="unavailable",
+        searched_documents=0,
+    )
+    try:
+        from app.rag.retriever import DocumentRetriever
+
+        # V11 Partie C : une demande qui cible EXPLICITEMENT un
+        # document élève la section user_documents (P2 → P1 §41/§46)
+        # et augmente le budget de chunks du run.
+        document_targeted = _query_targets_document(query)
+        if document_targeted:
+            log_event(
+                "DOCUMENT_TARGET_DETECTED",
+                message=(
+                    "Document target detected | query target "
+                    "explicit | top_k=6 (P1)"
+                ),
+                user_id=user_id,
+                thread_id=thread_id,
+                extra={"query": (query or "")[:120]},
+            )
+        _retriever = DocumentRetriever()
+        doc_resp = _retriever.search_documents(
+            user_id=user_id,
+            query=query,
+            top_k=6 if document_targeted else 4,  # MAX_CONTEXT_CHUNKS du retriever
+        )
+    except Exception:  # pragma: no cover — défensif, fail-safe
+        _retriever = None
+        doc_resp = None
+        document_targeted = False
+    if doc_resp is not None and doc_resp.status == "found":
+        try:
+            doc_text = _retriever._format_results(
+                doc_resp.results
+            )
+        except Exception:  # pragma: no cover — formatage défensif
+            doc_text = ""
+        user_documents = DocumentContextInfo(
+            text=doc_text,
+            count=len(doc_resp.results),
+            status="found",
+            searched_documents=len(doc_resp.results),
+        )
+        log_event(
+            "DOCUMENTS_SELECTED",
+            message=(
+                f"User documents selected | user={user_id} | "
+                f"results={user_documents.count}"
+            ),
+            user_id=user_id,
+            thread_id=thread_id,
+            extra={
+                "operation": "documents_selected",
+                "documents_count": user_documents.count,
+                "documents_status": user_documents.status,
+                "documents_sources": [
+                    r.filename for r in doc_resp.results
+                ][:6],
+            },
+        )
+    # status found → log DOCUMENTS_SELECTED ; sinon rien : une
+    # base vide ou un retrieval sans résultat est la situation
+    # NORMALE (rien à loguer en WARNING).
 
     # --- 4. TOOLS (resolve_tools — §28/§39) ---
     available_tools, unavailable_tools = resolve_tools_for_subject(
@@ -481,6 +664,17 @@ def build_context(
         budget_sections.append(
             _sec("user_memory", 3, user.text)
         )
+    if user_documents.text:
+        budget_sections.append(
+            _sec(
+                # V11 C : priorité dynamique — cible explicite d'un
+                # document → P1 (§41/§43 jamais droppée), sinon P2
+                # (rang des sources retrieval classiques).
+                "user_documents",
+                1 if document_targeted else 2,
+                user_documents.text,
+            )
+        )
     if thread.text:
         budget_sections.append(_sec("thread", 4, thread.text))
 
@@ -531,6 +725,10 @@ def build_context(
         knowledge = knowledge.model_copy(
             update={"items": [], "results": []}
         )
+    if "user_documents" in budget_result.dropped_keys:
+        user_documents = user_documents.model_copy(
+            update={"text": "", "count": 0}
+        )
 
     log_event(
         "CONTEXT_BUDGET",
@@ -563,6 +761,7 @@ def build_context(
         memories_used=len(relevant),
         knowledge_items=len(knowledge.items),
         user_context_chars=len(user.text),
+        user_documents_count=user_documents.count,
         context_size=(
             len(user.text)
             + len(thread.text)
@@ -625,6 +824,7 @@ def build_context(
         budget=budget,
         model=caps,
         activity=activity_info,
+        user_documents=user_documents,
     )
 
     log_event(
@@ -659,6 +859,7 @@ def build_context(
                 f.get("id") for f in relevant
             ][:12],
             "thread_context_selected": bool(thread.thread_id),
+            "user_documents_selected": user_documents.count,
         },
     )
     return context

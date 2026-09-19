@@ -25,6 +25,7 @@ import { MemoryPage } from './pages/MemoryPage';
 import { LogsPage } from './pages/LogsPage';
 import { AssistantPage } from './pages/AssistantPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { DocumentsPage } from './pages/DocumentsPage';
 import { LearningLayout } from './pages/learning/LearningLayout';
 import { LearningOverviewPage } from './pages/learning/LearningOverviewPage';
 import { LearningProgressPage } from './pages/learning/LearningProgressPage';
@@ -122,6 +123,16 @@ function AppShell() {
             element={
               <Protected>
                 <ProfilePage />
+              </Protected>
+            }
+          />
+
+          {/* Documents (RAG V10) — documents personnels de l'utilisateur */}
+          <Route
+            path="/documents"
+            element={
+              <Protected>
+                <DocumentsPage />
               </Protected>
             }
           />

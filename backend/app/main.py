@@ -10,6 +10,7 @@ from app.api import (
     activity,
     chat,
     context,
+    documents,
     health,
     learning,
     logs,
@@ -88,6 +89,7 @@ app.include_router(subjects.router)
 app.include_router(context.router)
 app.include_router(learning.router)
 app.include_router(activity.router)
+app.include_router(documents.router)
 
 # SSE — événements agent temps réel
 app.add_api_route(

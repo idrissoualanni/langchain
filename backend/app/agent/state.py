@@ -33,3 +33,27 @@ class CustomAgentState(MessagesState):
     # V5.2 — pratique du code : compteur d'exécutions du thread
     # (anti-abus de la sandbox, §27)
     code_runs: int = 0
+
+    # V7 — orchestration LangGraph mono-graphe (mission ORCHESTRATION).
+    # Canaux de résolution des nodes parent (ROUTER/RETRIEVAL/
+    # FALLBACK/CONTEXT/LEARNING) — résultats de services réels
+    # persistés par le checkpointer, consommés par l'aval :
+    #   routing_result    : RoutingResult.model_dump()
+    #   knowledge         : KnowledgeSearchResult.model_dump()
+    #   web               : SearchResponse.model_dump()
+    #   fallback          : FallbackDecision.model_dump()
+    #   built_context     : BuiltContext.model_dump() — assemblé UNE
+    #                       fois par le node CONTEXT, consommé par le
+    #                       dynamic_prompt (aucune re-exécution).
+    #   learning_decision : LearningDecision.model_dump()
+    #   agent_response    : AgentResponse.model_dump() — contrat public
+    #                       produit par le node RESPONSE, lu par le
+    #                       runner (fallback au comportement historique
+    #                       si absent).
+    routing_result: dict = Field(default_factory=dict)
+    knowledge: dict = Field(default_factory=dict)
+    web: dict = Field(default_factory=dict)
+    fallback: dict = Field(default_factory=dict)
+    built_context: dict = Field(default_factory=dict)
+    learning_decision: dict = Field(default_factory=dict)
+    agent_response: dict = Field(default_factory=dict)

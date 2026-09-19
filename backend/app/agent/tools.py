@@ -1,4 +1,4 @@
-# Tools de l'agent — repris de ap.py, log_event structuré au lieu de logger brut
+# Tools de l'agent — log_event structuré
 from langchain_core.tools import tool
 
 from app.agent.memory import (
@@ -11,53 +11,6 @@ from app.agent.memory import (
     write_profile,
 )
 from app.logging.events import log_event
-
-
-@tool
-def additionner(
-    a: float,
-    b: float,
-) -> float:
-    """Additionne deux nombres."""
-
-    log_event(
-        "TOOL_CALL",
-        message=f"additionner a={a} b={b}",
-        tool_name="additionner",
-    )
-
-    result = a + b
-
-    log_event(
-        "TOOL_RESULT",
-        message=f"additionner result={result}",
-        tool_name="additionner",
-    )
-
-    return result
-
-
-@tool
-def calculer_longueur_texte(
-    texte: str,
-) -> int:
-    """Calcule le nombre de caractères."""
-
-    log_event(
-        "TOOL_CALL",
-        message="calculer_longueur_texte",
-        tool_name="calculer_longueur_texte",
-    )
-
-    result = len(texte)
-
-    log_event(
-        "TOOL_RESULT",
-        message=f"longueur={result}",
-        tool_name="calculer_longueur_texte",
-    )
-
-    return result
 
 
 @tool
@@ -123,8 +76,6 @@ def recherche_web(
 
 
 tools = [
-    additionner,
-    calculer_longueur_texte,
     recherche_web,
 ]
 
@@ -318,10 +269,15 @@ from app.agent.pedagogical_tools import pedagogical_tools  # noqa: E402
 # voit, mais chaque appel vérifie l'autorisation du subject.
 from app.agent.code_tools import code_tools  # noqa: E402
 
+# V10 — RAG / user knowledge : upload / search / list / delete
+# documents personnels (recherche hybride sémantique+lexicale).
+from app.agent.document_tools import document_tools  # noqa: E402
+
 all_tools = (
     tools
     + memory_tools
     + pedagogical_tools
     + learning_tools
     + code_tools
+    + document_tools
 )
