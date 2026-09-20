@@ -5,7 +5,6 @@ Génère des JWT tokens pour l'authentification des clients LiveKit.
 Les tokens permettent de rejoindre des rooms avec des permissions spécifiques.
 """
 
-import os
 from datetime import timedelta
 from livekit.api import AccessToken, TokenVerifier, VideoGrants
 
@@ -21,13 +20,11 @@ from app.config import (
 def livekit_api_url() -> str:
     """URL HTTP de l'API LiveKit ( RoomService / AgentDispatch ).
 
-    Le projet ne définit que LIVEKIT_WS_URL ( wss://… ) ; LiveKitAPI
-    attend une URL http(s)://. On convertit le schéma ws→http,
-    wss→https, en laissant LIVEKIT_URL explicite primer si présente.
+    LiveKitAPI attend une URL http(s):// ; LIVEKIT_HOST est du wss://
+    (ou ws://). On convertit donc le schéma systématiquement — y
+    compris la valeur explicite, qui sinon arriverait en wss:// à
+    l'API et ferait échouer agent/start|stop.
     """
-    explicit = os.getenv("LIVEKIT_URL", "").strip()
-    if explicit:
-        return explicit
     ws = LIVEKIT_HOST.strip()
     if ws.startswith("wss://"):
         return "https://" + ws[len("wss://"):]

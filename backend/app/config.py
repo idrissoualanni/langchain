@@ -155,12 +155,61 @@ def _env_or_default(name: str, default: str) -> str:
 # ------------------------------------------------------------------
 # LiveKit — temps réel vidéo/audio
 # ------------------------------------------------------------------
-# Le projet ne définit que LIVEKIT_WS_URL (wss://…) : LIVEKIT_HOST est le
-# point d'accès WebSocket, et l'URL HTTP/HTTPS de l'API s'en déduit
+# LIVEKIT_HOST est le point d'accès WebSocket (wss://…) du serveur ou du
+# projet LiveKit Cloud. Deux noms d'env sont acceptés :
+#   LIVEKIT_URL      — convention LiveKit Cloud (docs officielles)
+#   LIVEKIT_WS_URL   — ancien nom du projet, conservé par compatibilité
+# L'URL HTTP/HTTPS de l'API s'en déduit par conversion de schéma
 # (voir app.livekit.token.livekit_api_url).
 LIVEKIT_API_KEY = _env_or_default("LIVEKIT_API_KEY", "devkey")
 LIVEKIT_API_SECRET = _env_or_default("LIVEKIT_API_SECRET", "devsecret")
-LIVEKIT_HOST = _env_or_default("LIVEKIT_WS_URL", "wss://localhost:7880")
+LIVEKIT_HOST = _env_or_default(
+    "LIVEKIT_URL",
+    _env_or_default("LIVEKIT_WS_URL", "wss://localhost:7880"),
+)
+
+
+def _looks_masked(value: str) -> bool:
+    """Détecte un secret copié depuis un dashboard en mode masqué.
+
+    LiveKit Cloud affiche le secret sous forme de points '••••' ; un
+    copier-coller dans cet état met des U+2022 dans le .env, et l'API
+    répond alors 401 sur TOUT appel — une erreur sourde qui se manifeste
+    loin de sa cause. Le secret réel est en base64url ( ASCII pur ).
+    """
+    return bool(value) and any(ord(c) > 126 for c in value)
+
+
+if _looks_masked(LIVEKIT_API_SECRET):
+    print(
+        "⚠️  LIVEKIT_API_SECRET contient des caractères masqués ( '••••' ) : "
+        "il a été copié depuis le dashboard LiveKit sans être révélé. "
+        "L'API LiveKit répondra 401 sur tous les appels. "
+        "Revenez sur le dashboard, affichez le secret, puis recopiez-le."
+    )
+
+
+# ------------------------------------------------------------------
+# LiveKit Agents — modèles du tuteur vocal ( worker app.livekit.agent )
+# ------------------------------------------------------------------
+# Tous via LiveKit Inference : mêmes LIVEKIT_API_KEY / SECRET que le
+# reste du projet, aucune clé provider à gérer. Les noms doivent
+# exister dans livekit.agents.inference ( STTModels / LLMModels /
+# TTSModels ) — un nom invalide lève à la première inference.
+LIVEKIT_AGENT_STT_MODEL = _env_or_default(
+    "LIVEKIT_AGENT_STT_MODEL", "deepgram/nova-3"
+)
+LIVEKIT_AGENT_LLM_MODEL = _env_or_default(
+    "LIVEKIT_AGENT_LLM_MODEL", "google/gemini-2.5-flash"
+)
+LIVEKIT_AGENT_TTS_MODEL = _env_or_default(
+    "LIVEKIT_AGENT_TTS_MODEL", "cartesia/sonic-3"
+)
+# Voice ID provider ( UUID Cartesia, nom Inworld… ). Vide = la voix par
+# défaut côté Inference ; on ne transmet alors pas le paramètre — un ID
+# inventé ferait échouer la première synthèse.
+LIVEKIT_AGENT_TTS_VOICE = _env_or_default("LIVEKIT_AGENT_TTS_VOICE", "")
+LIVEKIT_AGENT_LANGUAGE = _env_or_default("LIVEKIT_AGENT_LANGUAGE", "fr")
 
 
 # ------------------------------------------------------------------
