@@ -31,6 +31,7 @@ import { ObservabilityPage } from './features/admin/observability/ObservabilityP
 import { AssistantPage } from './pages/AssistantPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { DocumentsPage } from './pages/DocumentsPage';
+import VideoPage from './app/video/page';
 import { LearningLayout } from './pages/learning/LearningLayout';
 import { LearningOverviewPage } from './pages/learning/LearningOverviewPage';
 import { LearningProgressPage } from './pages/learning/LearningProgressPage';
@@ -46,7 +47,9 @@ import { SettingsProfilePage } from './pages/settings/SettingsProfilePage';
 import { SettingsAppearancePage } from './pages/settings/SettingsAppearancePage';
 import { SettingsLearningPreferencesPage } from './pages/settings/SettingsLearningPreferencesPage';
 import { SettingsMemoryPage } from './pages/settings/SettingsMemoryPage';
+import { SettingsModelPage } from './pages/settings/SettingsModelPage';
 import { SettingsNotificationsPage } from './pages/settings/SettingsNotificationsPage';
+import { SettingsSessionsPage } from './pages/settings/SettingsSessionsPage';
 import { SettingsDataPage } from './pages/settings/SettingsDataPage';
 import { DevLoginPage } from './auth/DevLoginPage';
 import { AdminGate } from './auth/AdminGate';
@@ -99,6 +102,16 @@ function AppShell() {
             }
           />
           <Route path="/chat" element={<Navigate to="/assistant" replace />} />
+
+          {/* Vidéo — session LiveKit */}
+          <Route
+            path="/video"
+            element={
+              <Protected>
+                <VideoPage />
+              </Protected>
+            }
+          />
 
           {/* Learning — section à navigation secondaire */}
           <Route
@@ -160,10 +173,12 @@ function AppShell() {
               element={<SettingsLearningPreferencesPage />}
             />
             <Route path="memory" element={<SettingsMemoryPage />} />
+            <Route path="model" element={<SettingsModelPage />} />
             <Route
               path="notifications"
               element={<SettingsNotificationsPage />}
             />
+            <Route path="sessions" element={<SettingsSessionsPage />} />
             <Route path="data" element={<SettingsDataPage />} />
           </Route>
 

@@ -4,6 +4,7 @@ import "@assistant-ui/react-markdown/styles/dot.css";
 
 import {
   type CodeHeaderProps,
+  type SyntaxHighlighterProps,
   MarkdownTextPrimitive,
   unstable_memoizeMarkdownComponents as memoizeMarkdownComponents,
   useIsMarkdownCodeBlock,
@@ -17,6 +18,7 @@ import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-ic
 import { useCopyToClipboard } from "@/hooks/use-copy-to-clipboard";
 import { cn } from "@/lib/utils";
 import { SyntaxHighlighter } from "@/components/assistant-ui/elements/syntax-highlighter";
+import { MermaidDiagram } from "@/components/assistant-ui/elements/mermaid-diagram.aui";
 
 type MarkdownTextProps = Partial<TextMessagePartProps> & {
   components?: Parameters<typeof memoizeMarkdownComponents>[0];
@@ -84,8 +86,25 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   );
 };
 
+// Les blocs ```mermaid sont rendus en diagramme SVG (spec FUNCTIONALITIES.md
+// §18) au lieu d'être affichés comme simple code colorisé. Les autres
+// langages conservent le syntax-highlighter. L'en-tête (langage + bouton
+// copier) est conservé dans les deux cas.
+const CodeBlock: FC<SyntaxHighlighterProps> = (props) => {
+  const { language, code } = props;
+  if (language?.trim().toLowerCase() === "mermaid") {
+    return (
+      <>
+        <CodeHeader language={language} code={code} />
+        <MermaidDiagram chart={code} />
+      </>
+    );
+  }
+  return <SyntaxHighlighter {...props} />;
+};
+
 const defaultComponents = memoizeMarkdownComponents({
-  SyntaxHighlighter,
+  SyntaxHighlighter: CodeBlock,
   h1: ({ className, ...props }) => (
     <h1
       className={cn(

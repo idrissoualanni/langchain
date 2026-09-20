@@ -30,9 +30,7 @@ import {
 import { useAssistantStore, setStoreUser } from './store';
 import { convertMessage } from './convert';
 import type { BackendModel } from './types';
-import { apiFetch } from '@/api/base';
 import { listModels } from './api';
-import { nextId } from './types';
 
 // Pièces jointes — adaptateurs OFFICIELS (images + fichiers texte).
 // Le Composer (attachment.aui) gère l'ajout/preview/retrait ; à l'envoi,
@@ -165,34 +163,10 @@ export function AssistantUIRuntimeProvider({
         .filter((p) => p.type === 'text')
         .map((p) => p.text)
         .join(String.fromCharCode(10));
-      // Envoyer le message au backend chat
+      // Envoyer le message au backend chat. C'est le main graph qui
+      // décide ensuite, via son propre router de capacités, d'invoquer
+      // ou non le sous-graphe coding — on ne double pas l'appel ici.
       await sendMessage(userId, text);
-
-      // Après chaque soumission, appeler le sous‑graph coding et afficher le résultat
-      try {
-        // Utilise l'helper API générique qui ajoute le token d'auth
-        const codingResult = await apiFetch<any>('/api/coding/execute', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          // Le payload dépend du backend – on envoie le texte utilisateur comme "code"
-          body: JSON.stringify({ code: text }),
-        });
-        // Formater la réponse comme message assistant
-        const assistantId = nextId('assistant');
-        const codingMsg = {
-          id: assistantId,
-          role: 'assistant',
-          content: codingResult?.output ?? JSON.stringify(codingResult),
-          createdAt: Date.now(),
-        } as any;
-        // Ajouter le message au store de façon atomique
-        useAssistantStore.setState((s) => ({
-          messages: [...s.messages, codingMsg],
-        }));
-      } catch (e) {
-        // En cas d’erreur, on n’interrompt pas le flow principal
-        console.error('Erreur appel /api/coding/execute :', e);
-      }
     },
 
     // onCancel : Stop generation (bouton Cancel officiel du Composer)

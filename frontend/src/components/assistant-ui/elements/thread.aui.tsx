@@ -42,6 +42,7 @@ import {
   type FileMessagePartComponent,
   type ImageMessagePartComponent,
   type ToolCallMessagePartComponent,
+  useAui,
   useAuiState,
 } from "@assistant-ui/react";
 import {
@@ -65,6 +66,8 @@ import {
   type FC,
   type PropsWithChildren,
 } from "react";
+import { ActivityTrigger } from "@/components/assistant-ui/elements/activity.aui";
+import { VoiceButton } from "@/components/assistant-ui/elements/voice.aui";
 
 export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
 
@@ -302,11 +305,26 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
 
 const ComposerAction: FC = () => {
   const { ComposerToolbar } = useContext(ThreadComponentsContext);
+  // Brief §20 : le Composer porte le déclencheur d'activité (panneau
+  // latéral droit) + le bouton voix. L'envoi de l'instruction passe
+  // par le composer officiel (setText + send) pour bénéficier des
+  // pièces jointes et du run config, comme un envoi clavier.
+  const aui = useAui();
+  const isRunning = useAuiState((s) => s.thread.isRunning);
+
+  const handleActivityTrigger = (instruction: string) => {
+    if (isRunning) return;
+    aui.composer.setText(instruction);
+    aui.composer.send();
+  };
+
   return (
     <div className="aui-composer-action-wrapper relative flex items-center justify-between">
       <div className="flex min-w-0 items-center gap-1.5">
         <ComposerAddAttachment />
         {ComposerToolbar ? <ComposerToolbar /> : null}
+        <ActivityTrigger onTrigger={handleActivityTrigger} />
+        <VoiceButton />
       </div>
       <div className="flex items-center gap-1.5">
         <AuiIf condition={(s) => s.thread.capabilities.dictation}>

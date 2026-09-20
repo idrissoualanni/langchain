@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LiveKitRoom, useAgent, useTracks, Track } from "@/livekit/stubs";
+import {
+  LiveKitRoom,
+  useAgent,
+  useLocalParticipant,
+  useRoomContext,
+  useTracks,
+} from "@livekit/components-react";
+import { Track } from "livekit-client";
+import { useTheme } from "@/hooks/useTheme";
 import { AgentAudioVisualizerAura } from "@/components/agents-ui/agent-audio-visualizer-aura";
 import { AgentControlBar } from "@/components/agents-ui/agent-control-bar";
 import { AgentVideoTile } from "@/components/agents-ui/agent-video-tile";
@@ -116,11 +124,18 @@ export function VideoSession({ roomName, token: tokenProp, url: urlProp }: Video
 }
 
 function VideoSessionContent() {
-  const resolvedTheme = "dark";
+  // Thème résolu (clair/sombre) fourni par le hook projet — plus de valeur
+  // codée en dur.
+  const { resolvedTheme } = useTheme();
 
   // LiveKit hooks for agent state and tracks
   const { state: agentState } = useAgent();
   const tracks = useTracks();
+  // Participant local (pour activer/désactiver micro, caméra, partage d'écran)
+  const { localParticipant } = useLocalParticipant();
+  // Room courante (pour la déconnexion) — les hooks doivent être appelés
+  // à l'intérieur d'un <LiveKitRoom>, ce qui est le cas ici.
+  const room = useRoomContext();
 
   // Filter video, screen‑share and audio tracks
   const videoTracks = tracks.filter(
@@ -201,10 +216,19 @@ function VideoSessionContent() {
         </div>
 
         <AgentControlBar
-          onToggleMicrophone={(muted) => console.log("Mic:", muted)}
-          onToggleCamera={(muted) => console.log("Camera:", muted)}
-          onToggleScreenShare={(enabled) => console.log("Screen:", enabled)}
-          onDisconnect={() => console.log("Disconnect")}
+          onToggleMicrophone={async (muted) => {
+            // `muted` = nouvel état coupé → on active le micro si non coupé
+            await localParticipant.setMicrophoneEnabled(!muted);
+          }}
+          onToggleCamera={async (muted) => {
+            await localParticipant.setCameraEnabled(!muted);
+          }}
+          onToggleScreenShare={async (enabled) => {
+            await localParticipant.setScreenShareEnabled(enabled);
+          }}
+          onDisconnect={() => {
+            room.disconnect();
+          }}
           className="backdrop-blur-md bg-background/50 rounded-full p-2 flex gap-2"
           showScreenShareButton={true}
         />

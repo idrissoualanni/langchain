@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LiveKitRoom } from "@/livekit/stubs";
+import { LiveKitRoom } from "@livekit/components-react";
 import { VideoSession } from "@/components/livekit/VideoSession";
 import { Loader2 } from "lucide-react";
 
@@ -57,7 +57,15 @@ export default function VideoPage() {
       data-lk-theme="default"
       className="h-screen w-full bg-background"
     >
-      <VideoSession roomName={roomName} />
+      {/*
+        Token + URL transmis à VideoSession : la branche `provided` de
+        VideoSession se contente alors de rendre son contenu à l'intérieur
+        du LiveKitRoom ci-dessus, SANS recréer une seconde salle (ni un
+        second fetch /api/livekit/token). Avec la vraie bibliothèque, une
+        double <LiveKitRoom> ouvrirait 2 connexions concurrentes vers le
+        serveur ; une seule salle suffit.
+      */}
+      <VideoSession roomName={roomName} token={token} url={url} />
     </LiveKitRoom>
   );
 }

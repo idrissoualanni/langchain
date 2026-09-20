@@ -23,6 +23,16 @@ import {
   deleteThread as apiDeleteThread,
   streamChat,
 } from './api';
+// Panneau d'activité (spec §38) : les événements activity.* du run
+// sont dispatchés vers le store d'activité dédié.
+import {
+  LOCAL_ACTIVITY_PREFIX,
+  resolveActivityKind,
+  buildActivityTitle,
+  useActivityStore,
+  type Activity,
+  type ActivityStatus,
+} from '../hooks/use-activity-store';
 
 interface AssistantStore {
   // ---- Threads (métadonnées — ExternalStoreThreadListAdapter) ----
@@ -296,6 +306,61 @@ export const useAssistantStore = create<AssistantStore>((set, get) => ({
           },
           onError: (message) => {
             set({ error: message });
+          },
+          onActivity: (event) => {
+            // Dispatch vers le store d'activité (panneau §38).
+            const id = event.activity_id || nextId('activity');
+            const status: ActivityStatus = event.type.endsWith(
+              'completed',
+            )
+              ? 'completed'
+              : event.type.endsWith('failed')
+                ? 'failed'
+                : 'running';
+            // Kind §38 : spec §3 activity_type d'abord, sinon le
+            // tool_name backend (create_quiz → quiz, execute_code →
+            // coding…) — le payload ACTIVITY_STARTED/QUIZ_STARTED n'a
+            // pas d'activity_type (pedagogical_tools.py).
+            const kind = resolveActivityKind(
+              event.activity_type,
+              event.tool_name,
+            );
+            // Titre spec §3 : le backend ne l'envoie pas, on le
+            // compose avec subject/topic (présents dans le payload).
+            const title = buildActivityTitle({
+              title: event.title,
+              subject: event.subject,
+              topic: event.topic,
+              toolName: event.tool_name,
+              kind,
+            });
+            const activityStore = useActivityStore.getState();
+            // Réconciliation : l'activité optimiste déposée par le
+            // bouton Activité du Composer (encore 'running') est
+            // remplacée par l'activité réelle. On privilégie celle
+            // qui correspond par kind PUIS title (un Quiz flash local
+            // ne doit pas absorber un exercice backend, et inversement)
+            // — fallback sur la plus récente encore running.
+            const optimisticCandidates =
+              activityStore.activities.filter(
+                (a) =>
+                  a.id.startsWith(LOCAL_ACTIVITY_PREFIX) &&
+                  a.status === 'running',
+              );
+            const optimistic =
+              optimisticCandidates.find((a) => a.type === kind) ??
+              optimisticCandidates.find((a) => a.title === title) ??
+              optimisticCandidates[0];
+            if (optimistic) activityStore.removeActivity(optimistic.id);
+            const activity: Activity = {
+              id,
+              type: kind,
+              title,
+              status,
+              data: event.data,
+            };
+            activityStore.upsertActivity(activity);
+            activityStore.setActive(id);
           },
         },
         currentAbort.signal,

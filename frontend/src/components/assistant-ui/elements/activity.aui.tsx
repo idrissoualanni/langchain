@@ -15,11 +15,18 @@ import {
   ListChecks,
   type LucideIcon,
 } from "lucide-react";
+import {
+  createLocalActivity,
+  useActivityStore,
+  type ActivityKind,
+} from "@/hooks/use-activity-store";
 
 type ActivityItem = {
   label: string;
   icon: LucideIcon;
   instruction: string;
+  /** Kind du panneau d'activité (spec §38) créé au déclenchement. */
+  kind: ActivityKind;
 };
 
 const ACTIVITIES: ActivityItem[] = [
@@ -27,19 +34,36 @@ const ACTIVITIES: ActivityItem[] = [
     label: "Quiz flash",
     icon: ListChecks,
     instruction: "Lance un exercice : Quiz flash",
+    kind: "quiz",
   },
   {
     label: "Exercice guidé",
     icon: GraduationCap,
     instruction: "Lance un exercice : Exercice guidé",
+    kind: "exercise",
   },
   {
     label: "Correction de code",
     icon: Code2,
     instruction: "Lance un exercice : Correction de code",
+    kind: "coding",
   },
 ];
 
+/**
+ * Déclencheur d'activité du Composer.
+ *
+ * Comportement :
+ *   - crée une activité "running" dans le store d'activité (spec §38),
+ *     active-la et ouvre le panneau latéral ;
+ *   - notifie le parent via `onTrigger` (le Composer envoie alors
+ *     l'instruction de chat à l'agent) ;
+ *   - sans `onTrigger` (usage orphelin hors Composer), affiche
+ *     l'instruction en local pour préserver l'ancien comportement.
+ *
+ * L'activité créée est optimiste : le store assistant-ui la
+ * réconciliera avec le véritable événement activity.* du backend.
+ */
 export function ActivityTrigger({
   onTrigger,
 }: {
@@ -47,11 +71,19 @@ export function ActivityTrigger({
 }) {
   const [toastText, setToastText] = useState<string | null>(null);
 
-  const handleSelect = (instruction: string) => {
+  const handleSelect = (item: ActivityItem) => {
+    // Store d'activité : une entrée "running" immédiate + panneau ouvert
+    // pour que l'utilisateur voie son activité démarrer (spec §20/§38).
+    const activity = createLocalActivity(item.kind, item.label);
+    const activityStore = useActivityStore.getState();
+    activityStore.upsertActivity(activity);
+    activityStore.setActive(activity.id);
+    activityStore.togglePanel(true);
+
     if (onTrigger) {
-      onTrigger(instruction);
+      onTrigger(item.instruction);
     } else {
-      setToastText(instruction);
+      setToastText(item.instruction);
     }
   };
 
@@ -67,14 +99,14 @@ export function ActivityTrigger({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56 p-1">
-        {ACTIVITIES.map(({ label, icon: Icon, instruction }) => (
+        {ACTIVITIES.map((item) => (
           <DropdownMenuItem
-            key={label}
-            onSelect={() => handleSelect(instruction)}
+            key={item.label}
+            onSelect={() => handleSelect(item)}
             className="cursor-pointer"
           >
-            <Icon className="size-4" />
-            {label}
+            <item.icon className="size-4" />
+            {item.label}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

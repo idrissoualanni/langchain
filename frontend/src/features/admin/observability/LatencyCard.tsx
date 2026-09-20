@@ -10,10 +10,10 @@ interface LatencyCardProps {
 }
 
 export function LatencyCard({
-  avgLatency = 0,
-  p50Latency = 0,
-  p95Latency = 0,
-  p99Latency = 0,
+  avgLatency,
+  p50Latency,
+  p95Latency,
+  p99Latency,
 }: LatencyCardProps) {
   const getLatencyStatus = (latency: number) => {
     if (latency < 500) return { color: "text-green-600", status: "Excellent" };
@@ -22,7 +22,21 @@ export function LatencyCard({
     return { color: "text-red-600", status: "Poor" };
   };
 
-  const status = getLatencyStatus(avgLatency);
+  // Sans mesure (avgLatency indéfini) on garde un état neutre : on ne affiche
+  // pas "Excellent" pour une latence nulle qui n'existe pas.
+  const status =
+    avgLatency == null
+      ? { color: "text-muted-foreground", status: "N/A" }
+      : getLatencyStatus(avgLatency);
+
+  // Les percentiles ne sont pas fournis par le backend : on affiche "N/A"
+  // plutôt que des zéros trompeux (0ms de latency P95 n'existe pas).
+  const formatMs = (value?: number): string =>
+    value != null ? `${value.toFixed(0)}ms` : "N/A";
+  const pctOfAvg = (value?: number): string =>
+    value != null && (avgLatency ?? 0) > 0
+      ? `${((value / avgLatency!) * 100).toFixed(0)}% of avg`
+      : "N/A";
 
   return (
     <Card>
@@ -34,7 +48,7 @@ export function LatencyCard({
         <div className="space-y-2">
           <div className="flex items-baseline justify-between">
             <span className={`text-3xl font-bold ${status.color}`}>
-              {avgLatency.toFixed(0)}ms
+              {formatMs(avgLatency)}
             </span>
             <span className="text-sm text-muted-foreground">
               {status.status}
@@ -44,15 +58,15 @@ export function LatencyCard({
           <div className="grid grid-cols-3 gap-2 pt-2">
             <div className="text-center p-2 bg-gray-50 rounded">
               <div className="text-xs text-muted-foreground">P50</div>
-              <div className="font-semibold">{p50Latency.toFixed(0)}ms</div>
+              <div className="font-semibold">{formatMs(p50Latency)}</div>
             </div>
             <div className="text-center p-2 bg-gray-50 rounded">
               <div className="text-xs text-muted-foreground">P95</div>
-              <div className="font-semibold">{p95Latency.toFixed(0)}ms</div>
+              <div className="font-semibold">{formatMs(p95Latency)}</div>
             </div>
             <div className="text-center p-2 bg-gray-50 rounded">
               <div className="text-xs text-muted-foreground">P99</div>
-              <div className="font-semibold">{p99Latency.toFixed(0)}ms</div>
+              <div className="font-semibold">{formatMs(p99Latency)}</div>
             </div>
           </div>
         </div>
@@ -60,15 +74,15 @@ export function LatencyCard({
         <div className="text-xs text-muted-foreground space-y-1">
           <div className="flex justify-between">
             <span>P50 (Median):</span>
-            <span>{((p50Latency / avgLatency) * 100 || 0).toFixed(0)}% of avg</span>
+            <span>{pctOfAvg(p50Latency)}</span>
           </div>
           <div className="flex justify-between">
             <span>P95:</span>
-            <span>{((p95Latency / avgLatency) * 100 || 0).toFixed(0)}% of avg</span>
+            <span>{pctOfAvg(p95Latency)}</span>
           </div>
           <div className="flex justify-between">
             <span>P99:</span>
-            <span>{((p99Latency / avgLatency) * 100 || 0).toFixed(0)}% of avg</span>
+            <span>{pctOfAvg(p99Latency)}</span>
           </div>
         </div>
         

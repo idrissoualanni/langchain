@@ -16,6 +16,7 @@ import {
   Settings,
   Sun,
   User,
+  Video,
 } from 'lucide-react';
 import { UserButton } from '@clerk/clerk-react';
 import { useHealth } from '@/hooks/useHealth';
@@ -48,6 +49,7 @@ const USER_NAV: NavItem[] = [
   { to: '/assistant', label: 'Assistant', icon: Bot },
   { to: '/learning', label: 'Learning', icon: GraduationCap },
   { to: '/documents', label: 'Documents', icon: FileText },
+  { to: '/video', label: 'Vidéo', icon: Video },
   { to: '/profile', label: 'Profile', icon: User },
 ];
 

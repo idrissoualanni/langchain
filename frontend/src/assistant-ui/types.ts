@@ -63,6 +63,41 @@ export interface AgentBusEvent {
   error?: string;
   agent_response?: AgentResponse;
   timestamp?: string;
+  // ---- Événements d'activité (spec FUNCTIONALITIES §3) ----
+  // Shape { type, activity_id, activity_type, title, status, data } ;
+  // les champs sont optionnels car le switch SSE reste défensif sur
+  // les événements non-activité qui ne les portent pas.
+  type?: string;
+  activity_id?: string;
+  activity_type?: string;
+  title?: string;
+  status?: string;
+  data?: unknown;
+  // Champs accompagnant les événements activité côté backend
+  // (pedagogical_tools.py : subject/topic dans le payload extra).
+  subject?: string;
+  topic?: string;
+}
+
+/** Événement d'activité normalisé, dispatché vers le store d'activité
+ *  (hooks/use-activity-store.ts) par le switch SSE de api.ts.
+ *  Shape spec §3 : { type, activity_id, activity_type, title, status, data },
+ *  enrichie des champs réellement émis par le backend (tool_name,
+ *  subject, topic) servant à déduire kind/title quand la spec §3 est
+ *  incomplète (cf. resolveActivityKind / buildActivityTitle). */
+export interface ActivityStreamEvent {
+  /** Nom de l'événement : activity.started | activity.completed | activity.failed. */
+  type: 'activity.started' | 'activity.completed' | 'activity.failed';
+  activity_id: string;
+  activity_type?: string;
+  title?: string;
+  status?: string;
+  data?: unknown;
+  /** Outil émetteur (log_event.tool_name) — détermine le kind §38
+   *  quand activity_type est absent (cas réel backend actuel). */
+  tool_name?: string;
+  subject?: string;
+  topic?: string;
 }
 
 let idCounter = 0;

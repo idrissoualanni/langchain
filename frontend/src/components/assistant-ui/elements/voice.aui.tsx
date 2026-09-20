@@ -3,27 +3,64 @@
 import * as React from "react";
 import { Loader2, Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 function VoiceButton() {
   const [started, setStarted] = React.useState(false);
   const [connecting, setConnecting] = React.useState(false);
+  const { toast } = useToast();
 
   const handleClick = React.useCallback(async () => {
     try {
       if (!started) {
         setConnecting(true);
         const res = await fetch("/api/livekit/agent/start", { method: "POST" });
-        if (res.ok) setStarted(true);
+        if (res.ok) {
+          setStarted(true);
+        } else if (res.status === 503) {
+          // Le serveur LiveKit n'est pas démarré (ex: local). On l'indique
+          // clairement à l'utilisateur plutôt que de rester bloqué en
+          // "Connexion".
+          const data = await res.json().catch(() => null);
+          toast({
+            title: "Serveur LiveKit indisponible",
+            description:
+              data?.detail ??
+              "Le serveur LiveKit n'est pas démarré. La voix reste désactivée.",
+          });
+        } else {
+          // Autre erreur serveur (500, 401, …) : ne pas rester silencieux.
+          const data = await res.json().catch(() => null);
+          toast({
+            title: "Démarrage de la voix impossible",
+            description:
+              data?.detail ?? `Erreur HTTP ${res.status}`,
+            variant: "destructive",
+          });
+        }
         setConnecting(false);
       } else {
-        await fetch("/api/livekit/agent/stop", { method: "POST" });
+        const res = await fetch("/api/livekit/agent/stop", { method: "POST" });
+        if (res.status === 503) {
+          const data = await res.json().catch(() => null);
+          toast({
+            title: "Serveur LiveKit indisponible",
+            description:
+              data?.detail ??
+              "Le serveur LiveKit n'est pas démarré. L'agent est déjà arrêté.",
+          });
+        }
         setStarted(false);
       }
     } catch (error) {
       console.error(error);
+      toast({
+        title: "Erreur de connexion vocale",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
+      });
       setConnecting(false);
     }
-  }, [started]);
+  }, [started, toast]);
 
   return (
     <Button

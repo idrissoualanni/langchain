@@ -16,6 +16,7 @@
 //   GET  /api/models                    — ModelSelector (ajout mission)
 //   GET  /api/events                    — bus SSE tool-calls temps réel
 import type {
+  ActivityStreamEvent,
   AgentBusEvent,
   BackendModelsResponse,
   BackendThread,
@@ -133,19 +134,110 @@ export interface StreamHandlers {
   onToolStart?: (toolName: string, input?: string) => void;
   onToolEnd?: (toolName: string, output?: string) => void;
   onToolError?: (toolName: string, error: string) => void;
+  /** Événement d'activité pédagogique (spec §3) → store d'activité. */
+  onActivity?: (event: ActivityStreamEvent) => void;
   onError?: (message: string) => void;
 }
 
-/** Parse un frame SSE "event: X\ndata: {...}". */
-function parseSseFrame(frame: string): AgentBusEvent | null {
-  const dataLine = frame
-    .split(String.fromCharCode(10))
-    .find((l) => l.startsWith('data:'));
+/** Nom + payload d'un frame SSE "event: X\ndata: {...}". */
+interface SseFrame {
+  /** Nom de l'événement : ligne `event:` sinon champ `event` du JSON. */
+  name: string;
+  payload: AgentBusEvent;
+}
+
+/** Parse un frame SSE. Le nom vient de la ligne `event:` quand elle
+ *  existe (le backend émet `event: ACTIVITY_STARTED\ndata: {...}`),
+ *  sinon du champ `event` du payload — pour rester compatible avec
+ *  les événements qui ne portent le type que dans les données. */
+function parseSseFrame(frame: string): SseFrame | null {
+  const lines = frame.split(String.fromCharCode(10));
+  const dataLine = lines.find((l) => l.startsWith('data:'));
   if (!dataLine) return null;
+  let payload: AgentBusEvent;
   try {
-    return JSON.parse(dataLine.slice(5).trim()) as AgentBusEvent;
+    payload = JSON.parse(dataLine.slice(5).trim()) as AgentBusEvent;
   } catch {
     return null;
+  }
+  const eventLine = lines.find((l) => l.startsWith('event:'));
+  const name = eventLine
+    ? eventLine.slice(6).trim()
+    : (payload.event ?? '');
+  return { name, payload };
+}
+
+/** Normalise un événement d'activité (spec §3) pour le store.
+ *  Propage tool_name/subject/topic : le backend actuel n'envoie NI
+ *  activity_type NI title (payload extra de ACTIVITY_STARTED/QUIZ_STARTED
+ *  = activity_id/subject/topic/status/source), le store d'activité en
+ *  déduit donc kind et titre depuis ces champs (resolveActivityKind /
+ *  buildActivityTitle). */
+function toActivityEvent(
+  type: ActivityStreamEvent['type'],
+  payload: AgentBusEvent,
+): ActivityStreamEvent {
+  return {
+    type,
+    activity_id: payload.activity_id ?? '',
+    activity_type: payload.activity_type,
+    title: payload.title,
+    status: payload.status,
+    data: payload.data,
+    tool_name: payload.tool_name,
+    subject: payload.subject,
+    topic: payload.topic,
+  };
+}
+
+/**
+ * Classe un nom d'événement SSE en phase d'activité (spec §3), ou null
+ * si l'événement ne concerne pas le cycle d'activité.
+ *
+ * Le backend n'émet PAS les noms spec §3 (activity.started/completed/
+ * failed). Il émet en réalité (log_event, app/agent/pedagogical_tools.py) :
+ *   - ACTIVITY_STARTED (create_exercise), QUIZ_STARTED (create_quiz)
+ *     → création d'une activité ;
+ *   - QUIZ_COMPLETED (create_quiz) → quiz terminé (a activity_id) ;
+ *   - ACTIVITY_STORE_SAVE (app/activity/store.py) → persiste le state
+ *     avec son status : "completed"/"abandoned" = terminaison réelle.
+ *
+ * On mappe donc les noms RÉELS vers les phases spec §3, tout en
+ * gardant les noms spec (activity.*) pour l'avenir. Les événements
+ * intermédiaires (ACTIVITY_WAITING, QUIZ_QUESTION, ACTIVITY_EVALUATED…)
+ * ne sont pas des terminaisons : score<0.4 mène à waiting_for_retry,
+ * l'activité continue — on les ignore pour ne pas fermer prématurément
+ * une activité en cours.
+ */
+function classifyActivityEvent(
+  name: string,
+  payload: AgentBusEvent,
+): ActivityStreamEvent['type'] | null {
+  switch (name) {
+    // ---- Démarrage (spec §3 + noms backend réels) ----
+    case 'activity.started':
+    case 'ACTIVITY_STARTED':
+    case 'QUIZ_STARTED':
+      return 'activity.started';
+    // ---- Terminaison réussie ----
+    case 'activity.completed':
+    case 'ACTIVITY_COMPLETED':
+    case 'QUIZ_COMPLETED':
+      return 'activity.completed';
+    // ---- Échec / abandon ----
+    case 'activity.failed':
+    case 'ACTIVITY_FAILED':
+    case 'ACTIVITY_ABANDONED':
+      return 'activity.failed';
+    // ---- Persistance du state : terminaison selon `status` ----
+    case 'ACTIVITY_STORE_SAVE': {
+      const st = payload.status ?? '';
+      if (st === 'completed') return 'activity.completed';
+      if (st === 'abandoned') return 'activity.failed';
+      return null; // running/waiting → pas une terminaison
+    }
+    default:
+      return null;
   }
 }
 
@@ -214,9 +306,10 @@ export async function streamChat(
     buffer = frames.pop() ?? '';
 
     for (const frame of frames) {
-      const event = parseSseFrame(frame);
-      if (!event) continue;
-      switch (event.event) {
+      const parsed = parseSseFrame(frame);
+      if (!parsed) continue;
+      const { name, payload: event } = parsed;
+      switch (name) {
         case 'ASSISTANT_MESSAGE':
           handlers.onAgentResponse?.(
             event.message ?? '',
@@ -246,8 +339,19 @@ export async function streamChat(
             event.message ?? 'Erreur du pipeline agent',
           );
           break;
-        default:
+        // ---- Activités pédagogiques (spec §3/§38) ----
+        // Le backend émet ses propres noms (ACTIVITY_STARTED,
+        // QUIZ_STARTED, QUIZ_COMPLETED, ACTIVITY_STORE_SAVE…) et non
+        // les noms spec §3 : classifyActivityEvent fait la traduction.
+        // Événements intermédiaires (WAITING, QUIZ_QUESTION,
+        // ACTIVITY_EVALUATED…) → ignorés : l'activité continue.
+        default: {
+          const phase = classifyActivityEvent(name, event);
+          if (phase) {
+            handlers.onActivity?.(toActivityEvent(phase, event));
+          }
           break;
+        }
       }
     }
   }
@@ -259,30 +363,4 @@ export async function streamChat(
 
 export async function listModels(): Promise<BackendModelsResponse> {
   return jsonFetch<BackendModelsResponse>('/api/models');
-}
-
-// ------------------------------------------------------------------
-// Bus global — /api/events (tool-calls temps réel, hors stream)
-// ADMIN (§22) : EventSource ne supporte pas les headers → token
-// en query `auth` ( preuve VÉRIFIÉE backend , cf sse.py ) , 401/403
-// refusent la connexion.
-// ------------------------------------------------------------------
-
-const EVENTS_BASE = import.meta.env.VITE_API_URL || '';
-
-export function connectAgentBus(
-  onEvent: (event: AgentBusEvent) => void,
-): () => void {
-  const source = new EventSource(`${EVENTS_BASE}/api/events`);
-  source.addEventListener('agent-event', (e) => {
-    try {
-      onEvent(JSON.parse((e as MessageEvent).data));
-    } catch {
-      /* ignore */
-    }
-  });
-  source.onerror = () => {
-    // EventSource re-connecte automatiquement (comportement natif)
-  };
-  return () => source.close();
 }

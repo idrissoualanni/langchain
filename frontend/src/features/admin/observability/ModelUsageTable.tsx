@@ -1,4 +1,8 @@
 // Model Usage Table Component
+//
+// Affiche la réponse brute de GET /api/admin/observability/models/usage :
+// model_name / provider / total_calls / total_tokens / avg_latency_ms…
+// (anciennement typée avec des champs inexistants comme model_id ou error_count).
 import {
   Table,
   TableBody,
@@ -8,24 +12,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-
-interface ModelUsage {
-  model_id: string;
-  display_name?: string;
-  provider: string;
-  request_count: number;
-  token_count: number;
-  avg_latency_ms: number;
-  error_count: number;
-}
+import type { ModelUsageEntry } from "./ObservabilityPage";
 
 interface ModelUsageTableProps {
-  usageData: ModelUsage[];
+  usageData: ModelUsageEntry[];
 }
 
 export function ModelUsageTable({ usageData }: ModelUsageTableProps) {
-  const totalRequests = usageData.reduce((sum, m) => sum + m.request_count, 0);
-  
+  const totalRequests = usageData.reduce((sum, m) => sum + m.total_calls, 0);
+
   return (
     <div className="space-y-4">
       <Table>
@@ -37,32 +32,32 @@ export function ModelUsageTable({ usageData }: ModelUsageTableProps) {
             <TableHead className="text-right">Share</TableHead>
             <TableHead className="text-right">Tokens</TableHead>
             <TableHead className="text-right">Avg Latency</TableHead>
-            <TableHead className="text-right">Errors</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {usageData.map((model) => {
-            const share = totalRequests > 0 
-              ? ((model.request_count / totalRequests) * 100).toFixed(1) 
+            const share = totalRequests > 0
+              ? ((model.total_calls / totalRequests) * 100).toFixed(1)
               : "0.0";
-            
+
             return (
-              <TableRow key={model.model_id}>
+              <TableRow key={model.model_name}>
                 <TableCell>
                   <div>
                     <div className="font-medium">
-                      {model.display_name || model.model_id}
-                    </div>
-                    <div className="text-xs text-muted-foreground font-mono">
-                      {model.model_id}
+                      {model.model_name}
                     </div>
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline">{model.provider}</Badge>
+                  {model.provider ? (
+                    <Badge variant="outline">{model.provider}</Badge>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-right">
-                  {model.request_count.toLocaleString()}
+                  {model.total_calls.toLocaleString()}
                 </TableCell>
                 <TableCell className="text-right">
                   <span className="text-sm text-muted-foreground">
@@ -70,22 +65,19 @@ export function ModelUsageTable({ usageData }: ModelUsageTableProps) {
                   </span>
                 </TableCell>
                 <TableCell className="text-right">
-                  {(model.token_count / 1000).toFixed(1)}k
+                  {(model.total_tokens / 1000).toFixed(1)}k
                 </TableCell>
                 <TableCell className="text-right">
-                  {model.avg_latency_ms.toFixed(0)}ms
-                </TableCell>
-                <TableCell className="text-right">
-                  <span className={model.error_count > 0 ? "text-red-600" : "text-green-600"}>
-                    {model.error_count}
-                  </span>
+                  {model.avg_latency_ms != null
+                    ? `${model.avg_latency_ms.toFixed(0)}ms`
+                    : <span className="text-muted-foreground">N/A</span>}
                 </TableCell>
               </TableRow>
             );
           })}
         </TableBody>
       </Table>
-      
+
       {usageData.length === 0 && (
         <div className="text-center py-8 text-muted-foreground">
           No usage data available

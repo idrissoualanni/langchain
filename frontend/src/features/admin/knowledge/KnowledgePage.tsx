@@ -30,6 +30,14 @@ export function KnowledgePage() {
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [managingAccess, setManagingAccess] = useState<KnowledgeBase | null>(null);
+  const [editingKb, setEditingKb] = useState<KnowledgeBase | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    description: '',
+    scope: 'private' as KnowledgeBase['scope'],
+    enabled: true,
+  });
   const [newKb, setNewKb] = useState({
     id: '',
     name: '',
@@ -108,9 +116,45 @@ export function KnowledgePage() {
     }
   };
 
-  const handleEdit = (_kb: KnowledgeBase) => {
-    // Implement edit functionality
-    toast({ title: "Edit functionality", description: "To be implemented" });
+  const handleEdit = (kb: KnowledgeBase) => {
+    // Ouvre le dialogue d'édition pré-rempli avec les valeurs réelles de la KB.
+    setEditingKb(kb);
+    setEditForm({
+      name: kb.name,
+      description: kb.description || '',
+      scope: kb.scope,
+      enabled: kb.enabled,
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingKb) return;
+    setSavingEdit(true);
+    try {
+      // PATCH /api/admin/knowledge/{kb_id} — mise à jour partielle (backend knowledge.py:159)
+      const response = await apiRequest(`/api/admin/knowledge/${editingKb.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm),
+      });
+
+      if (response.ok) {
+        toast({ title: "Knowledge base updated successfully" });
+        setEditingKb(null);
+        loadKnowledgeBases();
+      } else {
+        const error = await response.json();
+        throw new Error(error.detail || "Failed to update");
+      }
+    } catch (error) {
+      toast({
+        title: "Error updating knowledge base",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   const handleManageAccess = (kb: KnowledgeBase) => {
@@ -207,6 +251,70 @@ export function KnowledgePage() {
           </Dialog>
         </div>
       </div>
+
+      {/* Dialogue d'édition — PATCH /api/admin/knowledge/{kb_id} */}
+      <Dialog open={!!editingKb} onOpenChange={(open) => !open && setEditingKb(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Edit Knowledge Base{editingKb ? `: ${editingKb.id}` : ''}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-kb-name">Name</Label>
+              <Input
+                id="edit-kb-name"
+                value={editForm.name}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="e.g., Python for Beginners"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-kb-description">Description</Label>
+              <Textarea
+                id="edit-kb-description"
+                value={editForm.description}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="Describe this knowledge base..."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-kb-scope">Scope</Label>
+              <Select
+                value={editForm.scope}
+                onValueChange={(value: any) => setEditForm((prev) => ({ ...prev, scope: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="private">Private</SelectItem>
+                  <SelectItem value="public">Public</SelectItem>
+                  <SelectItem value="group">Group</SelectItem>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="edit-kb-enabled">Enabled</Label>
+              <Switch
+                id="edit-kb-enabled"
+                checked={editForm.enabled}
+                onCheckedChange={(checked) => setEditForm((prev) => ({ ...prev, enabled: checked }))}
+              />
+            </div>
+            <Button
+              onClick={handleSaveEdit}
+              disabled={savingEdit}
+              className="w-full"
+            >
+              {savingEdit ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {managingAccess && (
         <Card>

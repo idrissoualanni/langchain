@@ -1,27 +1,88 @@
-// DocumentsPage V10 — documents personnels de l'utilisateur (RAG).
+// DocumentsPage V11 — documents personnels de l'utilisateur (RAG).
 //
-// Deux zones :
+// Trois zones :
 //   - Upload : fichier texte/MD/paste → indexation SQLite (+embeddings).
-//   - Liste + recherche : CRUD documents, recherche hybride avec
-//     statut contrôlé (found/insufficient/unavailable/error).
-import { useRef, useState } from 'react';
+//   - Recherche : CRUD documents, recherche hybride avec statut
+//     contrôlé (found/insufficient/unavailable/error).
+//   - Bibliothèque : onglets de filtrage (§11) + menu d'actions par
+//     document (Ouvrir / Résumer / Poser une question / Générer un
+//     QCM / Supprimer).
+//
+// Règle d'honnêteté : un onglet sans donnée backend réelle affiche un
+// état vide explicite — JAMAIS de donnée fabriquée.
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
+  Eye,
   FileText,
   FileUp,
+  HelpCircle,
+  ListChecks,
   Loader2,
+  MoreVertical,
   Search,
+  ScrollText,
   Trash2,
   Upload as UploadIcon,
   X,
 } from 'lucide-react';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useDocuments } from '../hooks/useDocuments';
+import { searchDocuments as searchDocumentsApi } from '../api/documents';
+import { apiFetch } from '../api/base';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
+import { Dialog } from '../components/ui/dialog';
 
 const MAX_BYTES = 2_000_000;
+
+/** Document potentiellement enrichi de métadonnées de partage/ownership.
+ * Le backend actuel ne peuple pas ces champs (DocumentOut est user-scoped)
+ * → les filtres restent défensifs et s'adaptent si l'API les ajoute. */
+type DocWithMeta = {
+  doc_id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  chunk_count: number;
+  created_at: string;
+  owner_id?: string;
+  shared?: boolean;
+  metadata?: Record<string, unknown>;
+};
+
+type DocTab = 'all' | 'mine' | 'shared' | 'kb';
+
+const TABS: { id: DocTab; label: string }[] = [
+  { id: 'all', label: 'Tous' },
+  { id: 'mine', label: 'Mes documents' },
+  { id: 'shared', label: 'Partagés avec moi' },
+  { id: 'kb', label: 'Base de connaissances' },
+];
+
+interface KnowledgeBaseItem {
+  id: string;
+  name: string;
+  description: string;
+  subject_id: string;
+  scope: string;
+  enabled: boolean;
+}
+
+type KbState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; items: KnowledgeBaseItem[] }
+  | { status: 'unavailable'; reason: string };
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -37,7 +98,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export function DocumentsPage() {
-  const { internal: currentUser, signedIn } = useCurrentUser();
+  const { internal: currentUser, signedIn, isAdmin } = useCurrentUser();
   const userId = signedIn ? currentUser?.user_id ?? null : null;
   const {
     documents,
@@ -55,10 +116,79 @@ export function DocumentsPage() {
     searchDocuments,
   } = useDocuments(userId);
 
+  const navigate = useNavigate();
+
   const [pasted, setPasted] = useState<string>('');
   const [fileName, setFileName] = useState<string>('');
   const [isPdfPick, setIsPdfPick] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Onglet de la bibliothèque (§11)
+  const [tab, setTab] = useState<DocTab>('all');
+
+  // Aperçu "Ouvrir" — extraits réels du document (recherche hybride)
+  const [previewDoc, setPreviewDoc] = useState<DocWithMeta | null>(null);
+  const [previewChunks, setPreviewChunks] = useState<string[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  // Onglet "Base de connaissances" — retrieval backend si un endpoint
+  // accessible existe, sinon état vide honnête.
+  const [kb, setKb] = useState<KbState>({ status: 'idle' });
+
+  const docs = documents as DocWithMeta[];
+
+  const isMine = (d: DocWithMeta) =>
+    !d.owner_id || (userId !== null && d.owner_id === userId);
+
+  const isShared = (d: DocWithMeta) =>
+    d.shared === true || d.metadata?.shared === true;
+
+  const visibleDocuments = useMemo<DocWithMeta[]>(() => {
+    switch (tab) {
+      case 'all':
+        return docs;
+      case 'mine':
+        // L'API documents est user-scoped : tout document listé est
+        // nécessairement le sien (ownership validé côté backend).
+        return docs.filter(isMine);
+      case 'shared':
+        return docs.filter(isShared);
+      case 'kb':
+        return [];
+    }
+  }, [docs, tab, userId]);
+
+  // ---- Base de connaissances : retrieval réel si l'endpoint existe ----
+  useEffect(() => {
+    if (tab !== 'kb' || kb.status !== 'idle') return;
+    // Aucun endpoint de retrieval knowledge n'est exposé aux utilisateurs
+    // standards : seul /api/admin/knowledge (CRUD admin, sans retrieval)
+    // existe. Un admin voit la liste réelle des bases ; les autres
+    // obtiennent un état vide explicite — pas de donnée fabriquée.
+    if (!isAdmin) {
+      setKb({
+        status: 'unavailable',
+        reason:
+          'Aucune base de connaissances accessible. Le retrieval de connaissances partagées n’est pas disponible pour votre compte.',
+      });
+      return;
+    }
+    setKb({ status: 'loading' });
+    apiFetch<{ knowledge_bases: KnowledgeBaseItem[] }>('/api/admin/knowledge')
+      .then((res) =>
+        setKb({ status: 'ready', items: res.knowledge_bases ?? [] })
+      )
+      .catch((e) =>
+        setKb({
+          status: 'unavailable',
+          reason:
+            e instanceof Error
+              ? `Base de connaissances indisponible — ${e.message}`
+              : 'Base de connaissances indisponible.',
+        })
+      );
+  }, [tab, isAdmin, kb.status]);
 
   const doUpload = async () => {
     const content = pasted.trim();
@@ -124,6 +254,61 @@ export function DocumentsPage() {
     if (fileRef.current) fileRef.current.value = '';
   };
 
+  // ---- Actions par document (§11) ----
+  const goToAssistant = (prompt: string) => {
+    navigate(`/assistant?q=${encodeURIComponent(prompt)}`);
+  };
+
+  const summarizeDoc = (d: DocWithMeta) =>
+    goToAssistant(
+      `Résume le document « ${d.filename} » : extraits les points clés et les notions essentielles.`
+    );
+
+  const askAboutDoc = (d: DocWithMeta) =>
+    goToAssistant(
+      `À propos du document « ${d.filename} » : aide-moi à le comprendre en répondant à mes questions sur son contenu.`
+    );
+
+  const quizFromDoc = (d: DocWithMeta) =>
+    goToAssistant(
+      `Génère un QCM sur le contenu du document « ${d.filename} ».`
+    );
+
+  // "Ouvrir" : récupère les extraits réels du document via la recherche
+  // hybride (filtrée sur ce doc_id) — aucun contenu n'est inventé.
+  const openDoc = async (d: DocWithMeta) => {
+    setPreviewDoc(d);
+    setPreviewError(null);
+    if (!userId) {
+      setPreviewChunks([]);
+      setPreviewError('Session requise pour lire le contenu.');
+      return;
+    }
+    setPreviewLoading(true);
+    try {
+      const resp = await searchDocumentsApi(userId, d.filename, 20);
+      const mine = resp.results
+        .filter((r) => r.doc_id === d.doc_id)
+        .map((r) => r.content);
+      setPreviewChunks(mine);
+      if (resp.status === 'error') setPreviewError(resp.error || null);
+    } catch (e) {
+      setPreviewChunks([]);
+      setPreviewError(
+        e instanceof Error ? e.message : 'Lecture du document impossible'
+      );
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const TAB_LABEL: Record<DocTab, string> = {
+    all: 'Tous les documents',
+    mine: 'Mes documents',
+    shared: 'Partagés avec moi',
+    kb: 'Base de connaissances',
+  };
+
   return (
     <div className="h-full overflow-y-auto p-6">
       {/* En-tête */}
@@ -131,7 +316,7 @@ export function DocumentsPage() {
         <div>
           <h1 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-foreground">
             <FileText size={16} className="text-live" strokeWidth={1.8} />
-            Mes documents
+            Documents
           </h1>
           <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
             rag · sqlite · embeddings · {documents.length} document(s)
@@ -317,19 +502,87 @@ export function DocumentsPage() {
             </CardContent>
           </Card>
 
-          {/* Mes documents */}
+          {/* Bibliothèque — onglets §11 + actions par document */}
           <Card>
-            <CardHeader className="flex-row items-center justify-between">
+            <CardHeader className="flex-row items-center justify-between gap-3">
               <CardTitle className="flex items-center gap-2 text-[13px]">
                 <FileText size={13} className="text-live" strokeWidth={1.8} />
-                Mes documents
+                {TAB_LABEL[tab]}
               </CardTitle>
-              <span className="font-mono text-[10px] text-muted-foreground/60">
-                {documents.length} indexé(s)
-              </span>
+              {/* Onglets */}
+              <div className="flex flex-wrap gap-1">
+                {TABS.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setTab(t.id)}
+                    className={`rounded-[var(--radius-control)] px-2.5 py-1 text-[12.5px] font-medium transition-colors ${
+                      tab === t.id
+                        ? 'bg-muted text-foreground'
+                        : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {tab === 'kb' ? (
+                kb.status === 'loading' ? (
+                  <div className="py-8 text-center font-mono text-[11px] text-muted-foreground">
+                    chargement de la base de connaissances…
+                  </div>
+                ) : kb.status === 'ready' ? (
+                  kb.items.length === 0 ? (
+                    <div className="py-8 text-center font-mono text-[11px] text-muted-foreground">
+                      Aucune base de connaissances configurée.
+                    </div>
+                  ) : (
+                    <ul className="divide-y divide-border">
+                      {kb.items.map((k) => (
+                        <li
+                          key={k.id}
+                          className="group flex items-center gap-3 py-2.5"
+                        >
+                          <FileText
+                            size={15}
+                            className="shrink-0 text-muted-foreground/50"
+                            strokeWidth={1.6}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-mono text-xs font-medium text-foreground/90">
+                              {k.name}
+                            </div>
+                            <div className="font-mono text-[10px] text-muted-foreground/60">
+                              {k.subject_id} · {k.scope} ·{' '}
+                              {k.enabled ? 'activée' : 'désactivée'}
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )
+                ) : kb.status === 'unavailable' ? (
+                  <div className="py-8 text-center">
+                    <FileText
+                      size={28}
+                      className="mx-auto mb-3 text-muted-foreground/30"
+                      strokeWidth={1.6}
+                    />
+                    <p className="text-sm font-medium text-foreground">
+                      Base de connaissances
+                    </p>
+                    <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                      {kb.reason}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="py-8 text-center font-mono text-[11px] text-muted-foreground">
+                    Base de connaissances — en attente.
+                  </div>
+                )
+              ) : loading ? (
                 <div className="py-8 text-center font-mono text-[11px] text-muted-foreground">
                   chargement…
                 </div>
@@ -337,13 +590,27 @@ export function DocumentsPage() {
                 <div className="rounded-md bg-error/10 px-3 py-2 font-mono text-[11px] text-error">
                   {error}
                 </div>
-              ) : documents.length === 0 ? (
-                <div className="py-8 text-center font-mono text-[11px] text-muted-foreground">
-                  Aucun document indexé pour le moment.
+              ) : visibleDocuments.length === 0 ? (
+                <div className="py-8 text-center">
+                  <FileText
+                    size={28}
+                    className="mx-auto mb-3 text-muted-foreground/30"
+                    strokeWidth={1.6}
+                  />
+                  <p className="text-sm font-medium text-foreground">
+                    {tab === 'shared'
+                      ? 'Aucun document partagé avec vous'
+                      : 'Aucun document'}
+                  </p>
+                  <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                    {tab === 'shared'
+                      ? 'Le partage de documents n’est pas encore disponible — aucun document ne vous a été partagé.'
+                      : 'Aucun document indexé pour le moment dans cette catégorie.'}
+                  </p>
                 </div>
               ) : (
                 <ul className="divide-y divide-border">
-                  {documents.map((d) => (
+                  {visibleDocuments.map((d) => (
                     <li
                       key={d.doc_id}
                       className="group flex items-center gap-3 py-2.5"
@@ -362,14 +629,46 @@ export function DocumentsPage() {
                           · {d.created_at?.replace('T', ' ').slice(0, 16)}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => void deleteDocument(d.doc_id)}
-                        className="rounded p-1 text-muted-foreground/50 opacity-0 transition-opacity hover:text-error group-hover:opacity-100"
-                        title="Supprimer ce document"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+
+                      {/* Menu d'actions (§11) */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className="rounded p-1 text-muted-foreground/50 opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                            title="Actions sur ce document"
+                            aria-label={`Actions sur ${d.filename}`}
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem onClick={() => void openDoc(d)}>
+                            <Eye className="h-3.5 w-3.5" />
+                            Ouvrir
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => summarizeDoc(d)}>
+                            <ScrollText className="h-3.5 w-3.5" />
+                            Résumer
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => askAboutDoc(d)}>
+                            <HelpCircle className="h-3.5 w-3.5" />
+                            Poser une question
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => quizFromDoc(d)}>
+                            <ListChecks className="h-3.5 w-3.5" />
+                            Générer un QCM
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => void deleteDocument(d.doc_id)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Supprimer
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </li>
                   ))}
                 </ul>
@@ -378,6 +677,46 @@ export function DocumentsPage() {
           </Card>
         </div>
       )}
+
+      {/* Aperçu "Ouvrir" — extraits réels du document */}
+      <Dialog
+        open={previewDoc !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPreviewDoc(null);
+            setPreviewChunks([]);
+            setPreviewError(null);
+          }
+        }}
+        title={previewDoc?.filename ?? 'Document'}
+        className="max-w-2xl"
+      >
+        {previewLoading ? (
+          <div className="flex items-center gap-2 py-6 font-mono text-[11px] text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            lecture des extraits…
+          </div>
+        ) : previewError ? (
+          <div className="rounded-md bg-error/10 px-3 py-2 font-mono text-[11px] text-error">
+            {previewError}
+          </div>
+        ) : previewChunks.length === 0 ? (
+          <p className="py-4 text-sm text-muted-foreground">
+            Aucun extrait exploitable pour ce document.
+          </p>
+        ) : (
+          <div className="max-h-[60vh] space-y-2 overflow-y-auto">
+            {previewChunks.map((c, i) => (
+              <p
+                key={i}
+                className="rounded-lg border border-border bg-muted/50 p-3 text-xs leading-relaxed text-foreground/85"
+              >
+                {c}
+              </p>
+            ))}
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 }
