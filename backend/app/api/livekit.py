@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from livekit.api import (
     CreateAgentDispatchRequest,
     CreateRoomRequest,
-    DeleteAgentDispatchRequest,
     LiveKitAPI,
 )
 from pydantic import BaseModel
@@ -149,7 +148,12 @@ async def start_agent(
 async def stop_agent(
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    """Arrête l'agent tuteur déployé dans la room de l'utilisateur."""
+    """Arrête l'agent tuteur déployé dans la room de l'utilisateur.
+
+    L'API LiveKit 1.x demande l'identifiant du dispatch à supprimer ;
+    on liste donc les dispatchs de la room et on les supprime un à un
+    ( stop sans start préalable = liste vide = rien à faire ).
+    """
     room_name = _room_of(current_user)
 
     try:
@@ -158,13 +162,14 @@ async def stop_agent(
             api_key=LIVEKIT_API_KEY,
             api_secret=LIVEKIT_API_SECRET,
         ) as lkapi:
-            await lkapi.agent_dispatch.delete_dispatch(
-                DeleteAgentDispatchRequest(room=room_name)
-            )
+            dispatches = await lkapi.agent_dispatch.list_dispatch(room_name)
+            for d in dispatches:
+                await lkapi.agent_dispatch.delete_dispatch(d.id, room_name)
         return {
             "status": "stopped",
             "room": room_name,
             "agent": TUTOR_AGENT_NAME,
+            "removed": len(dispatches),
         }
     except HTTPException:
         raise
