@@ -8,7 +8,6 @@ Integrates with the existing architecture without creating parallel systems.
 from langsmith import Client, traceable
 from langsmith.run_helpers import get_run_tree_context, get_tracing_context
 from typing import Any, Optional
-import os
 
 
 class LangSmithClient:
@@ -20,12 +19,18 @@ class LangSmithClient:
     """
     
     def __init__(self):
-        self.enabled = os.getenv("LANGSMITH_ENABLED", "true").lower() == "true"
-        self.project = os.getenv("LANGSMITH_PROJECT", "agent-tutor")
-        self.api_key = os.getenv("LANGSMITH_API_KEY")
-        self.endpoint = os.getenv("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com")
-        self.environment = os.getenv("LANGSMITH_ENVIRONMENT", "development")
-        
+        # LANGSMITH_* vient de app.config (source unique des défauts) ;
+        # la lecture est fraîche à chaque instanciation pour rester
+        # testable (patch.dict de os.environ dans les tests).
+        from app.config import langsmith_settings
+
+        settings = langsmith_settings()
+        self.enabled = settings.enabled
+        self.project = settings.project
+        self.api_key = settings.api_key
+        self.endpoint = settings.endpoint
+        self.environment = settings.environment
+
         if self.enabled and self.api_key:
             self.client = Client(
                 api_key=self.api_key,

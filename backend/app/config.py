@@ -1,5 +1,6 @@
 # Agent Control Center — configuration centrale
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -102,6 +103,64 @@ def ollama_headers() -> dict | None:
     if OLLAMA_API_KEY:
         return {"Authorization": f"Bearer {OLLAMA_API_KEY}"}
     return None
+
+
+# ------------------------------------------------------------------
+# LangSmith — observabilité (source unique de vérité)
+# ------------------------------------------------------------------
+# Une SEULE définition des défauts ici : avant, le client
+# (langsmith_client.py) utilisait "true" par défaut et le health check
+# (health.py) "false" par défaut — les deux répondaient "non configuré"
+# l'un et "configuré" l'autre pour la même env absente. Désactivé par
+# défaut : le tracing ne s'active que s'il est explicitement voulu ET
+# qu'une clé API est présente (vérifiée côté client).
+#
+# La lecture se fait via une FONCTION (et non des constantes de module)
+# pour rester testable : les tests patchent os.environ puis instancient
+# LangSmithClient / appellent /api/health/langsmith — une constante
+# lue à l'import ignorerait ces patches.
+
+
+@dataclass(frozen=True)
+class LangSmithSettings:
+    enabled: bool
+    project: str
+    endpoint: str
+    environment: str
+    api_key: str
+
+
+def langsmith_settings() -> LangSmithSettings:
+    """Config LangSmith — lecture fraîche à chaque appel (testable)."""
+    return LangSmithSettings(
+        enabled=os.getenv("LANGSMITH_ENABLED", "false").strip().lower() == "true",
+        project=os.getenv("LANGSMITH_PROJECT", "agent-tutor"),
+        endpoint=os.getenv("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com"),
+        environment=os.getenv("LANGSMITH_ENVIRONMENT", "development"),
+        api_key=os.getenv("LANGSMITH_API_KEY", "").strip(),
+    )
+
+
+def _env_or_default(name: str, default: str) -> str:
+    """Valeur d'env non vide, sinon le défaut.
+
+    Une variable présente mais VIDE ( ``LIVEKIT_WS_URL=`` ) ne doit pas
+    court-circuiter le défaut : os.getenv renvoie "" dans ce cas, ce qui
+    donnerait des tokens signés avec une clé vide.
+    """
+    value = os.getenv(name, "")
+    return value.strip() if value.strip() else default
+
+
+# ------------------------------------------------------------------
+# LiveKit — temps réel vidéo/audio
+# ------------------------------------------------------------------
+# Le projet ne définit que LIVEKIT_WS_URL (wss://…) : LIVEKIT_HOST est le
+# point d'accès WebSocket, et l'URL HTTP/HTTPS de l'API s'en déduit
+# (voir app.livekit.token.livekit_api_url).
+LIVEKIT_API_KEY = _env_or_default("LIVEKIT_API_KEY", "devkey")
+LIVEKIT_API_SECRET = _env_or_default("LIVEKIT_API_SECRET", "devsecret")
+LIVEKIT_HOST = _env_or_default("LIVEKIT_WS_URL", "wss://localhost:7880")
 
 
 # ------------------------------------------------------------------

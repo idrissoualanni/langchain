@@ -280,6 +280,27 @@ def clear_all_rules() -> None:
     _access_rules.clear()
 
 
+def clear_rules_for_kb(kb_id: str) -> int:
+    """Supprime uniquement les règles d'UNE knowledge base.
+
+    Retourne le nombre de règles supprimées. Contrairement à
+    clear_all_rules(), les autres KB ne sont pas affectées (§26 :
+    isolation des données entre ressources).
+    """
+    rules = _access_rules.pop(kb_id, [])
+    return len(rules)
+
+
+def list_rules_for_kb(kb_id: str) -> list[KnowledgeAccessRule]:
+    """Liste les règles d'accès d'UNE knowledge base."""
+    return list(_access_rules.get(kb_id, []))
+
+
+def unregister_knowledge_base(kb_id: str) -> bool:
+    """Retire une KB du registry. Retourne True si elle existait."""
+    return _knowledge_bases.pop(kb_id, None) is not None
+
+
 def clear_all_knowledge_bases() -> None:
     """Supprime toutes les KB enregistrées (pour tests/reset)."""
     _knowledge_bases.clear()
@@ -299,5 +320,8 @@ __all__ = [
     "grant_access",
     "revoke_access",
     "clear_all_rules",
+    "clear_rules_for_kb",
+    "list_rules_for_kb",
+    "unregister_knowledge_base",
     "clear_all_knowledge_bases",
 ]

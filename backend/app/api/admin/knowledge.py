@@ -31,6 +31,9 @@ from app.knowledge_access.resolver import (
     revoke_access,
     clear_all_rules,
     clear_all_knowledge_bases,
+    clear_rules_for_kb,
+    list_rules_for_kb,
+    unregister_knowledge_base,
 )
 
 
@@ -183,19 +186,23 @@ def admin_delete_knowledge(
     kb_id: str,
     current_user: CurrentUser = Depends(require_admin),
 ) -> dict:
-    """Supprime une knowledge base (admin only)."""
+    """Supprime une knowledge base (admin only).
+
+    Scope STRICTEMENT la KB ciblée : on supprime ses règles d'accès
+    et on la retire du registry, sans toucher aux autres KB
+    ( clear_all_rules() effaçait TOUT — bug d'isolation §26 ).
+    """
     kb = get_knowledge_base(kb_id)
     if not kb:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Knowledge base {kb_id} not found",
         )
-    
-    # TODO: Implémenter la suppression réelle (nécessite DB)
-    # Pour l'instant, on retire du registry en mémoire
-    clear_all_rules()  # Attention: supprime toutes les règles
-    
-    return {"success": True, "deleted": kb_id}
+
+    removed_rules = clear_rules_for_kb(kb_id)
+    unregister_knowledge_base(kb_id)
+
+    return {"success": True, "deleted": kb_id, "removed_access_rules": removed_rules}
 
 
 @router.get("/{kb_id}/access")
@@ -265,9 +272,10 @@ def admin_revoke_knowledge_access(
 
 def _get_rules_for_kb(kb_id: str) -> list[AccessRuleResponse]:
     """Helper pour récupérer les règles d'accès d'une KB."""
-    # TODO: Implémenter depuis DB
-    # Pour l'instant, retourne une liste vide car les règles sont en mémoire privée
-    return []
+    return [
+        AccessRuleResponse(**rule.model_dump())
+        for rule in list_rules_for_kb(kb_id)
+    ]
 
 
 __all__ = ["router"]

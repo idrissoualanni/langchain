@@ -123,10 +123,12 @@ def resolve_internal_user(
             if clerk_user_id in ADMIN_CLERK_IDS
             else _role_of(existing)
         )
-        return {
-            "user_id": existing["user_id"],
-            "is_admin": clerk_user_id in ADMIN_CLERK_IDS,
-        }
+        return CurrentUser(
+            clerk_user_id=clerk_user_id,
+            user_id=existing["user_id"],
+            name=existing.get("name") or display_name or "Utilisateur",
+            role=role,
+        )
 
     # Provisioning du premier login
     created = users_db.create_user(
@@ -141,10 +143,14 @@ def resolve_internal_user(
         message=f"User provisioned from Clerk | name={display_name}",
         user_id=created["user_id"],
     )
-    return {
-        "user_id": created["user_id"],
-        "is_admin": clerk_user_id in ADMIN_CLERK_IDS,
-    }
+    return CurrentUser(
+        clerk_user_id=clerk_user_id,
+        user_id=created["user_id"],
+        name=created.get("name") or display_name or "Utilisateur",
+        role=(
+            "admin" if clerk_user_id in ADMIN_CLERK_IDS else "user"
+        ),
+    )
 
 
 def _role_of(user_row: dict) -> str:

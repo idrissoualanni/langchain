@@ -6,6 +6,7 @@ from app.config import (
     MODEL_NAME,
     check_ollama_health,
     check_sqlite_health,
+    langsmith_settings,
 )
 from app.observability.langsmith_client import get_langsmith_client
 
@@ -79,16 +80,13 @@ def health_model_gateway() -> dict:
 @router.get("/langsmith")
 def health_langsmith() -> dict:
     """Vérifie l'état de LangSmith observability."""
-    import os
-    
     client = get_langsmith_client()
-    enabled = os.getenv("LANGSMITH_ENABLED", "false").lower() == "true"
-    is_configured = client.is_enabled()
-    
+    settings = langsmith_settings()
+
     return {
-        "enabled": enabled,
-        "configured": is_configured,
-        "environment": os.getenv("LANGSMITH_ENVIRONMENT", "development"),
-        "endpoint": os.getenv("LANGSMITH_ENDPOINT", ""),
-        "project": os.getenv("LANGSMITH_PROJECT", "agent-tutor"),
+        "enabled": settings.enabled,
+        "configured": client.is_enabled(),
+        "environment": settings.environment,
+        "endpoint": settings.endpoint,
+        "project": settings.project,
     }

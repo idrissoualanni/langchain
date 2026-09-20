@@ -29,3 +29,4 @@ livekit-api
 # Data / RAG
 sqlalchemy
 beautifulsoup4
+pymupdf          # extraction PDF ( app/rag/documents.py — import fitz )
