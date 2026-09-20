@@ -4,7 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, RefreshCw } from "lucide-react";
-import { ModelConfig } from "@/types";
+import type { ModelConfig } from "@/types";
 import { ModelTable } from "./ModelTable";
 import { ModelForm } from "./ModelForm";
 import { ModelUsageCard } from "./ModelUsageCard";

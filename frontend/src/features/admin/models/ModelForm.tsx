@@ -1,12 +1,13 @@
 // Model Form Component
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import type { FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ModelConfig, ModelCapabilities } from "@/types";
+import type { ModelConfig, ModelCapabilities } from "@/types";
 
 interface ModelFormProps {
   initialData?: Partial<ModelConfig>;
@@ -25,12 +26,6 @@ export function ModelForm({ initialData, onSubmit, onCancel, isEditing = false }
     enabled: true,
     context_window: null,
     max_output_tokens: null,
-    capabilities: {
-      supports_tools: false,
-      supports_structured_output: false,
-      supports_vision: false,
-      supports_audio: false,
-    },
     metadata: {},
     ...initialData,
     capabilities: {
@@ -42,7 +37,7 @@ export function ModelForm({ initialData, onSubmit, onCancel, isEditing = false }
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     onSubmit(formData as ModelConfig);
   };

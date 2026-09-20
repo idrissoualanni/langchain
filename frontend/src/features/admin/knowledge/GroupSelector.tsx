@@ -44,6 +44,7 @@ export function GroupSelector({ selectedGroups, onChange }: GroupSelectorProps) 
   }, []);
 
   const handleAddGroup = (groupId: string) => {
+    if (groupId === "__none__") return;
     if (!selectedGroups.includes(groupId)) {
       onChange([...selectedGroups, groupId]);
     }
@@ -72,7 +73,7 @@ export function GroupSelector({ selectedGroups, onChange }: GroupSelectorProps) 
               </SelectItem>
             ))}
           {groups.filter(g => g.enabled && !selectedGroups.includes(g.id)).length === 0 && (
-            <SelectItem value="none" disabled>
+            <SelectItem value="__none__">
               No available groups
             </SelectItem>
           )}

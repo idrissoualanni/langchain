@@ -1,6 +1,6 @@
 "use client";
 
-import { MessagePrimitive, useMessage } from "@assistant-ui/react";
+import { MessagePrimitive } from "@assistant-ui/react";
 import { Sources } from "@/components/assistant-ui/elements/sources.aui";
 import { TextMessagePart } from "./text-message-part";
 import { ResearchCard } from "./cards/research-card";
@@ -12,15 +12,18 @@ import { ProblemArtifact } from "./cards/problem-artifact";
  * Délègue l'affichage aux composants spécialisés selon le type de contenu.
  */
 export function MessageRenderer() {
-  const { message } = useMessage();
-
   return (
     <MessagePrimitive.Root className="flex flex-col gap-4 my-4">
-      {/* En-tête du message (Avatar, Nom, Timestamp) */}
+      {/* En-tête du message (Auteur) */}
       <div className="flex items-center gap-2 px-1">
-        <MessagePrimitive.Avatar className="h-8 w-8 rounded-full" />
-        <MessagePrimitive.AuthorName className="text-sm font-semibold" />
-        <MessagePrimitive.CreatedAt className="text-xs text-muted-foreground" />
+        <MessagePrimitive.If assistant>
+          <span className="text-sm font-semibold text-muted-foreground">
+            Assistant
+          </span>
+        </MessagePrimitive.If>
+        <MessagePrimitive.If user>
+          <span className="text-sm font-semibold">Vous</span>
+        </MessagePrimitive.If>
       </div>
 
       {/* Corps du message avec gestion des parties riches */}
@@ -29,22 +32,25 @@ export function MessageRenderer() {
           components={{
             // Rendu du texte standard (Markdown supporté)
             Text: TextMessagePart,
-            
+
             // Rendu des sources (citations, références)
             Source: Sources,
-            
-            // Rendu des contenus structurés (Custom Parts)
-            // Ces parties sont injectées par le backend via le metadata du message
-            ResearchResult: ({ data }: any) => <ResearchCard {...data} />,
-            VideoContent: ({ data }: any) => <VideoCard {...data} />,
-            ProblemSolution: ({ data }: any) => <ProblemArtifact {...data} />,
-            
-            // Fallback pour les types inconnus
-            Unknown: ({ type, content }: any) => (
-              <div className="p-3 bg-muted rounded-md text-sm text-muted-foreground">
-                Contenu non supporté : {type}
-              </div>
-            ),
+
+            // Rendu des contenus structurés (Custom Data Parts)
+            // Ces parties sont injectées par le backend via les data parts du message
+            data: {
+              by_name: {
+                ResearchResult: (part) => <ResearchCard {...part.data} />,
+                VideoContent: (part) => <VideoCard {...part.data} />,
+                ProblemSolution: (part) => <ProblemArtifact {...part.data} />,
+              },
+              // Fallback pour les types inconnus
+              Fallback: (part) => (
+                <div className="p-3 bg-muted rounded-md text-sm text-muted-foreground">
+                  Contenu non supporté : {part.name}
+                </div>
+              ),
+            },
           }}
         />
       </div>

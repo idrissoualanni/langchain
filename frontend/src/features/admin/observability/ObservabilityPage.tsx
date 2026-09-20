@@ -1,9 +1,8 @@
 // Observability Page Component
 import { useState, useEffect } from "react";
-import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, BarChart3, Activity, AlertTriangle } from "lucide-react";
+import { RefreshCw, BarChart3, Activity } from "lucide-react";
 import { UsageOverview } from "./UsageOverview";
 import { ModelUsageTable } from "./ModelUsageTable";
 import { ErrorRateCard } from "./ErrorRateCard";
@@ -37,7 +36,6 @@ export function ObservabilityPage() {
   const [summary, setSummary] = useState<ObservabilitySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [environment, setEnvironment] = useState("development");
-  const { toast } = useToast();
 
   const loadSummary = async () => {
     try {
@@ -187,11 +185,11 @@ export function ObservabilityPage() {
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Langfuse Tracing</span>
               <span className={`text-sm font-medium ${
-                process.env.LANGFUSE_ENABLED === 'true' 
+                import.meta.env.VITE_LANGFUSE_ENABLED === 'true' 
                   ? 'text-green-600' 
                   : 'text-yellow-600'
               }`}>
-                {process.env.LANGFUSE_ENABLED === 'true' ? 'Enabled' : 'Disabled'}
+                {import.meta.env.VITE_LANGFUSE_ENABLED === 'true' ? 'Enabled' : 'Disabled'}
               </span>
             </div>
             <div className="pt-2 border-t">

@@ -26,7 +26,7 @@ interface VideoCardProps {
 /**
  * Carte vidéo intégrant le lecteur, la transcription segmentée et la navigation.
  */
-export function VideoCard({ video_id, title, duration, thumbnail_url, segments, status }: VideoCardProps) {
+export function VideoCard({ title, duration, thumbnail_url, segments, status }: VideoCardProps) {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
 

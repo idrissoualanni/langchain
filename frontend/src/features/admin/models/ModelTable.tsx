@@ -1,5 +1,4 @@
 // Model Table Component
-import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -18,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MoreVertical, Pencil, Trash2, Play } from "lucide-react";
-import { ModelConfig } from "@/types";
+import type { ModelConfig } from "@/types";
 import { ModelCapabilityBadge } from "./ModelCapabilityBadge";
 
 interface ModelTableProps {
