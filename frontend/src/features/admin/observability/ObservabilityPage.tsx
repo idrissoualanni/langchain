@@ -18,7 +18,6 @@ import { UsageOverview } from "./UsageOverview";
 import { ModelUsageTable } from "./ModelUsageTable";
 import { ErrorRateCard } from "./ErrorRateCard";
 import { LatencyCard } from "./LatencyCard";
-import { LangfuseLink } from "./LangfuseLink";
 import { apiRequest } from "@/api/request";
 
 /** Shape réel de GET /api/admin/observability/summary (observability.py:49). */
@@ -362,8 +361,6 @@ export function ObservabilityPage() {
 
       {/* Intégration dashboard de tracing + santé système réelle */}
       <div className="grid gap-4 md:grid-cols-2">
-        <LangfuseLink environment={environment} />
-
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
