@@ -3,6 +3,13 @@
 
 import * as React from 'react';
 
+export interface TrackReference {
+  participant: { isLocal?: boolean };
+  source?: string;
+  publication?: any;
+  track?: any;
+}
+
 export interface LiveKitRoomProps {
   token: string;
   serverUrl: string;
@@ -16,12 +23,19 @@ export interface LiveKitRoomProps {
 
 export const LiveKitRoom: React.FC<LiveKitRoomProps> = ({ children }) => {
   // Simple placeholder that just renders its children.
-  return <>{children}</>;
+  return React.createElement(React.Fragment, null, children);
+};
+
+export const VideoTrack: React.FC<{
+  trackRef?: TrackReference;
+  className?: string;
+}> = ({ className }) => {
+  return React.createElement('div', { className });
 };
 
 // Agent and track hooks – return empty placeholders.
-export const useAgent = () => ({ state: 'idle' as const });
-export const useTracks = () => [] as any[];
+export const useAgent = () => ({ state: 'idle' as 'idle' | 'speaking' | 'listening' });
+export const useTracks = () => [] as TrackReference[];
 
 export const Track = {
   Source: {

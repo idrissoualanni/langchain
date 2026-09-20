@@ -1,7 +1,7 @@
 "use client";
 
-import { VideoTrack } from "@livekit/components-react";
-import type { TrackReference } from "@livekit/components-react";
+import { VideoTrack } from "@/livekit/stubs";
+import type { TrackReference } from "@/livekit/stubs";
 
 interface AgentVideoTileProps {
   /** The LiveKit track reference to render, or `undefined` for a placeholder. */

@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LiveKitRoom, useAgent, useTracks } from "@livekit/components-react";
-import { Track } from "livekit-client";
+import { LiveKitRoom, useAgent, useTracks, Track } from "@/livekit/stubs";
 import { AgentAudioVisualizerAura } from "@/components/agents-ui/agent-audio-visualizer-aura";
 import { AgentControlBar } from "@/components/agents-ui/agent-control-bar";
 import { AgentVideoTile } from "@/components/agents-ui/agent-video-tile";
-import { useTheme } from "next-themes";
 import { Loader2 } from "lucide-react";
 
 interface VideoSessionProps {
@@ -118,7 +116,7 @@ export function VideoSession({ roomName, token: tokenProp, url: urlProp }: Video
 }
 
 function VideoSessionContent() {
-  const { resolvedTheme } = useTheme();
+  const resolvedTheme = "dark";
 
   // LiveKit hooks for agent state and tracks
   const { state: agentState } = useAgent();

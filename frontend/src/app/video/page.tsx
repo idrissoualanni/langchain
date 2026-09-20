@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LiveKitRoom } from "@livekit/components-react";
+import { LiveKitRoom } from "@/livekit/stubs";
 import { VideoSession } from "@/components/livekit/VideoSession";
 import { Loader2 } from "lucide-react";
 
@@ -57,7 +57,7 @@ export default function VideoPage() {
       data-lk-theme="default"
       className="h-screen w-full bg-background"
     >
-      <VideoSession token={token} url={url} roomName={roomName} />
+      <VideoSession roomName={roomName} />
     </LiveKitRoom>
   );
 }
