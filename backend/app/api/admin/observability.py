@@ -14,10 +14,11 @@ Sécurité :
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Response, status, Query
 from pydantic import BaseModel, Field
 import os
 
@@ -56,6 +57,7 @@ class ObservabilitySummary(BaseModel):
     total_tokens: int = Field(default=0, description="Total tokens utilisés")
     error_rate: float = Field(default=0.0, description="Taux d'erreur (%)")
     period_hours: int = Field(default=24, description="Période analysée (heures)")
+    available: bool = Field(default=True, description="False si la source (LangSmith) est indisponible — distin­gue 'vide' de 'indisponible'")
 
 
 class RunInfo(BaseModel):
@@ -136,9 +138,89 @@ class LangSmithLink(BaseModel):
     expires_in_seconds: Optional[int] = None
 
 
+class UnavailableResponse(BaseModel):
+    """
+    Réponse quand la source de données d'observabilité est indisponible.
+    
+    Retourné (HTTP 503) quand LangSmith n'est pas configuré ou remonte une erreur,
+    afin que le frontend puisse distinguer "données vides mais disponibles" d'une
+    source réellement indisponible. Utilisé par les endpoints renvoyant
+    normalement des listes : on ne peut pas leur ajouter un champ sans casser la
+    forme `[]` attendue par les consommateurs (ex: piste traces).
+    """
+    
+    available: bool = Field(default=False, description="Toujours false")
+    error: str = Field(description="Raison de l'indisponibilité")
+
+
 # ============================================================================
 # Helper Functions
 # ============================================================================
+
+# Run.error est une simple chaîne côté LangSmith : `type(run.error).__name__`
+# renvoie donc toujours "str" et l'agrégation des erreurs par type devient
+# inutilisable (un seul bucket "str"). On extrait un type exploitable depuis le
+# texte de l'erreur.
+
+_EXCEPTION_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*(?:Error|Exception|Warning))")
+
+_ERROR_CATEGORIES: list[tuple[str, str]] = [
+    ("timeout", "timeout"),
+    ("timed out", "timeout"),
+    ("deadline exceeded", "timeout"),
+    ("rate limit", "rate_limit"),
+    ("rate_limit", "rate_limit"),
+    ("quota", "rate_limit"),
+    ("429", "rate_limit"),
+    ("unauthorized", "authentication"),
+    ("authentication", "authentication"),
+    ("api key", "authentication"),
+    ("api_key", "authentication"),
+    ("permission", "authorization"),
+    ("forbidden", "authorization"),
+    ("connection", "connection_error"),
+    ("unreachable", "connection_error"),
+    ("dns", "connection_error"),
+    ("not found", "not_found"),
+    ("not_found", "not_found"),
+    ("404", "not_found"),
+    ("context window", "context_window"),
+    ("context_length", "context_window"),
+    ("invalid_request", "invalid_request"),
+    ("invalid request", "invalid_request"),
+    ("bad request", "invalid_request"),
+    ("overloaded", "overloaded"),
+    ("internal", "server_error"),
+    ("500", "server_error"),
+    ("503", "server_error"),
+]
+
+
+def _classify_error(error: str | None) -> str:
+    """
+    Extrait un type d'erreur exploitable depuis le message d'erreur.
+
+    Stratégie :
+    1. Le message commence souvent par la classe de l'exception
+       (ex. ``TimeoutError: Request timed out``) → on renvoie cette classe.
+    2. Sinon, on recherche des mots-clés normalisés (timeout, rate limit…).
+    3. En dernier recours, ``"other"``.
+    """
+    if not error:
+        return "unknown"
+
+    head = error.strip()
+    match = _EXCEPTION_RE.match(head)
+    if match:
+        return match.group(1)
+
+    lowered = head.lower()
+    for pattern, label in _ERROR_CATEGORIES:
+        if pattern in lowered:
+            return label
+
+    return "other"
+
 
 def get_langsmith_client():
     """Récupère le client LangSmith configuré."""
@@ -185,8 +267,9 @@ async def get_observability_summary(
     client = get_langsmith_client()
     
     if not client:
-        # Retourner des données vides si LangSmith non configuré
-        return ObservabilitySummary(period_hours=hours)
+        # LangSmith non configuré : données réellement indisponibles (available=False),
+        # on ne renvoie pas un résumé vide que le front prendrait pour "aucune activité".
+        return ObservabilitySummary(period_hours=hours, available=False)
     
     try:
         # Récupérer les runs récents
@@ -241,8 +324,8 @@ async def get_observability_summary(
             message=f"Failed to fetch observability summary: {e}",
             extra={"operation": "get_observability_summary"},
         )
-        # Retourner des données vides en cas d'erreur
-        return ObservabilitySummary(period_hours=hours)
+        # Source en erreur : indisponible plutôt que "vide"
+        return ObservabilitySummary(period_hours=hours, available=False)
 
 
 @router.get("/runs", response_model=list[RunInfo])
@@ -517,9 +600,10 @@ async def get_evaluations(
         return []
 
 
-@router.get("/models/usage", response_model=list[ModelUsage])
+@router.get("/models/usage", response_model=list[ModelUsage] | UnavailableResponse)
 async def get_model_usage(
     days: int = Query(default=7, ge=1, le=90),
+    response: Response = None,
     admin: dict = Depends(verify_admin_auth),
 ):
     """
@@ -530,50 +614,69 @@ async def get_model_usage(
     - Tokens consommés
     - Coûts estimés (si disponibles)
     - Latence moyenne
+    
+    Si LangSmith est indisponible, renvoie HTTP 503 avec
+    ``{"available": false, "error": ...}`` pour distinguer "vide" de "indisponible".
     """
     client = get_langsmith_client()
     
     if not client:
-        return []
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return UnavailableResponse(error="LangSmith n'est pas configuré (LANGSMITH_API_KEY manquant)")
     
     try:
         # Agréger par modèle
         model_stats: dict[str, dict] = {}
         
         project_name = os.getenv("LANGSMITH_PROJECT", "agent-tutor")
-        runs = list(client.list_runs(
-            project_name=project_name,
-            limit=1000,  # Limite raisonnable
-        ))
-        
-        for run in runs:
-            if not run.metadata:
-                continue
+        # L'API LangSmith rejette limit > 100 ("Limit exceeds maximum allowed value
+        # of 100") : on pagine par pages de 100, plafonnées à max_runs.
+        page_size = 100
+        max_runs = 1000
+        offset = 0
+        fetched = 0
+        while fetched < max_runs:
+            page = list(client.list_runs(
+                project_name=project_name,
+                limit=page_size,
+                offset=offset,
+            ))
+            if not page:
+                break
             
-            model = run.metadata.get("model")
-            if not model:
-                continue
+            for run in page:
+                if not run.metadata:
+                    continue
+                
+                model = run.metadata.get("model")
+                if not model:
+                    continue
+                
+                if model not in model_stats:
+                    model_stats[model] = {
+                        "calls": 0,
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "total_tokens": 0,
+                        "latencies": [],
+                    }
+                
+                stats = model_stats[model]
+                stats["calls"] += 1
+                
+                usage = run.metadata.get("usage", {})
+                stats["input_tokens"] += usage.get("prompt_tokens", 0)
+                stats["output_tokens"] += usage.get("completion_tokens", 0)
+                stats["total_tokens"] += usage.get("total_tokens", 0)
+                
+                if run.start_time and run.end_time:
+                    latency = (run.end_time - run.start_time).total_seconds() * 1000
+                    stats["latencies"].append(latency)
             
-            if model not in model_stats:
-                model_stats[model] = {
-                    "calls": 0,
-                    "input_tokens": 0,
-                    "output_tokens": 0,
-                    "total_tokens": 0,
-                    "latencies": [],
-                }
-            
-            stats = model_stats[model]
-            stats["calls"] += 1
-            
-            usage = run.metadata.get("usage", {})
-            stats["input_tokens"] += usage.get("prompt_tokens", 0)
-            stats["output_tokens"] += usage.get("completion_tokens", 0)
-            stats["total_tokens"] += usage.get("total_tokens", 0)
-            
-            if run.start_time and run.end_time:
-                latency = (run.end_time - run.start_time).total_seconds() * 1000
-                stats["latencies"].append(latency)
+            fetched += len(page)
+            if len(page) < page_size:
+                break
+            offset += page_size
         
         # Construire la réponse
         result = []
@@ -609,47 +712,74 @@ async def get_model_usage(
             message=f"Failed to fetch model usage: {e}",
             extra={"operation": "get_model_usage"},
         )
-        return []
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return UnavailableResponse(error=f"LangSmith indisponible: {e}")
 
 
-@router.get("/errors", response_model=list[ErrorEntry])
+@router.get("/errors", response_model=list[ErrorEntry] | UnavailableResponse)
 async def get_error_log(
     limit: int = Query(default=100, ge=1, le=1000),
+    response: Response = None,
     admin: dict = Depends(verify_admin_auth),
 ):
     """
     Journal des erreurs avec traces.
     
     Liste les erreurs récentes avec leur contexte.
+    
+    Si LangSmith est indisponible, renvoie HTTP 503 avec
+    ``{"available": false, "error": ...}`` pour distinguer "vide" de "indisponible".
     """
     client = get_langsmith_client()
     
     if not client:
-        return []
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return UnavailableResponse(error="LangSmith n'est pas configuré (LANGSMITH_API_KEY manquant)")
     
     try:
         errors_list = []
         
         project_name = os.getenv("LANGSMITH_PROJECT", "agent-tutor")
-        runs = list(client.list_runs(
-            project_name=project_name,
-            filter="error exists",
-            limit=limit,
-        ))
+        # La syntaxe de filtre "error exists" est rejetée par l'API LangSmith
+        # ("Unable to parse filter") : on filtre côté serveur sur run.error en
+        # parcourant les runs récents par pages de 100 (limite API).
+        page_size = 100
+        offset = 0
+        scanned = 0
+        scan_cap = 1000  # Garde-fou : on ne scanne pas tout l'historique
         
-        for run in runs:
-            if not run.error:
-                continue
-            
-            errors_list.append(ErrorEntry(
-                run_id=str(run.id),
-                timestamp=run.start_time or datetime.now(),
-                error_type=type(run.error).__name__ if hasattr(run.error, '__class__') else "Unknown",
-                error_message=str(run.error)[:500],  # Tronquer
-                workflow=run.metadata.get("workflow") if run.metadata else None,
-                node=run.name,
-                stack_trace=None,  # Stack trace complète si disponible
+        while scanned < scan_cap:
+            page = list(client.list_runs(
+                project_name=project_name,
+                limit=page_size,
+                offset=offset,
             ))
+            if not page:
+                break
+            
+            for run in page:
+                if not run.error:
+                    continue
+                
+                errors_list.append(ErrorEntry(
+                    run_id=str(run.id),
+                    timestamp=run.start_time or datetime.now(),
+                    # run.error est une chaîne : on classe le type depuis son texte
+                    # (cf. _classify_error) — type(run.error).__name__ vaudrait "str".
+                    error_type=_classify_error(run.error),
+                    error_message=str(run.error)[:500],  # Tronquer
+                    workflow=run.metadata.get("workflow") if run.metadata else None,
+                    node=run.name,
+                    stack_trace=None,  # Stack trace complète si disponible
+                ))
+                
+                if len(errors_list) >= limit:
+                    break
+            
+            scanned += len(page)
+            offset += page_size
+            if len(page) < page_size or len(errors_list) >= limit:
+                break
         
         # Trier par date décroissante
         errors_list.sort(key=lambda e: e.timestamp, reverse=True)
@@ -662,7 +792,8 @@ async def get_error_log(
             message=f"Failed to fetch errors: {e}",
             extra={"operation": "get_error_log"},
         )
-        return []
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return UnavailableResponse(error=f"LangSmith indisponible: {e}")
 
 
 @router.get("/langsmith-link", response_model=LangSmithLink)
