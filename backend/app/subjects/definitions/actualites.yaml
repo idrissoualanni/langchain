@@ -1,0 +1,209 @@
+id: actualites
+name: Actualités et culture générale
+domain: general
+description: Couche de connaissance dynamique. Elle ne doit pas être considérée comme
+  une source d'actualité en temps réel; les questions actuelles doivent déclencher
+  une recherche de sources récentes lorsque cette capacité est disponible.
+aliases:
+- actualités
+- news
+- actualité
+- current affairs
+- élections
+- gouvernement
+- parlement
+- diplomatie
+- politique
+- PIB
+- inflation
+- emploi
+- marchés
+- économie
+- IA
+- informatique
+- innovation
+- numérique
+- technologie
+- recherche
+- découverte
+- sciences
+- laboratoire
+- science
+- climat
+- biodiversité
+- pollution
+- énergie
+- environnement
+- santé publique
+- OMS
+- prévention
+- épidémie
+- médecine
+- relations internationales
+- conflits
+- géopolitique
+- Union africaine
+- Afrique
+- développement
+- coopération
+- Sénégal
+- économie sénégalaise
+- société sénégalaise
+- université
+- école
+- formation
+- enseignement
+- éducation
+- entreprises
+- industrie
+- commerce
+- arts
+- patrimoine
+- littérature
+- cinéma
+- culture
+- sport
+- compétitions
+- fédérations
+- athlètes
+- démographie
+- société
+- travail
+- tendances sociales
+- ONU
+- monde
+- coopération internationale
+- événements mondiaux
+topics:
+- politique
+- economie
+- technologie
+- science
+- environnement
+- sante
+- geopolitique
+- afrique
+- senegal
+- education
+- entreprises_industrie
+- culture
+- sport
+- societe
+- international
+semantic_terms:
+  politique:
+  - Suivi et contextualisation des événements récents en politique.
+  - élections
+  - gouvernement
+  - parlement
+  - diplomatie
+  - politique
+  economie:
+  - Suivi et contextualisation des événements récents en économie.
+  - PIB
+  - inflation
+  - emploi
+  - marchés
+  - économie
+  technologie:
+  - Suivi et contextualisation des événements récents en technologie.
+  - IA
+  - informatique
+  - innovation
+  - numérique
+  - technologie
+  science:
+  - Suivi et contextualisation des événements récents en science.
+  - recherche
+  - découverte
+  - sciences
+  - laboratoire
+  - science
+  environnement:
+  - Suivi et contextualisation des événements récents en environnement.
+  - climat
+  - biodiversité
+  - pollution
+  - énergie
+  - environnement
+  sante:
+  - Suivi et contextualisation des événements récents en santé.
+  - santé publique
+  - OMS
+  - prévention
+  - épidémie
+  - médecine
+  geopolitique:
+  - Suivi et contextualisation des événements récents en géopolitique.
+  - relations internationales
+  - conflits
+  - diplomatie
+  - géopolitique
+  afrique:
+  - Suivi et contextualisation des événements récents en afrique.
+  - Union africaine
+  - Afrique
+  - développement
+  - coopération
+  senegal:
+  - Suivi et contextualisation des événements récents en sénégal.
+  - Sénégal
+  - gouvernement
+  - économie sénégalaise
+  - société sénégalaise
+  education:
+  - Suivi et contextualisation des événements récents en éducation.
+  - université
+  - école
+  - formation
+  - enseignement
+  - éducation
+  entreprises_industrie:
+  - Suivi et contextualisation des événements récents en entreprises et industrie.
+  - entreprises
+  - industrie
+  - innovation
+  - emploi
+  - commerce
+  culture:
+  - Suivi et contextualisation des événements récents en culture.
+  - arts
+  - patrimoine
+  - littérature
+  - cinéma
+  - culture
+  sport:
+  - Suivi et contextualisation des événements récents en sport.
+  - sport
+  - compétitions
+  - fédérations
+  - athlètes
+  societe:
+  - Suivi et contextualisation des événements récents en société.
+  - démographie
+  - société
+  - travail
+  - tendances sociales
+  international:
+  - Suivi et contextualisation des événements récents en international.
+  - ONU
+  - monde
+  - coopération internationale
+  - événements mondiaux
+knowledge:
+  sources:
+  - actualites/politique/README
+  - actualites/economie/README
+  - actualites/technologie/README
+  - actualites/science/README
+  - actualites/environnement/README
+  - actualites/sante/README
+  - actualites/geopolitique/README
+  - actualites/afrique/README
+  - actualites/senegal/README
+  - actualites/education/README
+  - actualites/entreprises_industrie/README
+  - actualites/culture/README
+  - actualites/sport/README
+  - actualites/societe/README
+  - actualites/international/README

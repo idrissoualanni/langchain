@@ -1,0 +1,107 @@
+id: mathematics
+name: Mathématiques
+domain: sciences
+description: 'Algèbre, calcul, résolution d''équations.
+
+  '
+teaching_style:
+- rigoureux
+- étape par étape
+pedagogical_guidelines:
+- décomposer en sous-étapes
+- vérifier chaque étape
+capabilities:
+- explain
+- exercise
+- evaluate
+tools:
+  common:
+  - create_exercise
+  - evaluate_answer
+  - give_hint
+  - create_quiz
+  - assess_understanding
+  - propose_review
+  specialized: []
+knowledge:
+  sources:
+  - mathematics/algebre/equations
+  - mathematics/algebre
+  - mathematics/analyse
+  - mathematics/probabilites_statistiques
+topics:
+- algebre
+- equations
+- inconnue
+- calcul
+- derivees
+- integrales
+- analyse
+- probabilites_statistiques
+aliases:
+- mathematiques
+- maths
+- math
+- algebre
+- mathématiques
+- mathematics
+- équations
+- variables
+- polynômes
+- systèmes
+- fonctions
+- limites
+- dérivées
+- intégrales
+- probabilité
+- variable aléatoire
+- moyenne
+- variance
+semantic_terms:
+  algebre:
+  - algebre manipulation d expressions litterales
+  - algebra expressions
+  - Notions fondamentales de algèbre avec définitions, relations, exemples et erreurs
+    fréquentes.
+  - équations
+  - variables
+  - polynômes
+  - systèmes
+  - algebra
+  - equations
+  equations:
+  - resoudre une equation trouver l inconnue
+  - solve an equation find the unknown
+  inconnue:
+  - inconnue variable a determiner resoudre
+  - unknown variable to determine
+  calcul:
+  - calcul operations numeriques
+  - calculation numeric operations
+  derivees:
+  - derivee taux de variation pente
+  - derivative rate of change slope
+  integrales:
+  - integrale aire sous la courbe primitive
+  - integral area under the curve antiderivative
+  analyse:
+  - Notions fondamentales de analyse avec définitions, relations, exemples et erreurs
+    fréquentes.
+  - fonctions
+  - limites
+  - dérivées
+  - intégrales
+  - calculus
+  - derivatives
+  probabilites_statistiques:
+  - Notions fondamentales de probabilités et statistiques avec définitions, relations,
+    exemples et erreurs fréquentes.
+  - probabilité
+  - variable aléatoire
+  - moyenne
+  - variance
+  - statistics
+  - probability
+model:
+  provider: ollama
+  name: qwen2.5

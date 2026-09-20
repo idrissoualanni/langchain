@@ -1,0 +1,59 @@
+id: electronique
+name: Électronique
+domain: ingenierie
+description: Base pédagogique structurée pour Électronique. Contenu introductif et
+  intermédiaire, conçu pour l'apprentissage, le raisonnement et la révision.
+aliases:
+- électronique
+- electronics
+- circuits
+- résistance
+- condensateur
+- inductance
+- diode
+- logique
+- portes
+- booléen
+- bascules
+- GPIO
+- ADC
+- PWM
+- timer
+topics:
+- composants_circuits
+- electronique_numerique
+- microcontroleurs
+semantic_terms:
+  composants_circuits:
+  - Notions fondamentales de composants et circuits avec définitions, relations, exemples
+    et erreurs fréquentes.
+  - résistance
+  - condensateur
+  - inductance
+  - diode
+  - transistor
+  - circuits
+  electronique_numerique:
+  - Notions fondamentales de électronique numérique avec définitions, relations, exemples
+    et erreurs fréquentes.
+  - logique
+  - portes
+  - booléen
+  - bascules
+  - logique numérique
+  - digital electronics
+  microcontroleurs:
+  - Notions fondamentales de microcontrôleurs avec définitions, relations, exemples
+    et erreurs fréquentes.
+  - GPIO
+  - ADC
+  - PWM
+  - timer
+  - UART
+  - microcontroller
+  - embedded
+knowledge:
+  sources:
+  - electronique/composants_circuits
+  - electronique/electronique_numerique
+  - electronique/microcontroleurs

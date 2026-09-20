@@ -1,0 +1,57 @@
+id: informatique
+name: Informatique
+domain: technologie
+description: Base pédagogique structurée pour Informatique. Contenu introductif et
+  intermédiaire, conçu pour l'apprentissage, le raisonnement et la révision.
+aliases:
+- informatique
+- computer science
+- computing
+- algorithme
+- complexité
+- pseudo-code
+- algorithms
+- variables
+- fonctions
+- structures de contrôle
+- programmation
+- tableau
+- liste
+- pile
+- file
+topics:
+- algorithmique
+- programmation
+- structures_donnees
+semantic_terms:
+  algorithmique:
+  - Notions fondamentales de algorithmique avec définitions, relations, exemples et
+    erreurs fréquentes.
+  - algorithme
+  - complexité
+  - pseudo-code
+  - algorithms
+  - complexity
+  programmation:
+  - Notions fondamentales de programmation avec définitions, relations, exemples et
+    erreurs fréquentes.
+  - variables
+  - fonctions
+  - structures de contrôle
+  - programmation
+  - programming
+  structures_donnees:
+  - Notions fondamentales de structures de données avec définitions, relations, exemples
+    et erreurs fréquentes.
+  - tableau
+  - liste
+  - pile
+  - file
+  - arbre
+  - graphe
+  - data structures
+knowledge:
+  sources:
+  - informatique/algorithmique
+  - informatique/programmation
+  - informatique/structures_donnees

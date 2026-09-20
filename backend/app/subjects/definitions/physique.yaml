@@ -1,0 +1,58 @@
+id: physique
+name: Physique
+domain: sciences
+description: Base pédagogique structurée pour Physique. Contenu introductif et intermédiaire,
+  conçu pour l'apprentissage, le raisonnement et la révision.
+aliases:
+- physique
+- sciences physiques
+- physics
+- forces
+- mouvement
+- Newton
+- énergie
+- chaleur
+- température
+- entropie
+- charge
+- champ électrique
+- courant
+- tension
+topics:
+- mecanique
+- thermodynamique
+- electromagnetisme
+semantic_terms:
+  mecanique:
+  - Notions fondamentales de mécanique avec définitions, relations, exemples et erreurs
+    fréquentes.
+  - forces
+  - mouvement
+  - Newton
+  - énergie
+  - momentum
+  - mechanics
+  - dynamics
+  thermodynamique:
+  - Notions fondamentales de thermodynamique avec définitions, relations, exemples
+    et erreurs fréquentes.
+  - chaleur
+  - température
+  - entropie
+  - énergie
+  - gaz
+  - thermodynamics
+  electromagnetisme:
+  - Notions fondamentales de électromagnétisme avec définitions, relations, exemples
+    et erreurs fréquentes.
+  - charge
+  - champ électrique
+  - courant
+  - tension
+  - magnétisme
+  - electromagnetism
+knowledge:
+  sources:
+  - physique/mecanique
+  - physique/thermodynamique
+  - physique/electromagnetisme

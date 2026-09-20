@@ -1,0 +1,53 @@
+id: droit_institutions
+name: Droit et institutions
+domain: sciences_sociales
+description: Base pédagogique structurée pour Droit et institutions. Contenu introductif
+  et intermédiaire, conçu pour l'apprentissage, le raisonnement et la révision.
+aliases:
+- droit
+- institutions
+- law
+- institutions
+- contrat
+- responsabilité
+- personne
+- obligation
+- constitution
+- séparation des pouvoirs
+- constitutional law
+- ONU
+- organisations internationales
+- coopération
+- international institutions
+topics:
+- droit_civil
+- droit_constitutionnel
+- institutions_internationales
+semantic_terms:
+  droit_civil:
+  - Notions fondamentales de droit civil avec définitions, relations, exemples et
+    erreurs fréquentes.
+  - contrat
+  - responsabilité
+  - personne
+  - obligation
+  - civil law
+  droit_constitutionnel:
+  - Notions fondamentales de droit constitutionnel avec définitions, relations, exemples
+    et erreurs fréquentes.
+  - constitution
+  - séparation des pouvoirs
+  - institutions
+  - constitutional law
+  institutions_internationales:
+  - Notions fondamentales de institutions internationales avec définitions, relations,
+    exemples et erreurs fréquentes.
+  - ONU
+  - organisations internationales
+  - coopération
+  - international institutions
+knowledge:
+  sources:
+  - droit_institutions/droit_civil
+  - droit_institutions/droit_constitutionnel
+  - droit_institutions/institutions_internationales

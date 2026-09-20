@@ -1,0 +1,58 @@
+id: intelligence_artificielle
+name: Intelligence artificielle
+domain: technologie
+description: Base pédagogique structurée pour Intelligence artificielle. Contenu introductif
+  et intermédiaire, conçu pour l'apprentissage, le raisonnement et la révision.
+aliases:
+- IA
+- intelligence artificielle
+- AI
+- artificial intelligence
+- machine learning
+- données
+- entraînement
+- validation
+- neurone
+- couche
+- poids
+- gradient
+- NLP
+- langage naturel
+- transformer
+- LLM
+topics:
+- apprentissage_automatique
+- reseaux_neurones
+- nlp_llm
+semantic_terms:
+  apprentissage_automatique:
+  - Notions fondamentales de apprentissage automatique avec définitions, relations,
+    exemples et erreurs fréquentes.
+  - machine learning
+  - données
+  - entraînement
+  - validation
+  - classification
+  reseaux_neurones:
+  - Notions fondamentales de réseaux de neurones avec définitions, relations, exemples
+    et erreurs fréquentes.
+  - neurone
+  - couche
+  - poids
+  - gradient
+  - deep learning
+  - neural networks
+  nlp_llm:
+  - Notions fondamentales de nlp et modèles de langage avec définitions, relations,
+    exemples et erreurs fréquentes.
+  - NLP
+  - langage naturel
+  - transformer
+  - LLM
+  - token
+  - embeddings
+knowledge:
+  sources:
+  - intelligence_artificielle/apprentissage_automatique
+  - intelligence_artificielle/reseaux_neurones
+  - intelligence_artificielle/nlp_llm

@@ -1,0 +1,31 @@
+# Core API
+fastapi
+uvicorn[standard]
+sse-starlette
+pydantic
+python-dotenv
+requests
+PyYAML
+
+# Auth
+pyjwt
+cryptography
+
+# LangChain / LangGraph
+langchain
+langchain-core
+langchain-ollama
+langgraph
+langgraph-checkpoint-sqlite
+langsmith
+
+# Providers & Search
+ollama
+tavily-python
+
+# Realtime
+livekit-api
+
+# Data / RAG
+sqlalchemy
+beautifulsoup4

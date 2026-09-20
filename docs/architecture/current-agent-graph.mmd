@@ -1,0 +1,133 @@
+# Graphe LangGraph réel — Agent Tutor (orchestration complète, 2026-09-19)
+
+> **Fichier de cartographie du graphe ACTUEL** — cartographie après la mission
+> ORCHESTRATION. Le graphe est désormais un vrai `StateGraph` mono-graphe
+> (`backend/app/agent/graph.py`) autour du sous-graphe `create_agent`.
+
+---
+
+## 1. Vue d'ensemble — graphe parent ORCHESTRATION
+
+Le graphe est construit par `_compile_orchestration_graph(subgraph, checkpointer,
+store)` dans `backend/app/agent/graph.py` et compilé avec `compile(checkpointer=,
+store=)`. Chaque node appelle RÉELLEMENT son service métier.
+
+```mermaid
+flowchart LR
+    subgraph GRAPH["StateGraph(CustomAgentState) : _compile_orchestration_graph"]
+        direction LR
+        S["START"]:::ctl
+        R["router"]:::node
+        RE["retrieval"]:::node
+        FB["fallback"]:::node
+        CTX["context"]:::node
+        LN["learning"]:::node
+        AG["agent
+        (sous-graphe create_agent)"]:::agent
+        RP["response"]:::node
+        E["END"]:::ctl
+
+        S --> R
+        R -- "supported / multi_domain" --> RE
+        R -- "ambiguous / unknown / unsupported" --> FB
+        RE --> FB
+        FB --> CTX
+        CTX --> LN
+        LN --> AG
+        AG --> RP
+        RP --> E
+    end
+```
+
+**Résumé** : `START → ROUTER → RETRIEVAL → FALLBACK → CONTEXT → LEARNING →
+AGENT (sous-graphe) → RESPONSE → END`.
+
+- **Node `router`** (`orchestration.py:router_node`) : `route_subject(query)` →
+  `routing_result`. Branche conditionnelle `route_after_router`.
+- **Node `retrieval`** (`retrieval_node`) : `retrieve_sources(...)` (nouvelle
+  extraction §48) → `knowledge` + `web`. Sauté si branche fallback direct.
+- **Node `fallback`** (`fallback_node`) : `decide_fallback(...)` → `fallback` ;
+  candidats re-greffés si `ambiguous`.
+- **Node `context`** (`context_node`) : `build_context(..., routing=,
+  knowledge=, web=, fallback=)` avec les sorties PRÉ-CALCULÉES des nodes →
+  `built_context`.
+- **Node `learning`** (`learning_node`) : `decide(built_context, ...)` → `learning_decision`.
+- **Node `agent`** : sous-graphe `create_agent` (boucle model ⇄ tools). Le
+  middleware `tutor_dynamic_prompt` lit `request.state.built_context` +
+  `learning_decision` (aucune re-exécution du pipeline).
+- **Node `response`** (`response_node`) : `normalize_response(...)` → `agent_response`.
+
+---
+
+## 2. Sous-graphe agent (create_agent)
+
+```mermaid
+flowchart LR
+    subgraph SUB["create_agent (no checkpointer/store — hérités du parent)"]
+        direction LR
+        A["START"]:::ctl
+        M["model
+        (RunnableCallable model_node)"]:::node
+        T["tools
+        (ToolNode, 26 tools)"]:::node
+        E1["END"]:::ctl
+
+        A --> M
+        M -- "AIMessage sans tool_calls" --> E1
+        M -- "tool_calls en attente" --> T
+        T -- "return_direct=False" --> M
+    end
+```
+
+- Le **checkpointer** (`SqliteSaver`, `checkpoints.db`) et le **store mémoire**
+  (`SqliteStore`, `long_term_memory.db`) sont portés par le parent — hérités par le
+  sous-graphe.
+- `context_schema=AgentContext` : `user_id`/`thread_id` transportés via le
+  contexte d'exécution natif LangChain (`context=`), lus par
+  `request.state` dans le middleware.
+
+---
+
+## 3. Coordination des champs de state (dict-based)
+
+`CustomAgentState` hérite de `MessagesState` → **dict** : les nodes accèdent par
+`state.get(...)`, jamais par attribut (PoC-2). Les services sérialisent en dicts
+(`model_dump()`).
+
+| Champ | Écrit par | Lu par |
+|-------|-----------|--------|
+| `routing_result` | router | retrieval, fallback, route_after_router |
+| `knowledge` / `web` | retrieval | fallback, context |
+| `fallback` | fallback | context, response |
+| `built_context` | context | learning, middleware (subgraph) |
+| `learning_decision` | learning | middleware (subgraph) |
+| `learning_activity` | learning | response |
+| `agent_response` | response | runner |
+
+---
+
+## 4. Notes d'audit
+
+| # | Constat (vérifié dans le code) | Localisation |
+|---|-------------------------------|--------------|
+| A | **Vrai `StateGraph` mono-graphe** : `router → retrieval → fallback → context → learning → agent → response`, conditionnel router (`route_after_router`). | `backend/app/agent/graph.py` |
+| B | Chaque node appelle RÉELLEMENT le service : `route_subject`, `retrieve_sources`, `decide_fallback`, `build_context`, `decide`, `normalize_response`. | `backend/app/agent/orchestration.py` |
+| C | `retrieve_sources` extrait hors de `build_context` (source de vérité unique), `build_context` accepte les sorties pré-calculées. | `backend/app/context/builder.py:176` |
+| D | Retour à un node `state` est **dict** (`model_dump`) — pas d'objets pydantic bruts dans les canaux. | `backend/app/agent/orchestration.py` |
+| E | `StateGraph.compile` n'accepte PAS `context_schema` — la propagation Runtime Context passe par `context=` (invoke/stream), lue dans `request.state` du middleware. | `backend/app/agent/middleware.py` |
+| F | Middleware `tutor_dynamic_prompt` : branche précalculée (lit `state.built_context`) avec **fallback historique** `_build_context_prompt` si absent. | `backend/app/agent/middleware.py` |
+| G | Runner sync/stream : recense `state.agent_response` si présent, sinon chemin historique (register_activity + normalize). | `backend/app/agent/runner.py` |
+| H | `langgraph.json` entrypoint : `app/agent/graph.py:build_graph` (graphe parent compilé). | `backend/langgraph.json` |
+| I | Branche `supported/multi_domain → retrieval` ; `ambiguous → fallback` (candidats re-greffés dans `fallback_node`). | `backend/app/agent/orchestration.py:294` |
+| J | Les tests V5.2 (§43–§52, hors live-Ollama), V10 (16), V11 (31), V6.7 (30), V6.8 models (10) restent verts. | `backend/tests/` |
+
+---
+
+## 5. Légende des types de nœuds
+
+- `ctl` — contrôle (START / END).
+- `node` — node du graphe parent (orchestration).
+- `agent` — sous-graphe `create_agent`.
+- **Fichier** — bordure arrondie = node de graphe ; carré simple = service.
+
+*Fichier généré par l'assistant — lecture seule, conforme à la mission ORCHESTRATION.*

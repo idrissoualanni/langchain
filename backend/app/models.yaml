@@ -1,0 +1,29 @@
+models:
+  default:
+    context_window: null
+    max_output_tokens: null
+    model: gemma4:31b-cloud
+    provider: ollama
+    reserved_output_tokens: 2048
+    supports_audio: false
+    supports_structured_output: false
+    supports_tools: true
+    supports_vision: false
+  disabled-test-model:
+    display_name: Disabled Test
+    enabled: false
+    model: test
+    provider: ollama
+    supports_audio: false
+    supports_structured_output: false
+    supports_tools: false
+    supports_vision: false
+  test-model:
+    display_name: Test Model
+    enabled: true
+    model: gemma2:9b
+    provider: ollama
+    supports_audio: false
+    supports_structured_output: false
+    supports_tools: false
+    supports_vision: false
