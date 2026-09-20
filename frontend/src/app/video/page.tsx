@@ -3,32 +3,36 @@
 import { useEffect, useState } from "react";
 import { LiveKitRoom } from "@livekit/components-react";
 import { VideoSession } from "@/components/livekit/VideoSession";
+import { apiFetch } from "@/api/base";
 import { Loader2 } from "lucide-react";
+
+interface LiveKitTokenResponse {
+  token: string;
+  url: string;
+  room_name: string;
+}
 
 export default function VideoPage() {
   const [token, setToken] = useState<string>("");
   const [url, setUrl] = useState<string>("");
   const [roomName, setRoomName] = useState<string>("tutor-video-session");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchToken() {
       try {
-        const res = await fetch("/api/livekit/token", {
+        // apiFetch injecte le Bearer token (Clerk ou dev) — §19 : aucune
+        // requête ne devrait utiliser fetch() directement.
+        const data = await apiFetch<LiveKitTokenResponse>("/api/livekit/token", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            room_name: "session-" + Date.now(),
-            enable_video: true 
-          }),
+          body: JSON.stringify({ room_name: "session-" + Date.now() }),
         });
-        if (!res.ok) throw new Error("Failed to fetch token");
-        const data = await res.json();
         setToken(data.token);
         setUrl(data.url);
         setRoomName(data.room_name);
-      } catch (error) {
-        console.error("Erreur fetching token LiveKit:", error);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Erreur inconnue");
       } finally {
         setLoading(false);
       }
@@ -42,6 +46,19 @@ export default function VideoPage() {
         <div className="text-center space-y-4">
           <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
           <p className="text-muted-foreground">Initialisation de la session vidéo...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !token || !url) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center space-y-4 max-w-md">
+          <p className="text-destructive font-medium">Session vidéo indisponible</p>
+          <p className="text-sm text-muted-foreground">
+            {error || "Aucun token LiveKit reçu."}
+          </p>
         </div>
       </div>
     );

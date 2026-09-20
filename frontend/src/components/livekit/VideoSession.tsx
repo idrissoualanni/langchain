@@ -14,6 +14,13 @@ import { AgentAudioVisualizerAura } from "@/components/agents-ui/agent-audio-vis
 import { AgentControlBar } from "@/components/agents-ui/agent-control-bar";
 import { AgentVideoTile } from "@/components/agents-ui/agent-video-tile";
 import { Loader2 } from "lucide-react";
+import { apiFetch } from "@/api/base";
+
+interface LiveKitTokenResponse {
+  token: string;
+  url: string;
+  room_name: string;
+}
 
 interface VideoSessionProps {
   /** Nom de la salle LiveKit (utilisé pour la récupération autonome du token). */
@@ -30,9 +37,9 @@ interface VideoSessionProps {
  * - When `token` and `url` are provided (e.g. by a parent page that already
  *   renders a `<LiveKitRoom>`), they are used as-is and no nested room is
  *   created.
- * - Otherwise the component fetches its own token via
- *   `/api/livekit/token?room=<roomName>` and wraps its UI in a standalone
- *   `<LiveKitRoom>`.
+ * - Otherwise the component fetches its own token via un POST authentifié
+ *   sur `/api/livekit/token` et enveloppe son UI dans un
+ *   `<LiveKitRoom>` autonome.
  */
 export function VideoSession({ roomName, token: tokenProp, url: urlProp }: VideoSessionProps) {
   const provided = Boolean(tokenProp && urlProp);
@@ -52,18 +59,18 @@ export function VideoSession({ roomName, token: tokenProp, url: urlProp }: Video
 
     async function fetchToken() {
       try {
-        const response = await fetch(
-          `/api/livekit/token?room=${encodeURIComponent(roomName)}`,
-          { method: "GET" }
+        // POST authentifié via apiFetch (§19) — la route est POST-only,
+        // un GET avec query string renvoie 405.
+        const data = await apiFetch<LiveKitTokenResponse>(
+          "/api/livekit/token",
+          {
+            method: "POST",
+            body: JSON.stringify({ room_name: roomName }),
+          }
         );
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        const data = await response.json();
         if (cancelled) return;
         setFetchedToken(data.token);
-        // Some back‑ends expose the server URL under `url` or `serverUrl`
-        setFetchedUrl(data.url ?? data.serverUrl ?? "");
+        setFetchedUrl(data.url);
       } catch (e) {
         if (cancelled) return;
         console.error("Erreur de récupération du token LiveKit:", e);
