@@ -18,6 +18,7 @@ import { useHealth } from '../hooks/useHealth';
 import { InlineError } from '../components/ui/error-state';
 import { useActivityStore } from '../hooks/use-activity-store';
 import { ActivityCard } from '../components/agent/activity-card';
+import { ActivityPanel } from '../components/assistant-ui/elements/activity-panel.aui';
 
 /**
  * Sélecteur de modèle intégré au Composer (brief §19).
@@ -111,33 +112,34 @@ function AgentActivityHeader() {
   );
 }
 
-/** Liste compacte des activités récentes sous le thread */
-function RecentActivities() {
-  const activities = useActivityStore((s) => s.activities);
-  if (activities.length === 0) return null;
+/** Ouvreur du panel — compteur d'activités running */
+function ActivityOpener() {
+  const count = useActivityStore((s) => s.activities.filter((a) => a.status === 'running').length);
+  const toggle = useActivityStore((s) => s.togglePanel);
   return (
-    <div className="mx-auto w-full max-w-[44rem] space-y-2 px-2 pb-2">
-      {activities.slice(0, 3).map((a) => (
-        <ActivityCard key={a.id} kind={a.type} title={a.title} status={a.status} progress={a.progress} />
-      ))}
-    </div>
+    <button type="button" onClick={() => toggle(true)} className="text-muted-foreground hover:text-foreground font-mono text-[11px] underline">
+      Activité{count ? ` (${count} en cours)` : ''}
+    </button>
   );
 }
 
 /** Composants montés DANS le runtime (hooks officiels data UI). */
 function AssistantRuntimeChildren() {
-  // Data part "agent-response" → cartes pédagogiques (mécanisme officiel)
   useAgentResponseDataUI();
-  // Tool-calls → Tool UIs dédiés (cartes pliantes) avant le ToolFallback
   useToolUIs();
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <RunErrorBanner />
-      <AgentActivityHeader />
-      <div className="min-h-0 flex-1 overflow-hidden">
-        <Thread components={THREAD_COMPONENTS} />
+    <div className="flex h-full min-h-0 flex-row">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex items-center justify-end px-2 py-1">
+          <ActivityOpener />
+        </div>
+        <RunErrorBanner />
+        <AgentActivityHeader />
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <Thread components={THREAD_COMPONENTS} />
+        </div>
       </div>
-      <RecentActivities />
+      <ActivityPanel />
     </div>
   );
 }

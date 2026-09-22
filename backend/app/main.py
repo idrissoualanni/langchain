@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.agent.graph import get_agent
+from app.graph.main import get_agent
 from app.api import (
     activity,
     chat,

@@ -12,7 +12,7 @@
 # — mêmes nodes métier (app.agent.orchestration), mêmes services,
 # même checkpointer/store. Seuls INTAKE et WORKFLOW_ROUTER sont
 # ajoutés (nouveaux nodes, non-cassants).
-from app.graph.state import MainState
+from app.graph.main.state import MainState
 from app.schemas.workflow import (
     ActivityResult,
     CodingResult,

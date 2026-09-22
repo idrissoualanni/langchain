@@ -79,7 +79,7 @@ def api_thread_activity(
 
     # Le state runner n'expose pas learning_activity directement —
     # on le lit depuis le snapshot complet
-    from app.agent.graph import get_agent
+    from app.graph.main import get_agent
 
     snapshot = get_agent().get_state(
         {

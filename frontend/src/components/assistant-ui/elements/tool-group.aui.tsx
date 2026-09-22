@@ -101,7 +101,7 @@ function ToolGroupTrigger({
   count: number;
   active?: boolean;
 }) {
-  const label = `${count} tool ${count === 1 ? "call" : "calls"}`;
+  const label = active ? `${count} outil${count > 1 ? 's' : ''} en cours…` : `${count} outil${count > 1 ? 's' : ''}`;
 
   return (
     <CollapsibleTrigger

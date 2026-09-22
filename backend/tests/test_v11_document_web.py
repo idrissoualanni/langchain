@@ -31,7 +31,7 @@ from langchain.agents import create_agent
 
 from app.agent.middleware import build_middleware_stack
 from app.agent.pedagogical_tools import pedagogical_tools
-from app.agent.state import CustomAgentState
+from app.graph.main.state import CustomAgentState
 
 PASS = 0
 FAIL = 0

@@ -16,7 +16,7 @@ from app.schemas.activity import (
     ActivityContract,
     activity_to_contract,
 )
-from app.agent.graph import get_agent
+from app.graph.main import get_agent
 from app.logging.events import log_event
 
 # Channel state LangGraph qui porte l'activité du thread (V5.2).

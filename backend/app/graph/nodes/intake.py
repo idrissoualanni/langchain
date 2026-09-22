@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.graph.state import MainState
+from app.graph.main.state import MainState
 from app.logging.events import log_event
 
 

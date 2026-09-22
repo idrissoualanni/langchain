@@ -113,8 +113,8 @@ check(
 # ============================================================
 # B. MAIN STATE TYPÉ (§7)
 # ============================================================
-from app.graph.state import MainState  # noqa: E402
-from app.agent.state import CustomAgentState  # noqa: E402
+from app.graph.main.state import MainState  # noqa: E402
+from app.graph.main.state import CustomAgentState  # noqa: E402
 
 check(
     "§7: MainState inclut les canaux de CustomAgentState",

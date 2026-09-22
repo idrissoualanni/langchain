@@ -258,8 +258,7 @@ const EmptyState: FC = () => (
     <div className="space-y-1">
       <p className="text-sm font-medium">Aucune activité pour l'instant</p>
       <p className="text-muted-foreground text-xs leading-relaxed">
-        Lancez un quiz, un exercice ou une correction de code depuis le bouton
-        « Activité » de la barre de saisie pour les suivre ici.
+        Tapez <code className="rounded bg-muted px-1">@</code> dans le composer (ex. @exercise, @code, @deep-research) ou laissez l'agent en créer — elles apparaîtront ici.
       </p>
     </div>
   </div>

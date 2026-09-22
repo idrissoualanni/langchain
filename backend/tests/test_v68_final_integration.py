@@ -115,7 +115,7 @@ check(
 from app.schemas.activity import (  # noqa: E402
     summarize_activity,
 )
-from app.agent.graph import get_agent  # noqa: E402
+from app.graph.main import get_agent  # noqa: E402
 
 snapshot = get_agent().get_state(
     {

@@ -5,6 +5,7 @@ import {
   ComposerAttachments,
   UserMessageAttachments,
 } from "@/components/assistant-ui/elements/attachment.aui";
+import { MentionBadge } from "@/components/assistant-ui/elements/mention-badge.aui";
 import { File } from "@/components/assistant-ui/elements/file";
 import { ThreadFollowupSuggestions } from "@/components/assistant-ui/elements/follow-up-suggestions.aui";
 import { Image } from "@/components/assistant-ui/elements/image";
@@ -67,7 +68,6 @@ import {
   type FC,
   type PropsWithChildren,
 } from "react";
-import { ActivityTrigger } from "@/components/assistant-ui/elements/activity.aui";
 import { VoiceButton } from "@/components/assistant-ui/elements/voice.aui";
 import { useNavigate } from "react-router-dom";
 
@@ -341,6 +341,7 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
           className="border-border data-[dragging=true]:border-ring flex w-full cursor-text flex-col gap-2 rounded-(--composer-radius) border bg-(--composer-bg) p-(--composer-padding) transition-[border-color] data-[dragging=true]:border-dashed data-[dragging=true]:bg-[color-mix(in_oklab,var(--color-muted)_50%,var(--color-background))]"
         >
           <ComposerAttachments />
+          <MentionBadge />
           <ComposerPrimitive.Input
             placeholder="Écrire un message…"
             className="aui-composer-input caret-primary placeholder:text-muted-foreground/60 max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base leading-6 outline-none"
@@ -358,26 +359,13 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
 
 const ComposerAction: FC = () => {
   const { ComposerToolbar } = useContext(ThreadComponentsContext);
-  // Brief §20 : le Composer porte le déclencheur d'activité (panneau
-  // latéral droit) + le bouton voix. L'envoi de l'instruction passe
-  // par le composer officiel (setText + send) pour bénéficier des
-  // pièces jointes et du run config, comme un envoi clavier.
-  const aui = useAui();
   const navigate = useNavigate();
-  const isRunning = useAuiState((s) => s.thread.isRunning);
-
-  const handleActivityTrigger = (instruction: string) => {
-    if (isRunning) return;
-    aui.composer.setText(instruction);
-    aui.composer.send();
-  };
 
   return (
     <div className="aui-composer-action-wrapper relative flex items-center justify-between">
       <div className="flex min-w-0 items-center gap-1.5">
         <ComposerAddAttachment />
         {ComposerToolbar ? <ComposerToolbar /> : null}
-        <ActivityTrigger onTrigger={handleActivityTrigger} />
         <VoiceButton />
       </div>
       <div className="flex items-center gap-1.5">

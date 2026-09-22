@@ -9,7 +9,7 @@ import asyncio
 import time
 from typing import AsyncIterator
 
-from app.agent.graph import get_agent
+from app.graph.main import get_agent
 from app.config import (
     AGENT_RECURSION_LIMIT,
     AGENT_TIMEOUT_SECONDS,

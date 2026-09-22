@@ -281,7 +281,7 @@ def check_sqlite_health() -> bool:
 def check_langgraph_health() -> bool:
     """Vérifie que l'agent LangGraph est initialisé et le checkpointer actif."""
     try:
-        from app.agent.graph import get_agent
+        from app.graph.main import get_agent
 
         return get_agent() is not None
     except Exception:

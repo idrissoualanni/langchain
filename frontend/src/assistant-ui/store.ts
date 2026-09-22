@@ -233,13 +233,14 @@ export const useAssistantStore = create<AssistantStore>((set, get) => ({
     currentAbort = new AbortController();
     const model = get().selectedModel;
 
-    // Composer : les @mentions deviennent des termes. On extrait le
-    // workflow + le payload (§8) et on retire les termes du texte
-    // envoyé au modèle — le "@" ne doit plus polluer la requête.
-    // La bulle utilisateur affiche le texte ORIGINAL (ce que
-    // l'utilisateur a tapé), le backend reçoit la version nettoyée.
     const terms = parseComposerTerms(text);
     const queryToSend = terms.query.trim() || text;
+    if (!queryToSend.trim()) {
+      set({ error: 'Ajoutez un message au terme @ sélectionné.' });
+      // rollback messages optimistes
+      set((s) => ({ messages: s.messages.slice(0, -2), isRunning: false }));
+      return;
+    }
 
     const patchAssistant = (
       patch: Partial<StoreMessage>,
