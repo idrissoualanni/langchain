@@ -17,7 +17,7 @@ Tests d'intégration:
 """
 
 import pytest
-from app.graph.subgraphs.coding.graph import (
+from app.graph.subgraphs.coding.nodes import (
     CodingState,
     CodingResult,
     create_coding_subgraph,

@@ -402,9 +402,15 @@ async def run_coding_workflow(
     )
 
 
+# Alias canonique (a remplacé l'historique `create_coding_subgraph`
+# jadis exposé par coding/graph.py) — §30. Consommateurs : node
+# DOCUMENTED + tests + langgraph.json.
+create_coding_subgraph = compile_coding_subgraph
+
 __all__ = [
     "CodingState",
     "CodingResult",
+    "create_coding_subgraph",
     "analyze_task",
     "execute_action",
     "evaluate",

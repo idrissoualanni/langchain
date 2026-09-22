@@ -362,11 +362,11 @@ async def run_agent_stream(
     )
 
     # V6.7 §26 : normalisation (activité + fallback du registre)
-    from app.agent.middleware import (
+    from app.services.agent.middleware import (
         get_last_context,
         register_activity,
     )
-    from app.agent.normalizer import normalize_response
+    from app.services.agent.normalizer import normalize_response
 
     new_state_pre = agent.get_state(config)
     activity_pre = dict(
@@ -581,11 +581,11 @@ def run_agent(
         # AgentResponse (contrat public). Le texte brut reste
         # disponible (rétrocompatibilité) ; agent_response est la
         # voie structurée du frontend.
-        from app.agent.middleware import (
+        from app.services.agent.middleware import (
             get_last_context,
             register_activity,
         )
-        from app.agent.normalizer import normalize_response
+        from app.services.agent.normalizer import normalize_response
 
         activity = dict(
             (new_state.values or {}).get("learning_activity") or {}

@@ -265,7 +265,7 @@ def response_node(state, config=None) -> dict:
     utilise state.agent_response quand présent ; sinon il garde
     le comportement historique (non-régression).
     """
-    from app.agent.normalizer import normalize_response
+    from app.services.agent.normalizer import normalize_response
 
     message = _last_ai_message(state)
     activity = state.get("learning_activity") or None

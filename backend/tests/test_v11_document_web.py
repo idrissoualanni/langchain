@@ -480,7 +480,7 @@ def test_quiz_from_document():
 def test_middleware_forces_user_on_document_tools():
     print("\n--- §51 middleware force user_id document ---")
     from unittest.mock import patch
-    from app.agent import middleware as mw
+    from app.services.agent import middleware as mw
     from langchain_core.tools import InjectedToolCallId
 
     captured = {}

@@ -24,7 +24,10 @@ def _coding_subgraph():
     """Lazy-init du CodingSubgraph compilé (cache module)."""
     global _compiled_coding
     if _compiled_coding is None:
-        from app.graph.subgraphs.coding.graph import create_coding_subgraph
+        from app.graph.subgraphs.coding.nodes import (
+        compile_coding_subgraph,
+        create_coding_subgraph,
+    )
 
         _compiled_coding = create_coding_subgraph()
     return _compiled_coding
@@ -112,7 +115,7 @@ async def coding_node(state, config=None) -> dict[str, Any]:
     Sortie : workflow_result (CodingResult §8). Le sous-graphe est
     async (run_coding_workflow) — le node est async également.
     """
-    from app.graph.subgraphs.coding.graph import run_coding_workflow
+    from app.graph.subgraphs.coding.nodes import run_coding_workflow
 
     intake = (state or {}).get("intake") or {}
     query = intake.get("query") if isinstance(intake, dict) else ""

@@ -1302,7 +1302,7 @@ def test_agent1_intact():
     check(
         "52: core prompt règle 15 (record_learning_observation) préservée",
         "record_learning_observation" in __import__(
-            "app.agent.prompts", fromlist=["CORE_PROMPT"]
+            "app.services.agent.prompts", fromlist=["CORE_PROMPT"]
         ).CORE_PROMPT,
     )
 

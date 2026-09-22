@@ -306,7 +306,7 @@ def tutor_dynamic_prompt(request: ModelRequest) -> str:
     CONTEXT_BUILD_ERROR puis le CORE PROMPT seul est utilisé —
     jamais de crash.
     """
-    from app.agent.prompts import CORE_PROMPT
+    from app.services.agent.prompts import CORE_PROMPT
 
     user_id, thread_id = _ids_from_runtime(request.runtime)
 

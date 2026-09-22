@@ -379,7 +379,7 @@ check(
 # est le facteur commun _build_agent, graph.py:105)
 import inspect
 
-import app.agent.graph as graph_mod
+import app.graph.main.graph as graph_mod
 
 src = inspect.getsource(graph_mod._build_agent)
 check(
