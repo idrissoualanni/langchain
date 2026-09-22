@@ -1,26 +1,6 @@
-# Subgraphs (Phase 1) — contrats uniquement (§8).
+# Subgraphs spécialisés du Main Graph.
 #
-# Aucun subgraph implémenté en Phase 1 : seuls les contrats
-# d'entrée/sortie sont définis (contracts.py). Les implémentations
-# arrivent dans les Phases 2-7 (Activity, Problem, Coding, Research,
-# Video, Document). Le sous-graphe agentique create_agent vit dans
-# app.agent (§5).
-from app.schemas.workflow import (
-    ActivityResult,
-    CodingResult,
-    ProblemResult,
-    ResearchResult,
-    SubgraphInput,
-    SubgraphResult,
-    VideoResult,
-)
-
-__all__ = [
-    "SubgraphInput",
-    "SubgraphResult",
-    "ProblemResult",
-    "CodingResult",
-    "ResearchResult",
-    "VideoResult",
-    "ActivityResult",
-]
+# Chaque sous-graphe expose un contrat §8 (workflow_result) et une
+# fabrique standardisée : compile_<name>_subgraph() (§5). Aucun LLM
+# dans les sous-graphes déterministes (problem, document) ; les
+# sous-graphes agentiques seront wrapperés par le node correspondant.
