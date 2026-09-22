@@ -10,7 +10,7 @@
 #   question        →   [{query, focus, ...} × n ≤ max_queries]
 from __future__ import annotations
 
-from app.context.query_norm import normalize_query
+from app.services.context.query_norm import normalize_query
 
 # Nombre de requêtes par défaut d'un plan (= borne de la boucle).
 DEFAULT_MAX_QUERIES = 4

@@ -37,12 +37,12 @@ from app.schemas.context import (  # noqa: E402
     KnowledgeSearchResult,
     RoutingResult,
 )
-from app.learning.decision import (  # noqa: E402
+from app.services.learning.decision import (  # noqa: E402
     ACTIVITY_TRANSITIONS,
     LearningDecision,
 )
-from app.learning.engine import decide  # noqa: E402
-from app.learning.learning_profile import (  # noqa: E402
+from app.services.learning.engine import decide  # noqa: E402
+from app.services.learning.learning_profile import (  # noqa: E402
     create_learning_goal,
     update_profile_from_observation,
 )
@@ -50,7 +50,7 @@ from app.schemas.learning import (  # noqa: E402
     LearningContextInfo,
     LearningObservation,
 )
-from app.learning.rules import (  # noqa: E402
+from app.services.learning.rules import (  # noqa: E402
     MASTERY_THRESHOLDS,
     mastery_zone,
     read_trajectory,
@@ -233,7 +233,7 @@ create_learning_goal(
     goal_subject, "python", "Maîtriser les boucles",
     topic="loops",
 )
-from app.learning.learning_context import (  # noqa: E402
+from app.services.learning.learning_context import (  # noqa: E402
     get_learning_context,
 )
 lg = get_learning_context(
@@ -477,7 +477,7 @@ print("\n--- §4.1/§17/§18 : garde-fous code source ---")
 # ==================================================================
 
 import inspect  # noqa: E402
-from app.learning import engine as _engine_mod  # noqa: E402
+from app.services.learning import engine as _engine_mod  # noqa: E402
 
 src = inspect.getsource(_engine_mod)
 check(

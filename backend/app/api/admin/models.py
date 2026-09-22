@@ -13,15 +13,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.auth.resolver import CurrentUser, require_admin
-from app.models.registry import (
+from app.services.models.registry import (
     get_model_config,
     list_all_model_configs,
     save_model_config,
     delete_model_config,
     get_default_model_id,
 )
-from app.models.schemas import ModelConfig, ModelCapabilities
-from app.models.gateway import create_llm_from_config
+from app.services.models.schemas import ModelConfig, ModelCapabilities
+from app.services.models.gateway import create_llm_from_config
 
 
 router = APIRouter(prefix="/api/admin/models", tags=["admin-models"])

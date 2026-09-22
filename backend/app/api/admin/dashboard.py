@@ -7,10 +7,10 @@ from datetime import datetime, timedelta
 from app.config import CHECKPOINTS_DB_PATH
 from app.db.connections import get_conn
 from app.auth.resolver import require_admin as get_current_admin_user
-# from app.models.user import User
-# from app.models.thread import Thread
-# from app.models.activity import Activity
-# from app.models.learning_profile import LearningProfile
+# from app.services.models.user import User
+# from app.services.models.thread import Thread
+# from app.services.models.activity import Activity
+# from app.services.models.learning_profile import LearningProfile
 
 router = APIRouter(prefix="/dashboard", tags=["admin-dashboard"])
 
@@ -79,7 +79,7 @@ def _activity_stats() -> dict[str, Any]:
 def _learning_profile_count() -> int:
     """Nombre de profils d'apprentissage réels ( LangGraph Store )."""
     try:
-        from app.agent.memory import get_store
+        from app.services.memory.memory import get_store
         store = get_store()
         return len(list(store.list_namespaces(prefix=("users", "learning"))))
     except Exception:

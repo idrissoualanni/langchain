@@ -78,8 +78,8 @@ class ScriptedEmbeddingProvider:
 
 def reset_semantic_singleton():
     """Rétablit le provider/retriever par défaut après un test."""
-    from app.context.semantic import provider as prov_mod
-    from app.context.semantic import retriever as retr_mod
+    from app.services.context.semantic import provider as prov_mod
+    from app.services.context.semantic import retriever as retr_mod
 
     prov_mod.set_embedding_provider(None)
     retr_mod.set_semantic_retriever(retr_mod.LocalSemanticRetriever())
@@ -93,7 +93,7 @@ print("\n--- §0 PRÉREQUIS : couche sémantique disponible ---")
 # service est absent, ces tests basculent en échec HONNÊTE : le
 # but est de mesurer la compréhension sémantique RÉELLE (§34 —
 # jamais de faux succès).
-from app.context.router import route_subject  # noqa: E402
+from app.services.context.router import route_subject  # noqa: E402
 
 real_probe = route_subject("une fonction qui se rappelle elle-meme")
 SEMANTIC_REAL = real_probe.semantic_status == "available"
@@ -231,8 +231,8 @@ check(
 # ==================================================================
 print("\n--- §7 SEMANTIC UNAVAILABLE → LEXICAL FALLBACK (§15) ---")
 # ==================================================================
-from app.context.semantic import provider as prov_mod  # noqa: E402
-from app.context.semantic import retriever as retr_mod  # noqa: E402
+from app.services.context.semantic import provider as prov_mod  # noqa: E402
+from app.services.context.semantic import retriever as retr_mod  # noqa: E402
 
 # Requête qui DÉCLENCHE la consultation sémantique (conf lexicale
 # modérée/topic absent) — sinon unavailable serait le comportement
@@ -329,7 +329,7 @@ check(
     f"{r.status}/{r.subject}",
 )
 # le fallback V6.6 reste cohérent avec unknown
-from app.context.fallback import decide_fallback, is_vague_query  # noqa: E402
+from app.services.context.fallback import decide_fallback, is_vague_query  # noqa: E402
 
 fb = decide_fallback("unknown", query="Quel temps fait-il demain ?")
 check(
@@ -402,7 +402,7 @@ try:
     from app.subjects import registry as reg
 
     reg.invalidate()
-    from app.context.semantic.candidates import (
+    from app.services.context.semantic.candidates import (
         build_topic_candidates,
         invalidate_candidates_cache,
     )
@@ -443,7 +443,7 @@ try:
 finally:
     TEST_YAML.unlink(missing_ok=True)
     reg.invalidate()
-    from app.context.semantic.candidates import (
+    from app.services.context.semantic.candidates import (
         invalidate_candidates_cache as _inv,
     )
 
@@ -497,7 +497,7 @@ check(
 # ==================================================================
 print("\n--- §13 DÉDUPLICATION DE CONCEPTS (boucles ≡ loops) ---")
 # ==================================================================
-from app.context.semantic.candidates import (  # noqa: E402
+from app.services.context.semantic.candidates import (  # noqa: E402
     build_topic_candidates,
 )
 
@@ -585,7 +585,7 @@ check(
 # ==================================================================
 print("\n--- §16 PONDÉRATIONS : centralisées, testables (§10) ---")
 # ==================================================================
-from app.context.semantic.hybrid_ranker import (  # noqa: E402
+from app.services.context.semantic.hybrid_ranker import (  # noqa: E402
     get_hybrid_weights,
     rank_candidates,
     reset_hybrid_weights,
@@ -645,7 +645,7 @@ check(
 # ==================================================================
 print("\n--- §18 REGISTRE EMBEDDINGS : déclaratif (addendum) ---")
 # ==================================================================
-from app.context.semantic.embedding_registry import (  # noqa: E402
+from app.services.context.semantic.embedding_registry import (  # noqa: E402
     get_embedding_config,
 )
 
@@ -683,9 +683,9 @@ def _spy(event, level="INFO", message="", **kwargs):
     return _orig_log_event(event, level=level, message=message, **kwargs)
 
 
-import app.context.router as router_mod  # noqa: E402
-import app.context.semantic.retriever as retr_spy  # noqa: E402
-import app.context.semantic.hybrid_ranker as rank_spy  # noqa: E402
+import app.services.context.router as router_mod  # noqa: E402
+import app.services.context.semantic.retriever as retr_spy  # noqa: E402
+import app.services.context.semantic.hybrid_ranker as rank_spy  # noqa: E402
 
 _orig_router_log = router_mod.log_event
 _orig_retr_log = retr_spy.log_event

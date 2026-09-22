@@ -340,7 +340,7 @@ check(
 # ============================================================
 # C. CONTINUATION §16
 # ============================================================
-from app.activity.continuation import (  # noqa: E402
+from app.services.activity.continuation import (  # noqa: E402
     active_from_state,
     continuation_target,
     is_active_activity,
@@ -468,8 +468,8 @@ class StubAgent:
         return {"checkpoint_id": "ckpt-stub"}
 
 
-import app.activity.store as store_mod  # noqa: E402
-from app.activity.store import ACTIVITY_CHANNEL  # noqa: E402
+import app.services.activity.store as store_mod  # noqa: E402
+from app.services.activity.store import ACTIVITY_CHANNEL  # noqa: E402
 
 _stub = StubAgent(
     {

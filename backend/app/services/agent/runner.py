@@ -17,7 +17,7 @@ from app.config import (
 )
 from app.schemas.context import AgentContext
 from app.logging.events import log_event
-from app.models.retry import (
+from app.services.models.retry import (
     invoke_llm_with_retry,
     invoke_llm_with_retry_sync,
 )

@@ -196,7 +196,7 @@ check(
 # Injection directe (le LLM est non deterministe) pour verifier
 # la formule cote serveur via l'API.
 from app.schemas.learning import LearningObservation
-from app.learning.learning_profile import (
+from app.services.learning.learning_profile import (
     read_learning_profile,
     update_profile_from_observation,
 )

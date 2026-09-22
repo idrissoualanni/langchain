@@ -25,7 +25,7 @@ from app.services.agent.normalizer import (  # noqa: E402
     response_from_text,
 )
 from app.schemas.response import AgentResponse  # noqa: E402
-from app.context.fallback import decide_fallback  # noqa: E402
+from app.services.context.fallback import decide_fallback  # noqa: E402
 from app.schemas.context import FallbackDecision  # noqa: E402
 
 print("--- §19 : les 9 types convertibles ---")

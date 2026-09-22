@@ -200,7 +200,7 @@ def _build_prompt_from_context(
     (reconstruction). build_system_prompt assemble ; la LearningDecision
     optionnelle est ajoutée via add_learning_strategy_block.
     """
-    from app.context import build_system_prompt
+    from app.services.context import build_system_prompt
 
     prompt = build_system_prompt(
         core_prompt=core_prompt,
@@ -209,7 +209,7 @@ def _build_prompt_from_context(
         thread_id=thread_id,
     )
     if decision is not None:
-        from app.context.prompt_builder import (
+        from app.services.context.prompt_builder import (
             add_learning_strategy_block,
         )
 
@@ -222,7 +222,7 @@ def _build_context_prompt(
 ) -> str:
     """Chemin HISTORIQUE (non-orchestré) : reconstruction complète."""
     try:
-        from app.context import build_context
+        from app.services.context import build_context
 
         context = build_context(
             user_id=user_id,
@@ -237,7 +237,7 @@ def _build_context_prompt(
         # touche ni au profil ni aux sources (§4/§17/§18).
         decision = None
         try:
-            from app.learning.engine import decide
+            from app.services.learning.engine import decide
 
             decision = decide(
                 context, user_id=user_id, thread_id=thread_id
@@ -330,7 +330,7 @@ def tutor_dynamic_prompt(request: ModelRequest) -> str:
                 _register_context(thread_id, context)
             decision = None
             try:
-                from app.learning.decision import LearningDecision
+                from app.services.learning.decision import LearningDecision
 
                 ld = dict(state).get("learning_decision") or {}
                 if ld:

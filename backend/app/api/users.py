@@ -10,7 +10,7 @@
 # facts de B. Admin : accès complet (§8).
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.agent.memory import (
+from app.services.memory.memory import (
     delete_fact,
     list_facts,
     memory_overview_for_api,

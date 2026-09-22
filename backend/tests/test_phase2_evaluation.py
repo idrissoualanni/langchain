@@ -39,7 +39,7 @@ def check(label: str, cond: bool, detail: str = ""):
 # ============================================================
 from pydantic import ValidationError  # noqa: E402
 
-from app.evaluation.schemas import (  # noqa: E402
+from app.services.evaluation.schemas import (  # noqa: E402
     EvaluationResult,
     Verdict,
     make_evaluation,
@@ -121,7 +121,7 @@ check(
 # ============================================================
 # B. SCORING TEXTUEL DETERMINISTE (text_scoring)
 # ============================================================
-from app.evaluation.text_scoring import (  # noqa: E402
+from app.services.evaluation.text_scoring import (  # noqa: E402
     EVAL_STOP_WORDS,
     content_tokens,
     key_terms,
@@ -215,7 +215,7 @@ check(
 # ============================================================
 # C. EVALUATIONENGINE (§19/§20)
 # ============================================================
-from app.evaluation.engine import (  # noqa: E402
+from app.services.evaluation.engine import (  # noqa: E402
     ENGINE,
     EvaluationEngine,
     evaluate_activity,
@@ -320,7 +320,7 @@ check(
 # ============================================================
 # D. SEPARATION §18 : UPDATE ACTIVITY ADDITIF
 # ============================================================
-from app.evaluation.engine import (  # noqa: E402
+from app.services.evaluation.engine import (  # noqa: E402
     evaluation_to_result_dict,
     update_activity_with_result,
 )
@@ -373,7 +373,7 @@ check(
 # ============================================================
 # E. OBSERVATIONS (§18)
 # ============================================================
-from app.evaluation.observations import (  # noqa: E402
+from app.services.evaluation.observations import (  # noqa: E402
     emit_observation,
     result_to_observation,
 )

@@ -63,7 +63,7 @@ def server_up() -> bool:
 # doit être reconnu (subject=computer_networks)
 # ==================================================================
 print("\n--- §30 paraphrase ---")
-from app.context.router import route_subject  # noqa: E402
+from app.services.context.router import route_subject  # noqa: E402
 
 r = route_subject("Comment communiquent les ordinateurs ?")
 check(
@@ -100,7 +100,7 @@ check(
 # → local insufficient → tentative web
 # ==================================================================
 print("\n--- §32 knowledge absent → web ---")
-from app.context.builder import build_context  # noqa: E402
+from app.services.context.builder import build_context  # noqa: E402
 
 bc = build_context("v65-t", "v65-t", "python async asyncio")
 check(
@@ -125,7 +125,7 @@ if bc.web.results:
 # §33 — WEB UNAVAILABLE : échec simulé → pas de crash, statut propre
 # ==================================================================
 print("\n--- §33 web unavailable/error ---")
-from app.context.web_search import (  # noqa: E402
+from app.services.context.web_search import (  # noqa: E402
     build_web_query,
     rank_web_results,
     source_quality,
@@ -133,7 +133,7 @@ from app.context.web_search import (  # noqa: E402
 )
 
 # Simulation unavailable : clé absente (monkeypatch config)
-import app.context.web_search as ws  # noqa: E402
+import app.services.context.web_search as ws  # noqa: E402
 
 old_key = ws.OLLAMA_API_KEY
 ws.OLLAMA_API_KEY = ""
@@ -214,7 +214,7 @@ check(
 )
 
 # Knowledge ranking : section précise > section générique
-from app.context.knowledge_retriever import (  # noqa: E402
+from app.services.context.knowledge_retriever import (  # noqa: E402
     search_knowledge,
 )
 
@@ -314,7 +314,7 @@ check(
     f"{r.subject}/{r.topic}",
 )
 # get_learning_context ne crée pas de matière si profil diverge
-from app.learning.learning_context import (  # noqa: E402
+from app.services.learning.learning_context import (  # noqa: E402
     get_learning_context,
 )
 

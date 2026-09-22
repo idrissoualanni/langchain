@@ -520,7 +520,7 @@ def test_scrape_lifecycle_cases():
     print("\n--- §53/§54 scraping lifecycle ---")
     from unittest.mock import Mock, patch
     import requests
-    from app.context.web_scraper import fetch_page_content
+    from app.services.context.web_scraper import fetch_page_content
 
     # 53a : page HTML éditoriale → scraped, bruit retiré
     html = (
@@ -530,7 +530,7 @@ def test_scrape_lifecycle_cases():
         "</html>"
     )
     resp = Mock(status_code=200, headers={"Content-Type": "text/html"}, text=html)
-    with patch("app.context.web_scraper.requests.get", return_value=resp):
+    with patch("app.services.context.web_scraper.requests.get", return_value=resp):
         st, txt = fetch_page_content("https://ex.com/art")
     check(
         "53a: HTML → scraped avec contenu propre",
@@ -542,9 +542,9 @@ def test_scrape_lifecycle_cases():
     # 53b : recherche web → le branch scraping est actif (import
     # lazy + appel borné par len(results)) — vérifié en mockant le
     # provider ollama et le scraper pour un SearchResponse enrichi.
-    from app.context.web_search import web_search as ws_call
+    from app.services.context.web_search import web_search as ws_call
     from app.schemas.context import SearchResult, SearchResponse
-    import app.context.web_scraper as scraper_mod
+    import app.services.context.web_scraper as scraper_mod
 
     _raw = type(
         "R",
@@ -563,7 +563,7 @@ def test_scrape_lifecycle_cases():
     with patch(
         "ollama.Client",
     ) as fake_client, patch(
-        "app.context.web_search.rank_web_results"
+        "app.services.context.web_search.rank_web_results"
     ) as fake_rank, patch.object(
         scraper_mod, "fetch_page_content",
         return_value=("scraped", "Contenu EDITE complet et enrichi par le scraping."),
@@ -600,7 +600,7 @@ def test_scrape_lifecycle_cases():
 
     # 54c : cas d'échec contrôlé — timeout → unchanged
     with patch(
-        "app.context.web_scraper.requests.get",
+        "app.services.context.web_scraper.requests.get",
         side_effect=requests.exceptions.Timeout(),
     ):
         st, _ = fetch_page_content("https://slow.ex.com/")
@@ -612,7 +612,7 @@ def test_scrape_lifecycle_cases():
 
     # 54d : PDF (non-HTML) → unchanged
     resp_pdf = Mock(status_code=200, headers={"Content-Type": "application/pdf"})
-    with patch("app.context.web_scraper.requests.get", return_value=resp_pdf):
+    with patch("app.services.context.web_scraper.requests.get", return_value=resp_pdf):
         st, _ = fetch_page_content("https://ex.com/doc.pdf")
     check(
         "54d: PDF → unchanged",
@@ -622,7 +622,7 @@ def test_scrape_lifecycle_cases():
 
     # 54e : HTTP 403 → unchanged
     resp403 = Mock(status_code=403, headers={"Content-Type": "text/html"}, text="")
-    with patch("app.context.web_scraper.requests.get", return_value=resp403):
+    with patch("app.services.context.web_scraper.requests.get", return_value=resp403):
         st, _ = fetch_page_content("https://ex.com/forbidden")
     check(
         "54e: 403 → unchanged (échec partiel toléré)",
@@ -632,7 +632,7 @@ def test_scrape_lifecycle_cases():
 
     # 54f : échec partiel multi-URL — une bloquée, une OK
     from unittest.mock import patch as _patch
-    from app.context.web_scraper import scrape_results_snapshot
+    from app.services.context.web_scraper import scrape_results_snapshot
 
     r_ok = SearchResult(
         title="A",
@@ -667,7 +667,7 @@ def test_scrape_lifecycle_cases():
             return respA
         raise requests.exceptions.ConnectionError("boom")
 
-    with _patch("app.context.web_scraper.requests.get", side_effect=fake_get):
+    with _patch("app.services.context.web_scraper.requests.get", side_effect=fake_get):
         out = scrape_results_snapshot([r_ok, r_bad])
     check(
         "54f: échec partiel → 1 scrapée + 1 conservée (aucun crash)",
@@ -685,7 +685,7 @@ def test_scrape_lifecycle_cases():
 
 def test_document_target_detection():
     print("\n--- §55 détection cible documentaire ---")
-    from app.context.builder import _query_targets_document as d
+    from app.services.context.builder import _query_targets_document as d
     check("55a: 'mon document' détecté", d("Évalue-moi sur mon document") is True)
     check("55b: 'mon cours' détecté", d("Résume mon cours de python") is True)
     check("55c: 'mes notes' détecté", d("Tri mes notes sur la photosynthèse") is True)

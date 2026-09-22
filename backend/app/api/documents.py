@@ -17,15 +17,15 @@ from app.schemas import (
     DocumentUploadCreate,
 )
 from app.auth.resolver import CurrentUser, get_current_user
-from app.rag.chunker import chunk_text
-from app.rag.documents import (
+from app.services.documents.chunker import chunk_text
+from app.services.documents.documents import (
     MAX_FILE_BYTES,
     DocumentExtractError,
     extract_text,
     infer_content_type,
 )
-from app.rag.retriever import DocumentRetriever
-from app.rag.vector_store import (
+from app.services.documents.retriever import DocumentRetriever
+from app.services.documents.vector_store import (
     RagStoreError,
     get_rag_store,
 )

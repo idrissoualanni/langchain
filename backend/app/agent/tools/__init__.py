@@ -1,7 +1,7 @@
 # Tools de l'agent — log_event structuré
 from langchain_core.tools import tool
 
-from app.agent.memory import (
+from app.services.memory.memory import (
     delete_fact,
     list_facts,
     read_profile,
@@ -30,7 +30,7 @@ def recherche_web(
         tool_name="recherche_web",
     )
 
-    from app.context.web_search import web_search
+    from app.services.context.web_search import web_search
 
     response = web_search(
         user_query=query,

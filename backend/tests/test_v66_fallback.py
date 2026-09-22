@@ -17,7 +17,7 @@ def check(label, cond, detail=""):
     )
 
 
-from app.context.fallback import (  # noqa: E402
+from app.services.context.fallback import (  # noqa: E402
     decide_fallback,
     fallback_note_for_prompt,
     is_vague_query,
@@ -224,7 +224,7 @@ check(
 )
 
 # §10 : candidates pour clarification ambiguous
-from app.context.builder import build_context  # noqa: E402
+from app.services.context.builder import build_context  # noqa: E402
 
 bc = build_context("v66-t", "v66-t", "Parle-moi des reseaux.")
 check(

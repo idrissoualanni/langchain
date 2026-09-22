@@ -14,12 +14,12 @@
 from langchain_core.tools import tool
 
 from app.logging.events import log_event
-from app.rag.documents import (
+from app.services.documents.documents import (
     DocumentExtractError,
     extract_text,
 )
-from app.rag.retriever import DocumentRetriever
-from app.rag.vector_store import RagStoreError, get_rag_store
+from app.services.documents.retriever import DocumentRetriever
+from app.services.documents.vector_store import RagStoreError, get_rag_store
 
 
 def _retriever() -> DocumentRetriever:
@@ -66,7 +66,7 @@ def upload_document(
         return f"Impossible d'indexer le document : {exc}"
 
     try:
-        from app.rag.chunker import chunk_text
+        from app.services.documents.chunker import chunk_text
 
         chunks = chunk_text(text)
         record = get_rag_store().add_document(

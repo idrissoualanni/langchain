@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from langchain_core.tools import tool
 
 from app.services.sandbox.executor import execute_code, CodeExecutionResult
-from app.activity.store import save_activity
+from app.services.activity.store import save_activity
 from app.schemas.activity import ACTIVITY_TYPE_EXERCISE, ActivityContract
 
 

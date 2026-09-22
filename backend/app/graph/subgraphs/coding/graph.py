@@ -48,8 +48,8 @@ import time
 
 from app.agent.tools.coding.tools import get_coding_tools, execute_code_tool, analyze_code_tool, explain_error_tool
 from app.services.sandbox.executor import execute_code
-from app.learning.engine import decide
-from app.learning.decision import LearningDecision, LearningAction
+from app.services.learning.engine import decide
+from app.services.learning.decision import LearningDecision, LearningAction
 from app.observability.langsmith_client import traceable_agent_action
 
 

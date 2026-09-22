@@ -29,16 +29,16 @@ def check(label, cond, detail=""):
     )
 
 
-from app.context.builder import build_context  # noqa: E402
-from app.context.prompt_builder import build_system_prompt  # noqa: E402
+from app.services.context.builder import build_context  # noqa: E402
+from app.services.context.prompt_builder import build_system_prompt  # noqa: E402
 from app.schemas.context import BuiltContext  # noqa: E402
-from app.context.semantic.provider import (  # noqa: E402
+from app.services.context.semantic.provider import (  # noqa: E402
     LocalHashEmbeddingProvider,
     set_embedding_provider,
 )
-from app.rag.chunker import chunk_text  # noqa: E402
-from app.rag.retriever import DocumentRetriever  # noqa: E402
-from app.rag.vector_store import (  # noqa: E402
+from app.services.documents.chunker import chunk_text  # noqa: E402
+from app.services.documents.retriever import DocumentRetriever  # noqa: E402
+from app.services.documents.vector_store import (  # noqa: E402
     RagStore,
     reset_rag_store,
 )
@@ -57,7 +57,7 @@ def fresh_store():
 
 def build(user_id, query):
     with mock.patch(
-        "app.rag.retriever.DocumentRetriever",
+        "app.services.documents.retriever.DocumentRetriever",
         lambda: DocumentRetriever(store=fresh_store()),
     ):
         b = build_context(
@@ -118,7 +118,7 @@ record = store.add_document(
 _ = record  # doc_id inutilisé directement
 
 with mock.patch(
-    "app.rag.retriever.DocumentRetriever",
+    "app.services.documents.retriever.DocumentRetriever",
     lambda: DocumentRetriever(store=store),
 ):
     b = build_context(
@@ -159,7 +159,7 @@ check(
 
 print("--- C. Docs existants mais question hors sujet → rien ---")
 with mock.patch(
-    "app.rag.retriever.DocumentRetriever",
+    "app.services.documents.retriever.DocumentRetriever",
     lambda: DocumentRetriever(store=store),
 ):
     b = build_context(
@@ -181,7 +181,7 @@ check(
 
 print("--- D. Isolation user_id stricte (pas de fuite cross-user) ---")
 with mock.patch(
-    "app.rag.retriever.DocumentRetriever",
+    "app.services.documents.retriever.DocumentRetriever",
     lambda: DocumentRetriever(store=store),
 ):
     b = build_context(
@@ -204,7 +204,7 @@ def boom_search(**kwargs):
 
 
 with mock.patch(
-    "app.rag.retriever.DocumentRetriever",
+    "app.services.documents.retriever.DocumentRetriever",
     lambda: mock.Mock(
         search_documents=mock.Mock(side_effect=boom_search),
     ),

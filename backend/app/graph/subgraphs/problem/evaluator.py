@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 
-from app.evaluation.engine import ENGINE
+from app.services.evaluation.engine import ENGINE
 from app.schemas.problem import (
     ErrorKind,
     SolutionStep,

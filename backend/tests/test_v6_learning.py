@@ -25,7 +25,7 @@ from app.schemas.learning import (
     LearningObservation,
     LearningProfile,
 )
-from app.learning.learning_profile import (
+from app.services.learning.learning_profile import (
     create_learning_goal,
     list_observations,
     read_learning_profile,
@@ -33,7 +33,7 @@ from app.learning.learning_profile import (
     update_profile_from_observation,
     validate_observation_targets,
 )
-from app.learning.learning_context import get_learning_context
+from app.services.learning.learning_context import get_learning_context
 
 # ============================================================
 # Test A - nouveau profil : user sans Learning Profile
@@ -188,7 +188,7 @@ check(
 # ============================================================
 # Test I - Context Builder : contexte learning pertinent
 # ============================================================
-from app.context import build_context, build_system_prompt
+from app.services.context import build_context, build_system_prompt
 from app.services.agent.prompts import CORE_PROMPT
 
 ctx = build_context(
@@ -382,7 +382,7 @@ check(
 )
 
 # - namespace distinct de User Memory (5/6)
-from app.learning.learning_profile import _learning_namespace
+from app.services.learning.learning_profile import _learning_namespace
 
 check(
     "5/6: namespace learning distinct du namespace profile",
@@ -393,7 +393,7 @@ check(
 import importlib
 
 try:
-    importlib.import_module("app.learning.learning_engine")
+    importlib.import_module("app.services.learning.learning_engine")
     engine_exists = True
 except ImportError:
     engine_exists = False

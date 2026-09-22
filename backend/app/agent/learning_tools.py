@@ -1,8 +1,8 @@
 
 from langchain_core.tools import tool
 
-from app.learning.learning_context import get_learning_context
-from app.learning.learning_profile import (
+from app.services.learning.learning_context import get_learning_context
+from app.services.learning.learning_profile import (
     create_learning_goal,
     get_topic_state,
     read_learning_profile,

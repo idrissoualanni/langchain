@@ -13,8 +13,8 @@ from app.schemas import (
     SubjectOut,
     TopicOut,
 )
-from app.context import build_context
-from app.context.prompt_builder import build_system_prompt
+from app.services.context import build_context
+from app.services.context.prompt_builder import build_system_prompt
 from app.db.connections import init_db
 from app.db.users import get_user
 from app.subjects.registry import get_subject, list_subjects
@@ -112,12 +112,12 @@ def build_context_preview(
     # (ce que le LLM verra réellement au run — cohérence §31).
     preview_prompt = prompt
     try:
-        from app.learning.engine import decide
+        from app.services.learning.engine import decide
 
         d = decide(
             context, user_id=payload.user_id, thread_id=""
         )
-        from app.context.prompt_builder import (
+        from app.services.context.prompt_builder import (
             add_learning_strategy_block,
         )
 

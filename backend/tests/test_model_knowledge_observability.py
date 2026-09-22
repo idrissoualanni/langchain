@@ -17,7 +17,7 @@ import os
 
 def test_model_registry_get_config():
     """Test: Récupérer une configuration de modèle."""
-    from app.models.registry import get_model_config
+    from app.services.models.registry import get_model_config
     
     config = get_model_config("default")
     # Peut être None si pas configuré ou un ModelConfig
@@ -26,7 +26,7 @@ def test_model_registry_get_config():
 
 def test_model_registry_list_all():
     """Test: Lister tous les modèles."""
-    from app.models.registry import list_all_model_configs
+    from app.services.models.registry import list_all_model_configs
     
     models = list_all_model_configs()
     assert isinstance(models, list)
@@ -35,7 +35,7 @@ def test_model_registry_list_all():
 
 def test_model_registry_save_update():
     """Test: Sauvegarder/mettre à jour un modèle."""
-    from app.models.schemas import ModelConfig, ModelCapabilities
+    from app.services.models.schemas import ModelConfig, ModelCapabilities
     
     config = ModelConfig(
         id="test-model",
@@ -46,7 +46,7 @@ def test_model_registry_save_update():
         capabilities=ModelCapabilities(),
     )
     
-    from app.models.registry import save_model_config
+    from app.services.models.registry import save_model_config
     saved = save_model_config(config)
     assert saved is True or saved is False
     print("✓ test_model_registry_save_update")
@@ -58,7 +58,7 @@ def test_model_registry_save_update():
 
 def test_model_resolver_default_purpose():
     """Test: Résolution du modèle par défaut."""
-    from app.models.resolver import resolve_model_for_purpose
+    from app.services.models.resolver import resolve_model_for_purpose
     
     result = resolve_model_for_purpose(purpose="default")
     # Peut retourner None ou un ModelPurposeResult
@@ -67,7 +67,7 @@ def test_model_resolver_default_purpose():
 
 def test_model_resolver_coding_purpose():
     """Test: Résolution du modèle coding."""
-    from app.models.resolver import resolve_model_for_purpose
+    from app.services.models.resolver import resolve_model_for_purpose
     
     result = resolve_model_for_purpose(purpose="coding")
     print("✓ test_model_resolver_coding_purpose")
@@ -75,7 +75,7 @@ def test_model_resolver_coding_purpose():
 
 def test_model_resolver_unknown_purpose():
     """Test: Résolution avec purpose inconnu."""
-    from app.models.resolver import resolve_model_for_purpose
+    from app.services.models.resolver import resolve_model_for_purpose
     
     result = resolve_model_for_purpose(purpose="unknown_purpose_xyz")
     # Doit retourner None ou fallback to default
@@ -84,8 +84,8 @@ def test_model_resolver_unknown_purpose():
 
 def test_model_resolver_disabled_model():
     """Test: Modèle désactivé non retourné."""
-    from app.models.schemas import ModelConfig, ModelCapabilities
-    from app.models.registry import save_model_config
+    from app.services.models.schemas import ModelConfig, ModelCapabilities
+    from app.services.models.registry import save_model_config
     
     # Créer un modèle désactivé
     config = ModelConfig(
@@ -98,7 +98,7 @@ def test_model_resolver_disabled_model():
     )
     save_model_config(config)
     
-    from app.models.resolver import resolve_model_for_purpose
+    from app.services.models.resolver import resolve_model_for_purpose
     # Le resolver ne doit pas retourner un modèle désactivé
     print("✓ test_model_resolver_disabled_model")
 
@@ -109,7 +109,7 @@ def test_model_resolver_disabled_model():
 
 def test_knowledge_access_public():
     """Test: Accès public autorisé."""
-    from app.knowledge_access.resolver import check_access
+    from app.services.knowledge.resolver import check_access
     
     allowed_result = check_access(
         knowledge_base_id="public_kb",
@@ -123,7 +123,7 @@ def test_knowledge_access_public():
 
 def test_knowledge_access_private_owner():
     """Test: Accès private autorisé au propriétaire."""
-    from app.knowledge_access.resolver import check_access
+    from app.services.knowledge.resolver import check_access
     
     # Note: La logique actuelle vérifie les règles explicites
     # Pour un test complet, il faudrait créer une règle d'accès
@@ -138,7 +138,7 @@ def test_knowledge_access_private_owner():
 
 def test_knowledge_access_private_non_owner():
     """Test: Accès private refusé au non-propriétaire."""
-    from app.knowledge_access.resolver import check_access
+    from app.services.knowledge.resolver import check_access
     
     allowed_result = check_access(
         knowledge_base_id="private_kb",
@@ -153,7 +153,7 @@ def test_knowledge_access_private_non_owner():
 
 def test_knowledge_access_group_member():
     """Test: Accès group autorisé au membre."""
-    from app.knowledge_access.resolver import check_access
+    from app.services.knowledge.resolver import check_access
     
     allowed_result = check_access(
         knowledge_base_id="group_kb",
@@ -166,7 +166,7 @@ def test_knowledge_access_group_member():
 
 def test_knowledge_access_user_scope():
     """Test: Accès user scope."""
-    from app.knowledge_access.resolver import check_access
+    from app.services.knowledge.resolver import check_access
     
     allowed_result = check_access(
         knowledge_base_id="user_kb",
@@ -179,7 +179,7 @@ def test_knowledge_access_user_scope():
 
 def test_knowledge_access_admin_override():
     """Test: Admin override."""
-    from app.knowledge_access.resolver import check_access
+    from app.services.knowledge.resolver import check_access
     
     allowed_result = check_access(
         knowledge_base_id="any_kb",
@@ -193,7 +193,7 @@ def test_knowledge_access_admin_override():
 
 def test_knowledge_access_cross_user_isolation():
     """Test: Isolation cross-user."""
-    from app.knowledge_access.resolver import check_access
+    from app.services.knowledge.resolver import check_access
     
     # User A ne peut pas accéder aux connaissances privées de User B
     allowed_a = check_access(
@@ -217,7 +217,7 @@ def test_knowledge_access_cross_user_isolation():
 
 def test_knowledge_access_cross_group_isolation():
     """Test: Isolation cross-group."""
-    from app.knowledge_access.resolver import check_access
+    from app.services.knowledge.resolver import check_access
     
     allowed = check_access(
         knowledge_base_id="group_b_kb",

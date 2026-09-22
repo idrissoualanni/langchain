@@ -503,7 +503,7 @@ check(
 print("\n--- §27 : canonicité (build_context → 1 BuiltContext)")
 # ==================================================================
 
-from app.context.builder import build_context  # noqa: E402
+from app.services.context.builder import build_context  # noqa: E402
 
 bc_real = build_context(
     user_id="c-contracts-user",
@@ -551,7 +551,7 @@ print("\n--- §28 : non-duplication (le futur engine ne "
 # ==================================================================
 
 import inspect  # noqa: E402
-from app.context import builder as _builder  # noqa: E402
+from app.services.context import builder as _builder  # noqa: E402
 
 src = inspect.getsource(_builder)
 check(

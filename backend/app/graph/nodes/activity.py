@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.activity.continuation import is_active_activity, next_step_hint
+from app.services.activity.continuation import is_active_activity, next_step_hint
 from app.schemas.activity import ActivityContract, activity_to_contract
 from app.schemas.workflow import ActivityResult
 from app.logging.events import log_event

@@ -25,7 +25,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import StateGraph
 from langgraph.types import RetryPolicy
 
-from app.agent.memory import get_store
+from app.services.memory.memory import get_store
 from app.config import (
     AGENT_RECURSION_LIMIT,
     CHECKPOINTS_DB_PATH,
@@ -47,7 +47,7 @@ from app.agent import tools as tools_module
 all_tools = tools_module.all_tools
 from app.schemas.context import AgentContext
 from app.logging.events import log_event
-from app.models.retry import is_transient_error
+from app.services.models.retry import is_transient_error
 
 _conn: sqlite3.Connection | None = None
 _agent = None
@@ -76,7 +76,7 @@ def get_agent(model=None):
     if model:
         model = str(model).strip()
         if model and model != MODEL_NAME:
-            from app.models.registry import (
+            from app.services.models.registry import (
                 find_model_config,
                 get_default_model_id,
             )
@@ -201,13 +201,13 @@ def _resolve_llm_and_tools(model_name):
     - gate tools : supports_tools=False → [] + événement documenté
     - modèle défaut indisponible → ModelGatewayError contrôlé
     """
-    from app.models.gateway import (
+    from app.services.models.gateway import (
         ModelGatewayError,
         create_llm_from_config,
         get_llm_for_purpose,
     )
-    from app.models.registry import find_model_config
-    from app.models.resolver import resolve_model_for_purpose
+    from app.services.models.registry import find_model_config
+    from app.services.models.resolver import resolve_model_for_purpose
 
     if model_name:
         config = find_model_config(model_name)

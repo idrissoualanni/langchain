@@ -25,7 +25,7 @@ def check(label, cond, detail=""):
     )
 
 
-from app.context.builder import build_context  # noqa: E402
+from app.services.context.builder import build_context  # noqa: E402
 
 bc = build_context(
     user_id="v68-final",
@@ -184,11 +184,11 @@ import importlib.util  # noqa: E402
 # V6.8 (aucun engine AVANT l'unification des contrats) devient :
 # l'engine est une COUCHE DE DÉCISION PURE (§4.1) — elle n'écrit
 # JAMAIS le profil et ne recrée NI router NI recherche.
-engine_spec = importlib.util.find_spec("app.learning.engine")
+engine_spec = importlib.util.find_spec("app.services.learning.engine")
 if engine_spec is not None:
     import inspect  # noqa: E402
 
-    from app.learning import engine as _engine  # noqa: E402
+    from app.services.learning import engine as _engine  # noqa: E402
 
     _src = inspect.getsource(_engine)
     check(

@@ -46,7 +46,7 @@ from livekit.agents import (
 
 from livekit.plugins import silero
 
-from app.agent.memory import (
+from app.services.memory.memory import (
     list_facts,
     memory_overview_for_api,
     read_profile,

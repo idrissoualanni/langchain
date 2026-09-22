@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.auth.resolver import CurrentUser, get_current_user
 from app.db.connections import init_db
 from app.db.users import get_user
-from app.learning.learning_profile import (
+from app.services.learning.learning_profile import (
     list_observations,
     read_learning_profile,
 )

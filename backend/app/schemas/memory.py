@@ -27,7 +27,7 @@ def _check_category(v: str | None) -> str | None:
     app.schemas ne doit pas dépendre du service mémoire au import)."""
     if v is None:
         return None
-    from app.agent.memory import FACT_CATEGORIES
+    from app.services.memory.memory import FACT_CATEGORIES
 
     if v not in FACT_CATEGORIES:
         raise ValueError(

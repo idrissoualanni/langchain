@@ -271,7 +271,7 @@ check(
 )
 
 # Builder réel : budget appliqué sans rien casser
-from app.context.builder import build_context  # noqa: E402
+from app.services.context.builder import build_context  # noqa: E402
 
 bc = build_context(
     "v68-t", "v68-t", "Explique-moi les boucles python"

@@ -27,8 +27,8 @@ def _clean_purpose_env(monkeypatch):
     """Les tests de résolution doivent être déterministes : purge de
     tous les env <PURPOSE>_MODEL_ID qui pourraient pointer vers un
     modèle qui n'existe pas dans le registry de test."""
-    from app.models.resolver import set_global_assignment
-    from app.models.resolver import _global_assignments
+    from app.services.models.resolver import set_global_assignment
+    from app.services.models.resolver import _global_assignments
 
     _global_assignments.clear()
     for purpose in ("DEFAULT", "CODING", "RESEARCH", "FAST", "REASONING", "VISION"):
@@ -43,7 +43,7 @@ def _clean_purpose_env(monkeypatch):
 class TestResolver:
     def test_default_model_is_resolved_enabled(self):
         """Le modèle défaut (registry models.yaml) est résolu et enabled."""
-        from app.models.resolver import resolve_model_for_purpose
+        from app.services.models.resolver import resolve_model_for_purpose
 
         result = resolve_model_for_purpose("default")
         assert result.is_enabled is True
@@ -53,7 +53,7 @@ class TestResolver:
 
     def test_default_model_supports_tools(self):
         """Le modèle défaut du registry supporte les tools (gate §4)."""
-        from app.models.resolver import resolve_model_for_purpose
+        from app.services.models.resolver import resolve_model_for_purpose
 
         result = resolve_model_for_purpose("default")
         assert result.config.capabilities.supports_tools is True
@@ -61,7 +61,7 @@ class TestResolver:
     def test_capability_mismatch_disables_purpose(self):
         """Un modèle SANS vision ne peut pas satisfaire purpose='vision'
         → is_enabled=False + reason explicite (jamais de config bidon)."""
-        from app.models.resolver import resolve_model_for_purpose
+        from app.services.models.resolver import resolve_model_for_purpose
 
         result = resolve_model_for_purpose("default", required_capabilities=["vision"])
         assert result.is_enabled is False
@@ -71,7 +71,7 @@ class TestResolver:
     def test_disabled_model_never_selected(self):
         """Un modèle désactivé n'est JAMAIS sélectionnable, même en
         assignment global explicite → repli défaut tracé."""
-        from app.models.resolver import resolve_model_for_purpose, set_global_assignment
+        from app.services.models.resolver import resolve_model_for_purpose, set_global_assignment
 
         set_global_assignment("fast", "disabled-test-model")
         result = resolve_model_for_purpose("fast")
@@ -81,7 +81,7 @@ class TestResolver:
 
     def test_unknown_purpose_falls_back_to_default(self):
         """Purpose inconnu → repli déterministe sur le défaut (traçé)."""
-        from app.models.resolver import resolve_model_for_purpose
+        from app.services.models.resolver import resolve_model_for_purpose
 
         result = resolve_model_for_purpose("workflow-bogus")
         assert result.is_enabled is True
@@ -90,7 +90,7 @@ class TestResolver:
 
     def test_supported_purposes_taxonomy(self):
         """La taxonomie des purposes est exactement celle du contrat."""
-        from app.models.resolver import SUPPORTED_PURPOSES
+        from app.services.models.resolver import SUPPORTED_PURPOSES
 
         assert SUPPORTED_PURPOSES == (
             "default", "coding", "research", "fast", "reasoning", "vision",
@@ -98,7 +98,7 @@ class TestResolver:
 
     def test_required_capabilities_mapping(self):
         """coding/research exigent tools, vision exige vision (§4)."""
-        from app.models.resolver import required_capabilities_for_purpose
+        from app.services.models.resolver import required_capabilities_for_purpose
 
         assert required_capabilities_for_purpose("coding") == ["tools"]
         assert required_capabilities_for_purpose("research") == ["tools"]
@@ -107,7 +107,7 @@ class TestResolver:
 
     def test_get_model_for_subgraph_maps_purposes(self):
         """Le mapping subgraph → purpose suit le contrat."""
-        from app.models.resolver import (
+        from app.services.models.resolver import (
             _CAPABILITIES_FOR_PURPOSE,
             required_capabilities_for_purpose,
         )
@@ -124,7 +124,7 @@ class TestGateway:
     def test_get_llm_for_purpose_returns_chat_model(self):
         """Le gateway instancie LE LLM du modèle résolu (ChatOllama
         pour le provider ollama — plus AUCUN ChatOllama dans le graph)."""
-        from app.models.gateway import get_llm_for_purpose
+        from app.services.models.gateway import get_llm_for_purpose
 
         llm = get_llm_for_purpose("default")
         assert llm is not None
@@ -133,27 +133,27 @@ class TestGateway:
     def test_create_llm_from_config_disabled_raises(self):
         """create_llm_from_config sur un modèle désactivé → erreur
         contrôlée (le champ enabled est RESPECTÉ au point d'usage)."""
-        from app.models.gateway import ModelGatewayError, create_llm_from_config
+        from app.services.models.gateway import ModelGatewayError, create_llm_from_config
 
         with pytest.raises(ModelGatewayError):
             create_llm_from_config("disabled-test-model")
 
     def test_create_llm_from_config_unknown_raises(self):
         """Modèle inconnu → ModelGatewayError (jamais de config bidon)."""
-        from app.models.gateway import ModelGatewayError, create_llm_from_config
+        from app.services.models.gateway import ModelGatewayError, create_llm_from_config
 
         with pytest.raises(ModelGatewayError):
             create_llm_from_config("model-inconnu")
 
     def test_gateway_error_is_controlled_runtime_error(self):
-        from app.models.gateway import ModelGatewayError
+        from app.services.models.gateway import ModelGatewayError
 
         assert issubclass(ModelGatewayError, RuntimeError)
 
     def test_no_secret_placeholder_in_gateway(self):
         """Le placeholder sk-litellm-placeholder a été supprimé ; le
         gateway n'expose AUCUNE valeur de clé dans son code."""
-        from app.models import gateway
+        from app.services.models import gateway
 
         source = sys.modules[gateway.__name__].__file__
         with open(source, encoding="utf-8") as f:
@@ -167,8 +167,8 @@ class TestGateway:
         """Pas de fallback silencieux : un provider inconnu lève une
         erreur contrôlée (ModelGatewayError) — jamais un ChatOllama
         en dur avec un provider étranger."""
-        from app.models.gateway import ModelGatewayError, _get_direct_llm
-        from app.models.registry import get_model_config
+        from app.services.models.gateway import ModelGatewayError, _get_direct_llm
+        from app.services.models.registry import get_model_config
 
         config = get_model_config("default")
         config.provider = "provider-inconnu"
@@ -266,13 +266,13 @@ class TestLimits:
 
 class TestRetryBounded:
     def test_timeout_is_transient(self):
-        from app.models.retry import is_transient_error
+        from app.services.models.retry import is_transient_error
 
         assert is_transient_error(TimeoutError()) is True
         assert is_transient_error(ConnectionError()) is True
 
     def test_status_code_classification(self):
-        from app.models.retry import is_transient_error
+        from app.services.models.retry import is_transient_error
 
         class _Http:
             def __init__(self, status):
@@ -289,7 +289,7 @@ class TestRetryBounded:
 
     def test_validation_error_never_retried(self):
         """Validation/authorization → NON-transitoire (pas de retry)."""
-        from app.models.retry import is_transient_error
+        from app.services.models.retry import is_transient_error
 
         assert is_transient_error(ValueError("message invalide")) is False
         assert is_transient_error(TypeError("signature invalide")) is False
@@ -298,7 +298,7 @@ class TestRetryBounded:
     def test_sync_retry_never_retries_non_transient(self):
         """max_attempts borné : une erreur NON transitoire ne déclenche
         AUCUN retry (1 seul appel puis relève)."""
-        from app.models.retry import invoke_llm_with_retry_sync
+        from app.services.models.retry import invoke_llm_with_retry_sync
 
         calls = []
 
@@ -314,7 +314,7 @@ class TestRetryBounded:
 
     def test_sync_retry_bounded_to_max_attempts(self):
         """Erreur transitoire → retries bornés exactement à max_attempts."""
-        from app.models.retry import invoke_llm_with_retry_sync
+        from app.services.models.retry import invoke_llm_with_retry_sync
 
         calls = []
 

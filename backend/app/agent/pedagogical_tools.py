@@ -48,7 +48,7 @@ from app.schemas.activity import (
     RESPONSE_TYPE_SHORT_ANSWER,
     new_activity_id,
 )
-from app.context.knowledge_retriever import (
+from app.services.context.knowledge_retriever import (
     KNOWLEDGE_DIR,
     _split_sections,
 )
@@ -94,7 +94,7 @@ def _find_section(subject: str, topic: str) -> dict | None:
     # « _intro » est ambigu (présent dans chaque fichier) :
     # on ne le résout JAMAIS en section d'exercice — le LLM est
     # guidé vers les topics réels (§38 : pas d'invention).
-    from app.context.knowledge_retriever import resolve_topic_source
+    from app.services.context.knowledge_retriever import resolve_topic_source
 
     resolved = resolve_topic_source(subject, topic)
     src_yaml_resolved = resolved[0] if resolved else None
@@ -673,8 +673,8 @@ def evaluate_answer(
     # Formule canonique unique (evaluation.text_scoring.score_course_answer) :
     # le tool n'encapsule plus sa propre copie du scoring. covered/missing
     # restent disponibles pour le message de retour (mêmes valeurs).
-    from app.evaluation.engine import evaluate_activity
-    from app.evaluation.observations import emit_observation
+    from app.services.evaluation.engine import evaluate_activity
+    from app.services.evaluation.observations import emit_observation
 
     eval_result = evaluate_activity(
         activity_id=activity.get("activity_id", ""),
@@ -732,7 +732,7 @@ def evaluate_answer(
         }
         # §20 : résultat structuré stocké (activity["result"], ADDITIF) —
         # la shape V5.2 (score/verdict/covered/missing) reste inchangée.
-        from app.evaluation.engine import update_activity_with_result
+        from app.services.evaluation.engine import update_activity_with_result
 
         update_activity_with_result(activity, eval_result)
 

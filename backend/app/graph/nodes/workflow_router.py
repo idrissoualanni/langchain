@@ -69,7 +69,7 @@ def _capability_gate_reason(workflow: str) -> str | None:
     if requirement is None:
         return None
 
-    from app.models.resolver import resolve_model_for_purpose
+    from app.services.models.resolver import resolve_model_for_purpose
 
     result = resolve_model_for_purpose(
         purpose=requirement["purpose"],

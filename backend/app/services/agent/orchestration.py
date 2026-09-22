@@ -24,10 +24,10 @@
 # Contrat des nodes : (state, config) → dict de canaux à écrire.
 # Le state reçu est un Mapping (CustomAgentState, MessagesState
 # dict-grade) — accès par clé, jamais par attribut.
-from app.context import retrieve_sources
-from app.context.builder import build_context
-from app.context.fallback import decide_fallback
-from app.context.router import route_subject
+from app.services.context import retrieve_sources
+from app.services.context.builder import build_context
+from app.services.context.fallback import decide_fallback
+from app.services.context.router import route_subject
 from app.schemas.context import (
     BuiltContext,
     FallbackDecision,
@@ -222,8 +222,8 @@ def learning_node(state, config=None) -> dict:
     Appel réel : decide(built_context). La décision est persistée
     en dict et consommée par le dynamic_prompt (add_learning_strategy_block).
     """
-    from app.learning.decision import LearningDecision
-    from app.learning.engine import decide
+    from app.services.learning.decision import LearningDecision
+    from app.services.learning.engine import decide
 
     context = BuiltContext.model_validate(
         state.get("built_context") or {}

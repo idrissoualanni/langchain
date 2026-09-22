@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from typing import Literal
 
 from app.auth.resolver import CurrentUser, require_admin
-from app.knowledge_access.resolver import (
+from app.services.knowledge.resolver import (
     KnowledgeBaseInfo,
     KnowledgeAccessRule,
     AccessResult,

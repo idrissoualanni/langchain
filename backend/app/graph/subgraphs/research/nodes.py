@@ -77,7 +77,7 @@ def _default_web_search(
     """Recherche web réelle (app.context.web_search — chaîne existante,
     ranking + scraping intégrés). Résout l'import à l'appel pour éviter
     tout cycle d'import au module."""
-    from app.context.web_search import web_search
+    from app.services.context.web_search import web_search
 
     return web_search(
         query,
@@ -92,7 +92,7 @@ def _default_web_search(
 
 def _default_scrape(url: str, user_id: str = "", thread_id: str = ""):
     """Scraping de secours (app.context.web_scraper, fail-safe)."""
-    from app.context.web_scraper import fetch_page_content
+    from app.services.context.web_scraper import fetch_page_content
 
     return fetch_page_content(url, user_id=user_id, thread_id=thread_id)
 

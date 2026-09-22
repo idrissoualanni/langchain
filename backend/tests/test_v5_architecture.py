@@ -17,7 +17,7 @@ def check(label, cond, detail=""):
 # ============================================================
 # Â§54 â€” ROUTING STRUCTURÃ‰ (RoutingResult pydantic validÃ©)
 # ============================================================
-from app.context.router import route_subject
+from app.services.context.router import route_subject
 from app.schemas.context import RoutingResult
 
 r = route_subject("Explique-moi les fonctions Python.")
@@ -149,7 +149,7 @@ check(
 )
 
 # Knowledge retriever la trouve aussi
-from app.context.knowledge_retriever import search_knowledge
+from app.services.context.knowledge_retriever import search_knowledge
 
 k = search_knowledge("astronomy", "etoiles", "la vie des etoiles")
 check(
@@ -193,13 +193,13 @@ check(
 # ============================================================
 # Â§30 â€” BUILT CONTEXT STRUCTURÃ‰
 # ============================================================
-from app.context import build_context
+from app.services.context import build_context
 from app.schemas.context import BuiltContext
 
 import uuid
 
 # user de test avec faits Â§45
-from app.agent.memory import get_store, save_fact
+from app.services.memory.memory import get_store, save_fact
 
 TEST_USER = "u-v5-" + uuid.uuid4().hex[:8]
 # note: pas un UUID valide pour le store ? le store accepte str.
@@ -436,7 +436,7 @@ check(
 # ============================================================
 # Â§55 â€” DYNAMIC PROMPT (changement mÃ©moire visible au prochain appel)
 # ============================================================
-from app.context import build_system_prompt
+from app.services.context import build_system_prompt
 from app.services.agent.prompts import CORE_PROMPT
 
 p1 = build_system_prompt(CORE_PROMPT, ctx_a, TEST_USER, "t")
