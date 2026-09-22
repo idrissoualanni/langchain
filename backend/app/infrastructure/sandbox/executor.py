@@ -202,8 +202,12 @@ class SecureSandbox:
                     error_type="write_error"
                 )
             
-            # Préparer la commande
-            cmd = ["python3", "-u", str(script_path)]
+            # Préparer la commande — interpréteur résolu cross-platform.
+            # Windows : `python` (le stub Microsoft Store `python3` est un
+            # their trap — il échoue à l'exécution réelle) ;
+            # POSIX : `python3`.
+            interpreter = "python" if os.name == "nt" else "python3"
+            cmd = [interpreter, "-u", str(script_path)]
             env = os.environ.copy()
             
             # Nettoyer l'environnement (pas de secrets)
@@ -220,7 +224,11 @@ class SecureSandbox:
                     stdin=subprocess.PIPE if request.input_data else None,
                     cwd=tmpdir,
                     env=env,
-                    preexec_fn=lambda: self._setup_resource_limits(timeout, memory, cpu),
+                    # preexec_fn est UNIX-only — sur Windows, les limites
+                    # sont assurées par subprocess.communicate(timeout=…).
+                    preexec_fn=(
+                        lambda: self._setup_resource_limits(timeout, memory, cpu)
+                    ) if resource is not None else None,
                     text=True
                 )
                 
@@ -316,3 +324,23 @@ def execute_code(code: str, language: str = "python", **kwargs) -> CodeExecution
     """Fonction utilitaire pour exécuter du code rapidement."""
     request = CodeExecutionRequest(code=code, language=language, **kwargs)
     return get_sandbox().execute(request)
+
+
+class ScanResult(BaseModel):
+    """Résultat d'un scan statique de sécurité (sans exécution)."""
+    security_violation: bool = Field(default=False)
+    security_details: Optional[List[str]] = Field(None)
+
+
+def scan_code(code: str) -> ScanResult:
+    """Scan statique du code (patterns interdits + imports dangereux).
+
+    Utilisé en amont par les subgraphs (coding) pour détecter une
+    violation SANS exécuter le code — l'exécution réelle re-scanne
+    (§24, défense en profondeur).
+    """
+    violations = get_sandbox()._check_security(code or "")
+    return ScanResult(
+        security_violation=bool(violations),
+        security_details=violations or None,
+    )

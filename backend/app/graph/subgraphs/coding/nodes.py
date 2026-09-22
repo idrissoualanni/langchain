@@ -66,7 +66,12 @@ def analyze_task(state: CodingState) -> dict[str, Any]:
 
 @traceable_agent_action(name="coding_execute_action", run_type="tool")
 def execute_action(state: CodingState) -> dict[str, Any]:
-    """Exécute l'action de codage (write/debug/test/explain)."""
+    """Exécute l'action de codage (write/debug/test/explain).
+
+    Sécurité : le code fourni est TOUJOURS scanné (patterns interdits
+    + imports dangereux) avant tout traitement, quel que soit le type
+    de tâche — une violation stoppe le workflow (finalize_with_limit).
+    """
     task_type = state["task_type"]
     request = state["request"]
 
@@ -75,6 +80,21 @@ def execute_action(state: CodingState) -> dict[str, Any]:
     test_results = list(state.get("test_results", []))
 
     try:
+        # Scan sécurité statique (§24) — même si la tâche ne va pas
+        # exécuter le code ici (write/edit/explain), le sandbox bloque
+        # ces patterns à l'exécution : on les détecte EN AMONT.
+        from app.infrastructure.sandbox.executor import (
+            ScanResult,
+            scan_code,
+        )
+
+        scan = scan_code(state.get("code") or "")
+        if scan.security_violation:
+            errors.append({
+                "type": "security_violation",
+                "details": scan.security_details,
+            })
+
         if task_type == "debug":
             result = explain_error_tool.invoke({
                 "code": state.get("code", ""),
