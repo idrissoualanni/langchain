@@ -11,7 +11,7 @@ from app.agent.runner import (
     get_thread_history,
     get_thread_state,
 )
-from app.api.schemas import CheckpointOut, StateResponse
+from app.schemas import CheckpointOut, StateResponse
 from app.auth.resolver import CurrentUser, get_current_user
 from app.db.connections import init_db
 from app.db.threads import get_thread, thread_belongs_to_user

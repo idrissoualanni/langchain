@@ -27,7 +27,7 @@ def document_node(state, config=None) -> dict[str, Any]:
     MCP calendar sont résolus par le sous-graphe agentique (scoping §40)
     — CE node ne fait que confirmer le contrat et enregistrer la demande.
     """
-    from app.graph.subgraphs.contracts import SubgraphResult
+    from app.schemas.workflow import SubgraphResult
 
     intake = (state or {}).get("intake") or {}
     query = intake.get("query") if isinstance(intake, dict) else ""

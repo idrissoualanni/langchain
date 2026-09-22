@@ -29,7 +29,7 @@ import re
 import unicodedata
 
 from app.context.query_norm import normalize_query
-from app.context.schemas import SearchResponse, SearchResult
+from app.schemas.context import SearchResponse, SearchResult
 from app.config import OLLAMA_API_KEY, OLLAMA_HOST
 from app.logging.events import log_event
 

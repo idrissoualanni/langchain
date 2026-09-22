@@ -10,7 +10,7 @@ from app.context.query_norm import (
     normalize_tokens,
     variant_forms,
 )
-from app.context.schemas import SearchResult
+from app.schemas.context import SearchResult
 from app.logging.events import log_event
 from app.subjects.registry import get_subject
 

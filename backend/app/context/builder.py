@@ -18,7 +18,7 @@ from app.agent.memory import (
     read_profile,
     search_facts,
 )
-from app.context.budget import (
+from app.schemas.budget import (
     BudgetSection,
     apply_budget,
     build_budget,
@@ -29,11 +29,11 @@ from app.context.fallback import (
     fallback_note_for_prompt,
 )
 from app.context.knowledge_retriever import search_knowledge
-from app.context.model_capabilities import (
+from app.schemas.model_capabilities import (
     get_model_capabilities,
 )
 from app.context.router import route_subject
-from app.context.schemas import (
+from app.schemas.context import (
     ActivityContextInfo,
     BuiltContext,
     ContextStats,
@@ -51,7 +51,7 @@ from app.context.thread_context import build_thread_context
 from app.context.user_context import build_user_context
 from app.context.web_search import web_search
 from app.learning.learning_context import get_learning_context
-from app.learning.schemas import LearningContextInfo
+from app.schemas.learning import LearningContextInfo
 from app.logging.events import log_event
 # V10 : documents personnels de l'utilisateur (RAG). Import LAZY
 # au point d'usage (fail-safe §15) : app.rag.vector_store dépend

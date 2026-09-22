@@ -13,7 +13,7 @@
 # même checkpointer/store. Seuls INTAKE et WORKFLOW_ROUTER sont
 # ajoutés (nouveaux nodes, non-cassants).
 from app.graph.state import MainState
-from app.graph.subgraphs.contracts import (
+from app.schemas.workflow import (
     ActivityResult,
     CodingResult,
     ProblemResult,

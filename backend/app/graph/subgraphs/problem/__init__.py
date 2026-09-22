@@ -16,7 +16,7 @@ from app.graph.subgraphs.problem.nodes import (
     route_after_evaluate_step,
     validate_node,
 )
-from app.graph.subgraphs.problem.schemas import (
+from app.schemas.problem import (
     ParsedStatement,
     RigorScore,
     SolutionStep,

@@ -5,7 +5,7 @@
 # route reste pour le frontend — même handler, même réponse).
 from fastapi import APIRouter
 
-from app.api.schemas import (
+from app.schemas import (
     ContextPreviewRequest,
     ContextPreviewResponse,
 )

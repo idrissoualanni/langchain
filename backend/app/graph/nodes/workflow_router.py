@@ -16,7 +16,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.graph.subgraphs.contracts import KNOWN_WORKFLOWS
+from app.schemas.workflow import KNOWN_WORKFLOWS
 from app.logging.events import log_event
 
 # Marqueurs DÉTERMINISTES d'une requête de résolution d'énoncé (§21).

@@ -34,7 +34,7 @@ def check(label: str, cond: bool, detail: str = ""):
 # ============================================================
 # A. CONTRATS DE SUBGRAPH (§8)
 # ============================================================
-from app.graph.subgraphs.contracts import (  # noqa: E402
+from app.schemas.workflow import (  # noqa: E402
     ActivityResult,
     CodingResult,
     KNOWN_WORKFLOWS,

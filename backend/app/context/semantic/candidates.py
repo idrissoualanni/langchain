@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app.subjects.registry import list_subjects
-from app.subjects.schema import SubjectConfig
+from app.schemas.subject import SubjectConfig
 
 # Cache des candidats (invalidé quand le registry est rechargé —
 # invalidation par compteur de version du registry).

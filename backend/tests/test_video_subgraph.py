@@ -22,7 +22,7 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 import pytest
 from pydantic import ValidationError
 
-from app.graph.subgraphs.contracts import VideoResult
+from app.schemas.workflow import VideoResult
 from app.graph.subgraphs.video.ingest import (
     VideoFatalError,
     VideoTransientError,
@@ -39,7 +39,7 @@ from app.graph.subgraphs.video.nodes import (
 )
 from app.graph.subgraphs.video.persist import VideoKnowledgeStore
 from app.graph.subgraphs.video.retrieval import get_video, search_video_segments
-from app.graph.subgraphs.video.schemas import (
+from app.schemas.video import (
     PedagogicalSegment,
     VideoUploadPayload,
 )

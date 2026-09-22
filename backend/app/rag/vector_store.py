@@ -21,7 +21,7 @@ from app.context.semantic.provider import (
     cosine_similarity,
     get_embedding_provider,
 )
-from app.rag.schemas import (
+from app.schemas.document import (
     DocumentRecord,
     DocumentSearchResponse,
     DocumentSearchResult,

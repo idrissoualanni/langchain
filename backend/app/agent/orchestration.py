@@ -28,7 +28,7 @@ from app.context import retrieve_sources
 from app.context.builder import build_context
 from app.context.fallback import decide_fallback
 from app.context.router import route_subject
-from app.context.schemas import (
+from app.schemas.context import (
     BuiltContext,
     FallbackDecision,
     KnowledgeSearchResult,
@@ -121,7 +121,7 @@ def retrieval_node(state, config=None) -> dict:
     Appel réel : retrieve_sources() (source de vérité UNIQUE §48,
     partagé avec build_context). Résultats persistés en dicts.
     """
-    from app.context.schemas import RoutingResult as _R
+    from app.schemas.context import RoutingResult as _R
 
     routing = _R.model_validate(
         state.get("routing_result") or {}
@@ -243,7 +243,7 @@ def _web_results_from_context(state) -> tuple:
     PAS réapparaître, §44).
     """
     try:
-        from app.context.schemas import BuiltContext as _B
+        from app.schemas.context import BuiltContext as _B
 
         context = _B.model_validate(
             state.get("built_context") or {}

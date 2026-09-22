@@ -64,7 +64,7 @@ def emit_observation(
             resolve_registry_topic,
             update_profile_from_observation,
         )
-        from app.learning.schemas import LearningObservation
+        from app.schemas.learning import LearningObservation
 
         registry_topic = resolve_registry_topic(
             subject, topic, source=section_source

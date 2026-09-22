@@ -21,7 +21,7 @@ from app.learning.learning_profile import (
     get_topic_state,
     read_learning_profile,
 )
-from app.learning.schemas import (
+from app.schemas.learning import (
     LearningContextInfo,
     LearningGoal,
     TopicLearningState,

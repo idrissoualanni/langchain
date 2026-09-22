@@ -39,7 +39,7 @@ def _to_contract_result(local_result) -> dict:
     code_summary}. La traduction est EXPLICITE et défensive (un champ
     manquant ne casse jamais le run).
     """
-    from app.graph.subgraphs.contracts import CodingResult
+    from app.schemas.workflow import CodingResult
 
     if local_result is None:
         return CodingResult(
@@ -146,7 +146,7 @@ async def coding_node(state, config=None) -> dict[str, Any]:
             code=payload.get("code"),
         )
     except Exception as exc:  # noqa: BLE001 — isolation du run
-        from app.graph.subgraphs.contracts import CodingResult
+        from app.schemas.workflow import CodingResult
 
         log_event(
             "CODING_NODE_ERROR",

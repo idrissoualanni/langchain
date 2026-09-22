@@ -37,7 +37,7 @@ from langchain_core.tools import tool
 from langgraph.config import RunnableConfig
 from langgraph.types import Command
 
-from app.agent.activity_state import (
+from app.schemas.activity import (
     ACTIVITY_CHECKING_UNDERSTANDING,
     ACTIVITY_COMPLETED,
     ACTIVITY_TYPE_EXERCISE,

@@ -17,7 +17,7 @@ def check(label, cond, detail=""):
     )
 
 
-from app.context.model_capabilities import (  # noqa: E402
+from app.schemas.model_capabilities import (  # noqa: E402
     ModelCapabilities,
     get_model_capabilities,
     list_configured_models,

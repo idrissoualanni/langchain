@@ -16,14 +16,14 @@ def check(label, cond, detail=""):
     )
 
 
-from app.context.budget import (  # noqa: E402
+from app.schemas.budget import (  # noqa: E402
     CONSERVATIVE_ASSUMED_WINDOW,
     BudgetSection,
     apply_budget,
     build_budget,
     estimate_tokens,
 )
-from app.context.model_capabilities import (  # noqa: E402
+from app.schemas.model_capabilities import (  # noqa: E402
     ModelCapabilities,
 )
 
@@ -245,7 +245,7 @@ check(
 )
 
 # 12-13. Capacities : chemins §49/§50 (via registry)
-from app.context.model_capabilities import supports  # noqa: E402
+from app.schemas.model_capabilities import supports  # noqa: E402
 
 caps = ModelCapabilities(model_name="x", supports_tools=True)
 check(

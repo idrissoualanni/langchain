@@ -37,7 +37,7 @@ def check(label: str, cond: bool, detail: str = ""):
 
 # Statuts V5.2 importés de la source unique (activity_state, comme dans
 # app/activity/schemas.py) — même style d'import.
-from app.agent.activity_state import (  # noqa: E402
+from app.schemas.activity import (  # noqa: E402
     ACTIVITY_ABANDONED,
     ACTIVITY_CHECKING_UNDERSTANDING,
     ACTIVITY_COMPLETED,
@@ -55,7 +55,7 @@ from app.agent.activity_state import (  # noqa: E402
 # ============================================================
 # A. LIFECYCLE §14
 # ============================================================
-from app.activity.schemas import (  # noqa: E402
+from app.schemas.activity import (  # noqa: E402
     ACTIVITY_TYPES,
     CONTINUABLE_STATUSES,
     LIFECYCLE_CANCELLED,

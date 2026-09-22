@@ -10,7 +10,7 @@
 # par le parsing. Aucun LLM.
 from __future__ import annotations
 
-from app.graph.subgraphs.problem.schemas import (
+from app.schemas.problem import (
     ParsedStatement,
     SolutionStep,
 )

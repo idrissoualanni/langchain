@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from app.graph.subgraphs.problem.schemas import (
+from app.schemas.problem import (
     ParsedStatement,
     StatementClass,
 )

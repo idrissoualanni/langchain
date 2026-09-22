@@ -6,7 +6,7 @@ from pathlib import Path
 import yaml
 
 from app.logging.events import log_event
-from app.subjects.schema import SubjectConfig
+from app.schemas.subject import SubjectConfig
 
 DEFINITIONS_DIR = Path(__file__).parent / "definitions"
 

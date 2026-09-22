@@ -5,7 +5,7 @@
 # peut plus lire les logs d'un autre via cette route.
 from fastapi import APIRouter, Depends, Query
 
-from app.api.schemas import HealthResponse  # noqa: F401 (réutilisation types)
+from app.schemas import HealthResponse  # noqa: F401 (réutilisation types)
 from app.auth.resolver import CurrentUser, require_admin
 from app.logging.events import read_log_file
 

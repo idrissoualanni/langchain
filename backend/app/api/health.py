@@ -1,7 +1,7 @@
 # Route Health — GET /api/health
 from fastapi import APIRouter
 
-from app.api.schemas import HealthResponse
+from app.schemas import HealthResponse
 from app.config import (
     MODEL_NAME,
     check_ollama_health,

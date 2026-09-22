@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 
-from app.rag.schemas import DocumentSearchResponse, DocumentSearchResult
+from app.schemas.document import DocumentSearchResponse, DocumentSearchResult
 from app.rag.vector_store import RagStore, get_rag_store
 
 logger = logging.getLogger("rag")

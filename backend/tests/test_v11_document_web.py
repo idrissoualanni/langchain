@@ -543,7 +543,7 @@ def test_scrape_lifecycle_cases():
     # lazy + appel borné par len(results)) — vérifié en mockant le
     # provider ollama et le scraper pour un SearchResponse enrichi.
     from app.context.web_search import web_search as ws_call
-    from app.context.schemas import SearchResult, SearchResponse
+    from app.schemas.context import SearchResult, SearchResponse
     import app.context.web_scraper as scraper_mod
 
     _raw = type(

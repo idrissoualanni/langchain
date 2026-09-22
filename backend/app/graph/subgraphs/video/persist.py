@@ -16,7 +16,7 @@ import json
 import re
 from pathlib import Path
 
-from app.graph.subgraphs.video.schemas import PedagogicalSegment
+from app.schemas.video import PedagogicalSegment
 
 _SLUG_RE = re.compile(r"[^a-zA-Z0-9_-]")
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 import datetime
 import re
 
-from app.graph.subgraphs.video.schemas import VideoMetadata
+from app.schemas.video import VideoMetadata
 
 _WORD_RE = re.compile(r"[a-zA-ZÀ-ÿà-ÿ0-9]+")
 

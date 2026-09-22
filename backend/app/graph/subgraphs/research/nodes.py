@@ -37,7 +37,7 @@ import threading
 
 from langgraph.graph import END, START, StateGraph
 
-from app.graph.subgraphs.contracts import ResearchResult
+from app.schemas.workflow import ResearchResult
 from app.graph.subgraphs.research.claims import (
     compare_sources,
     extract_claims_from_sources,

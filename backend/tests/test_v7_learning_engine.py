@@ -31,7 +31,7 @@ def check(label: str, cond: bool, detail: str = ""):
         print(f"[FAIL] {label} — {detail}")
 
 
-from app.context.schemas import (  # noqa: E402
+from app.schemas.context import (  # noqa: E402
     ActivityContextInfo,
     BuiltContext,
     KnowledgeSearchResult,
@@ -46,7 +46,7 @@ from app.learning.learning_profile import (  # noqa: E402
     create_learning_goal,
     update_profile_from_observation,
 )
-from app.learning.schemas import (  # noqa: E402
+from app.schemas.learning import (  # noqa: E402
     LearningContextInfo,
     LearningObservation,
 )

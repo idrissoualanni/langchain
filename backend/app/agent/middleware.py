@@ -162,7 +162,7 @@ def register_activity(thread_id: str, activity: dict) -> None:
     if last is None:
         return
     try:
-        from app.context.schemas import ActivityContextInfo
+        from app.schemas.context import ActivityContextInfo
 
         if getattr(last, "activity", None) is not None:
             return  # déjà enrichi (builder §13)
@@ -320,7 +320,7 @@ def tutor_dynamic_prompt(request: ModelRequest) -> str:
     # CONTEXT (canal du state, POC-2/POC-5 validés). Le middleware
     # ne reconstruit JAMAIS ce qui a déjà été assemblé (§48). ---
     try:
-        from app.context.schemas import BuiltContext
+        from app.schemas.context import BuiltContext
 
         state = getattr(request, "state", None) or {}
         precomputed = dict(state).get("built_context") or {}

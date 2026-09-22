@@ -5,7 +5,7 @@
 # arrivent dans les Phases 2-7 (Activity, Problem, Coding, Research,
 # Video, Document). Le sous-graphe agentique create_agent vit dans
 # app.agent (§5).
-from app.graph.subgraphs.contracts import (
+from app.schemas.workflow import (
     ActivityResult,
     CodingResult,
     ProblemResult,

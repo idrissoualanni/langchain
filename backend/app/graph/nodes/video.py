@@ -52,7 +52,7 @@ def video_node(state, config=None) -> dict[str, Any]:
     partial explicite — le sous-graphe agentique explique à l'utilisateur
     qu'une vidéo doit être jointe.
     """
-    from app.graph.subgraphs.contracts import VideoResult
+    from app.schemas.workflow import VideoResult
 
     intake = (state or {}).get("intake") or {}
     query = intake.get("query") if isinstance(intake, dict) else ""

@@ -22,7 +22,7 @@ from langchain_core.tools import tool
 
 from app.services.sandbox.executor import execute_code, CodeExecutionResult
 from app.activity.store import save_activity
-from app.activity.schemas import ACTIVITY_TYPE_EXERCISE, ActivityContract
+from app.schemas.activity import ACTIVITY_TYPE_EXERCISE, ActivityContract
 
 
 class CodeToolResult(BaseModel):

@@ -64,7 +64,7 @@ def problem_node(state, config=None) -> dict[str, Any]:
 
     workflow_result = result.get("workflow_result") or {}
     if not workflow_result:
-        from app.graph.subgraphs.contracts import ProblemResult
+        from app.schemas.workflow import ProblemResult
 
         workflow_result = ProblemResult(
             workflow="problem",

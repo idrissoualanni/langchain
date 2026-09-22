@@ -29,12 +29,12 @@ from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
-from app.graph.subgraphs.contracts import ProblemResult
+from app.schemas.workflow import ProblemResult
 from app.graph.subgraphs.problem.artefact import build_artefact
 from app.graph.subgraphs.problem.evaluator import compute_rigor, evaluate_step
 from app.graph.subgraphs.problem.parser import parse_statement
 from app.graph.subgraphs.problem.planner import SolutionStep, build_guide, build_plan
-from app.graph.subgraphs.problem.schemas import ParsedStatement, StepEvaluation
+from app.schemas.problem import ParsedStatement, StepEvaluation
 from app.graph.subgraphs.problem.state import ProblemState
 from app.logging.events import log_event
 

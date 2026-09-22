@@ -7,7 +7,7 @@
 from fastapi import APIRouter, HTTPException
 
 from app.agent.prompts import CORE_PROMPT
-from app.api.schemas import (
+from app.schemas import (
     ContextPreviewRequest,
     ContextPreviewResponse,
     SubjectOut,

@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 
 from app.evaluation.engine import ENGINE
-from app.graph.subgraphs.problem.schemas import (
+from app.schemas.problem import (
     ErrorKind,
     SolutionStep,
     StepEvaluation,

@@ -1,5 +1,5 @@
 from app.context.fallback import fallback_note_for_prompt
-from app.context.schemas import BuiltContext
+from app.schemas.context import BuiltContext
 from app.logging.events import log_event
 
 

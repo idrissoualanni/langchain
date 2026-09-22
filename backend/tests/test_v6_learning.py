@@ -21,7 +21,7 @@ def new_uid(prefix):
     return f"{prefix}-{uuid.uuid4().hex[:10]}"
 
 
-from app.learning.schemas import (
+from app.schemas.learning import (
     LearningObservation,
     LearningProfile,
 )

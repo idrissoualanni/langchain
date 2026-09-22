@@ -12,7 +12,7 @@
 # générée côté backend, inchangée.
 from fastapi import APIRouter, Depends, HTTPException, Response
 
-from app.api.schemas import ThreadCreate, ThreadOut, ThreadRename
+from app.schemas import ThreadCreate, ThreadOut, ThreadRename
 from app.auth.resolver import CurrentUser, get_current_user
 from app.db.connections import init_db
 from app.db.threads import (

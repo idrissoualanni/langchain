@@ -82,7 +82,7 @@ def research_node(state, config=None) -> dict[str, Any]:
     try:
         result = sub.invoke(initial)
     except Exception as exc:  # noqa: BLE001 — isolation du run
-        from app.graph.subgraphs.contracts import ResearchResult
+        from app.schemas.workflow import ResearchResult
 
         log_event(
             "RESEARCH_NODE_ERROR",
@@ -102,7 +102,7 @@ def research_node(state, config=None) -> dict[str, Any]:
 
     workflow_result = result.get("workflow_result") or {}
     if not workflow_result:
-        from app.graph.subgraphs.contracts import ResearchResult
+        from app.schemas.workflow import ResearchResult
 
         workflow_result = ResearchResult(
             workflow="research",

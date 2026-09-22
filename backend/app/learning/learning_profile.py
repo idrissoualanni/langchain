@@ -19,7 +19,7 @@ from __future__ import annotations
 import uuid
 
 from app.agent.memory import _store_lock, get_store
-from app.learning.schemas import (
+from app.schemas.learning import (
     LearningGoal,
     LearningObservation,
     LearningProfile,

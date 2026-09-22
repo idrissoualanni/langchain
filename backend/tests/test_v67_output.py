@@ -24,9 +24,9 @@ from app.agent.normalizer import (  # noqa: E402
     response_from_search,
     response_from_text,
 )
-from app.agent.response import AgentResponse  # noqa: E402
+from app.schemas.response import AgentResponse  # noqa: E402
 from app.context.fallback import decide_fallback  # noqa: E402
-from app.context.schemas import FallbackDecision  # noqa: E402
+from app.schemas.context import FallbackDecision  # noqa: E402
 
 print("--- §19 : les 9 types convertibles ---")
 
@@ -180,7 +180,7 @@ check("§23 search : aucune clé interne fuiter", not leaks,
       str(leaks))
 
 print("--- §24 : search réutilise SearchResult (pas de 2e système) ---")
-from app.context.schemas import SearchResult  # noqa: E402
+from app.schemas.context import SearchResult  # noqa: E402
 
 sr = SearchResult(
     title="Docs", source="docs.python.org",

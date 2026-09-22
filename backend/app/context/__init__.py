@@ -17,7 +17,7 @@ from app.context.builder import (
     retrieve_sources,
 )
 from app.context.router import route_subject
-from app.context.schemas import (  # noqa: F401
+from app.schemas.context import (  # noqa: F401
     AgentContext,
     BuiltContext,
     KnowledgeResult,

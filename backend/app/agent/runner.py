@@ -15,7 +15,7 @@ from app.config import (
     AGENT_TIMEOUT_SECONDS,
     MODEL_RETRY_ATTEMPTS,
 )
-from app.context.schemas import AgentContext
+from app.schemas.context import AgentContext
 from app.logging.events import log_event
 from app.models.retry import (
     invoke_llm_with_retry,

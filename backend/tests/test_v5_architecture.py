@@ -18,7 +18,7 @@ def check(label, cond, detail=""):
 # Â§54 â€” ROUTING STRUCTURÃ‰ (RoutingResult pydantic validÃ©)
 # ============================================================
 from app.context.router import route_subject
-from app.context.schemas import RoutingResult
+from app.schemas.context import RoutingResult
 
 r = route_subject("Explique-moi les fonctions Python.")
 check(
@@ -194,7 +194,7 @@ check(
 # Â§30 â€” BUILT CONTEXT STRUCTURÃ‰
 # ============================================================
 from app.context import build_context
-from app.context.schemas import BuiltContext
+from app.schemas.context import BuiltContext
 
 import uuid
 
@@ -273,7 +273,7 @@ def _make_request(user_id: str | None = None, thread_id: str = "t-v5"):
     AgentContext — l'API réelle du dynamic_prompt."""
     from langchain_ollama import ChatOllama
 
-    from app.context.schemas import AgentContext
+    from app.schemas.context import AgentContext
 
     context = (
         AgentContext(user_id=user_id, thread_id=thread_id)
@@ -366,7 +366,7 @@ check(
 # ============================================================
 # Â§4 â€” RUNTIME CONTEXT (AgentContext transportÃ© par context=)
 # ============================================================
-from app.context.schemas import AgentContext
+from app.schemas.context import AgentContext
 
 ac = AgentContext(user_id="u1", thread_id="t1")
 check(

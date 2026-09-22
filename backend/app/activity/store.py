@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.activity.schemas import (
+from app.schemas.activity import (
     ACTIVITY_IDLE,
     CONTINUABLE_STATUSES,
     ActivityContract,
@@ -84,7 +84,7 @@ def summary(
     user_id: str, thread_id: str
 ) -> dict:
     """Vue API compacte (résumé V5.2 existant, non dupliqué)."""
-    from app.agent.activity_state import summarize_activity
+    from app.schemas.activity import summarize_activity
 
     activity = get_activity(user_id, thread_id)
     # Résumé API pensé pour le state → on le complète avec le

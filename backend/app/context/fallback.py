@@ -1,4 +1,4 @@
-from app.context.schemas import FallbackDecision
+from app.schemas.context import FallbackDecision
 from app.logging.events import log_event
 
 __all__ = [

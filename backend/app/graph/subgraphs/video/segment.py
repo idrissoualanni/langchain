@@ -21,7 +21,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from app.graph.subgraphs.video.schemas import PedagogicalSegment
+from app.schemas.video import PedagogicalSegment
 
 _SENTENCE_RE = re.compile(r"\s*\n+\s*|(?<=[.!?…])\s+")
 _WORD_RE = re.compile(r"[a-zA-ZÀ-ÿà-ÿ0-9]+")

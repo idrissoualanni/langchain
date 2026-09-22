@@ -36,7 +36,7 @@ from app.agent.state import CustomAgentState
 from app.agent import tools as tools_module
 
 all_tools = tools_module.all_tools
-from app.context.schemas import AgentContext
+from app.schemas.context import AgentContext
 from app.graph.main import compile_main_graph
 from app.logging.events import log_event
 

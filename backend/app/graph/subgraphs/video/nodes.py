@@ -38,7 +38,7 @@ from pathlib import Path
 
 from langgraph.graph import END, START, StateGraph
 
-from app.graph.subgraphs.contracts import VideoResult
+from app.schemas.workflow import VideoResult
 from app.graph.subgraphs.video.ingest import (
     VideoFatalError,
     VideoTransientError,
@@ -46,7 +46,7 @@ from app.graph.subgraphs.video.ingest import (
 )
 from app.graph.subgraphs.video.metadata import enrich_video_metadata
 from app.graph.subgraphs.video.persist import VideoKnowledgeStore
-from app.graph.subgraphs.video.schemas import VideoUploadPayload
+from app.schemas.video import VideoUploadPayload
 from app.graph.subgraphs.video.segment import (
     SegmentationError,
     segment_parts,

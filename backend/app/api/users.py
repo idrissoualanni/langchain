@@ -20,7 +20,7 @@ from app.agent.memory import (
     update_fact,
     write_profile,
 )
-from app.api.schemas import (
+from app.schemas import (
     MemoryFactCreate,
     MemoryFactOut,
     MemoryFactUpdate,

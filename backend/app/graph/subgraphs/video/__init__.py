@@ -28,7 +28,7 @@ from app.graph.subgraphs.video.retrieval import (
     get_video_segments,
     search_video_segments,
 )
-from app.graph.subgraphs.video.schemas import (
+from app.schemas.video import (
     PedagogicalSegment,
     VideoMetadata,
     VideoUploadPayload,

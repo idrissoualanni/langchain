@@ -195,7 +195,7 @@ check(
 # ---------- IT8 : mastery evolue avec une 2e evaluation ----------
 # Injection directe (le LLM est non deterministe) pour verifier
 # la formule cote serveur via l'API.
-from app.learning.schemas import LearningObservation
+from app.schemas.learning import LearningObservation
 from app.learning.learning_profile import (
     read_learning_profile,
     update_profile_from_observation,

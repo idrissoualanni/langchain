@@ -19,7 +19,7 @@
 #   §24/§25 : n'exécute PAS les tools — recommended_tool seulement
 from __future__ import annotations
 
-from app.context.schemas import BuiltContext
+from app.schemas.context import BuiltContext
 from app.learning.decision import (
     ACTIVITY_TRANSITIONS,
     LearningDecision,

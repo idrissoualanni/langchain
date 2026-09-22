@@ -16,7 +16,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from app.context.model_capabilities import ModelCapabilities
+from app.schemas.model_capabilities import ModelCapabilities
 
 
 class ModelConfig(BaseModel):

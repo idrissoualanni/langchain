@@ -13,8 +13,8 @@
 #   sinon → CE normalizer (normalisation contrôlée) ;
 #   sinon → texte standard (type=text).
 # Une incapacité de structured output ne casse JAMAIS le chat.
-from app.agent.response import AgentResponse
-from app.context.schemas import FallbackDecision
+from app.schemas.response import AgentResponse
+from app.schemas.context import FallbackDecision
 from app.logging.events import log_event
 
 __all__ = [

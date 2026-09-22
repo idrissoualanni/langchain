@@ -9,7 +9,7 @@ from app.learning.learning_profile import (
     update_learning_goal,
     update_profile_from_observation,
 )
-from app.learning.schemas import LearningObservation
+from app.schemas.learning import LearningObservation
 
 
 @tool

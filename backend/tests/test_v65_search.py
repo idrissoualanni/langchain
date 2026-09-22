@@ -168,7 +168,7 @@ check(
 )
 
 # Le pipeline builder ne crashe PAS sur web error
-from app.context.schemas import BuiltContext  # noqa: E402
+from app.schemas.context import BuiltContext  # noqa: E402
 
 bc2 = build_context("v65-t", "v65-t", "python async asyncio")
 bc2_web_before = bc2.web.status  # (peut être found réel)
@@ -275,7 +275,7 @@ check(
 # Knowledge — les sources restent séparées
 # ==================================================================
 print("\n--- §37 sources séparées ---")
-from app.context.schemas import (  # noqa: E402
+from app.schemas.context import (  # noqa: E402
     KnowledgeSearchResult,
     SearchResponse,
 )
@@ -341,7 +341,7 @@ except Exception:
 check("3a: SearchResponse Literal status protégé", bad_status)
 
 try:
-    from app.context.schemas import SearchResult
+    from app.schemas.context import SearchResult
 
     SearchResult(
         source="x",

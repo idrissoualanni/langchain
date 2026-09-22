@@ -21,7 +21,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
-from app.context.schemas import SearchResponse, SearchResult  # noqa: E402
+from app.schemas.context import SearchResponse, SearchResult  # noqa: E402
 from app.graph.subgraphs import contracts as subgraph_contracts  # noqa: E402
 from app.graph.subgraphs.research import (  # noqa: E402
     ResearchResult,

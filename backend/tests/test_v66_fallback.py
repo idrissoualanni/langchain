@@ -22,7 +22,7 @@ from app.context.fallback import (  # noqa: E402
     fallback_note_for_prompt,
     is_vague_query,
 )
-from app.context.schemas import FallbackDecision  # noqa: E402
+from app.schemas.context import FallbackDecision  # noqa: E402
 from app.logging.events import setup_logging  # noqa: E402
 
 setup_logging()  # handler fichier requis pour lire les events

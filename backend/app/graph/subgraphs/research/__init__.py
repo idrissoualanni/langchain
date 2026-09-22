@@ -6,7 +6,7 @@
 #
 # Exports publics (aucun second contrat créé : ResearchResult provient
 # du registre existant app.graph.subgraphs.contracts).
-from app.graph.subgraphs.contracts import ResearchResult
+from app.schemas.workflow import ResearchResult
 from app.graph.subgraphs.research.nodes import (
     build_initial_state,
     compile_research_subgraph,

@@ -9,14 +9,14 @@
 # cru sur parole ( 403 si usurpation ).
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.agent.activity_state import summarize_activity
+from app.schemas.activity import summarize_activity
 from app.agent.code_tools import (
     MAX_CODE_CHARS,
     run_python_isolated,
     static_security_scan,
 )
 from app.agent.runner import get_thread_state
-from app.api.schemas import (
+from app.schemas import (
     CodeRunRequest,
     CodeRunResponse,
     ThreadActivityResponse,

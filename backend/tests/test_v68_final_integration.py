@@ -112,7 +112,7 @@ check(
 
 # 10. ACTIVITY (état pédagogique thread-local — séparé du profil)
 # Lu depuis le snapshot LangGraph du thread (comme l'API activity).
-from app.agent.activity_state import (  # noqa: E402
+from app.schemas.activity import (  # noqa: E402
     summarize_activity,
 )
 from app.agent.graph import get_agent  # noqa: E402
@@ -135,7 +135,7 @@ check(
 )
 
 # 11. MODEL CAPABILITIES (V6.8)
-from app.context.model_capabilities import (  # noqa: E402
+from app.schemas.model_capabilities import (  # noqa: E402
     get_model_capabilities,
     supports,
 )
@@ -204,7 +204,7 @@ if engine_spec is not None:
     )
     check(
         "Engine V7 : consomme BuiltContext (§26)",
-        "from app.context.schemas import BuiltContext" in _src,
+        "from app.schemas.context import BuiltContext" in _src,
     )
 else:
     check(

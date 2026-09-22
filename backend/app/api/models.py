@@ -10,7 +10,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.config import MODEL_NAME, OLLAMA_HOST, ollama_headers
-from app.context.model_capabilities import list_configured_models
+from app.schemas.model_capabilities import list_configured_models
 
 router = APIRouter(prefix="/api/models", tags=["models"])
 

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.activity.schemas import make_result
+from app.schemas.activity import make_result
 from app.evaluation.schemas import (
     EvaluationResult,
     Verdict,

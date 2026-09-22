@@ -18,7 +18,7 @@ import yaml
 from pydantic import ValidationError
 
 from app.models.schemas import ModelConfig
-from app.context.model_capabilities import (
+from app.schemas.model_capabilities import (
     ModelCapabilities,
     get_model_capabilities,
     list_configured_models,

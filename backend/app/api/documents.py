@@ -11,7 +11,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.api.schemas import (
+from app.schemas import (
     DocumentOut,
     DocumentSearchResponseOut,
     DocumentUploadCreate,

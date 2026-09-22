@@ -458,7 +458,7 @@ finally:
 print("\n--- §12 CONTRATS : RoutingResult étendu (V6.8.1 intact) ---")
 # ==================================================================
 import pydantic  # noqa: E402
-from app.context.schemas import RoutingResult  # noqa: E402
+from app.schemas.context import RoutingResult  # noqa: E402
 
 
 def rejected(fn) -> bool:

@@ -31,7 +31,7 @@ def check(label, cond, detail=""):
 
 from app.context.builder import build_context  # noqa: E402
 from app.context.prompt_builder import build_system_prompt  # noqa: E402
-from app.context.schemas import BuiltContext  # noqa: E402
+from app.schemas.context import BuiltContext  # noqa: E402
 from app.context.semantic.provider import (  # noqa: E402
     LocalHashEmbeddingProvider,
     set_embedding_provider,

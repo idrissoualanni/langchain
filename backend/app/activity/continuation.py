@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.activity.schemas import (
+from app.schemas.activity import (
     ACTIVITY_IDLE,
     CONTINUABLE_STATUSES,
     TERMINAL_STATUSES,

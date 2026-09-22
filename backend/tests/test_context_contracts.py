@@ -19,7 +19,7 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 import pydantic  # noqa: E402
 
-from app.context.schemas import (  # noqa: E402
+from app.schemas.context import (  # noqa: E402
     ActivityContextInfo,
     AgentContext,
     BuiltContext,
@@ -35,14 +35,14 @@ from app.context.schemas import (  # noqa: E402
     ThreadContextInfo,
     UserContextInfo,
 )
-from app.context.budget import (  # noqa: E402
+from app.schemas.budget import (  # noqa: E402
     ContextBudget,
     BudgetSection,
 )
-from app.context.model_capabilities import (  # noqa: E402
+from app.schemas.model_capabilities import (  # noqa: E402
     ModelCapabilities,
 )
-from app.learning.schemas import LearningContextInfo  # noqa: E402
+from app.schemas.learning import LearningContextInfo  # noqa: E402
 
 PASS = 0
 FAIL = 0
