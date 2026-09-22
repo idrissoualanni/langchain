@@ -129,7 +129,7 @@ class AgentStartRequest(BaseModel):
 
     thread_id est optionnel : si fourni, le transcript vocal est
     réinjecté dans ce thread en fin de session ( voir
-    app.livekit.transcript ). Aucune validation de propriété ici —
+    app.infrastructure.livekit.transcript ). Aucune validation de propriété ici —
     le thread_id voyage dans le metadata du dispatch et le worker le
     recroise avec l'identity du token, qui est forcée côté serveur.
     """
@@ -308,7 +308,7 @@ async def stop_agent(
 # Capture d'écran navigateur — l'agent voit l'écran partagé
 # ------------------------------------------------------------------
 # Le worker maintient, par room, le dernier frame ScreenShare reçu
-# ( app.livekit.browser.ScreenShareCapturer ). Ces endpoints permettent au
+# ( app.infrastructure.livekit.browser.ScreenShareCapturer ). Ces endpoints permettent au
 # frontend de savoir si l'agent "voit" l'écran et à l'utilisateur de
 # comprendre que sa question portera sur l'affichage.
 #

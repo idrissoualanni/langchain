@@ -2,7 +2,7 @@
 #
 # Les nodes métier existants (ROUTER/RETRIEVAL/FALLBACK/CONTEXT/
 # LEARNING/AGENT/RESPONSE) restent dans app.services.agent.orchestration (§48
-# — source de vérité unique) ; app.agent.graph les cablait déjà.
+# — source de vérité unique) ; app.graph.main les cable déjà.
 # Phase 1 ajoute DEUX nodes d'orchestration propres au Main Graph :
 #
 #   INTAKE          (graph/nodes/intake.py) — normalisation d'entrée

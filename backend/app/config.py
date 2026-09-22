@@ -160,7 +160,7 @@ def _env_or_default(name: str, default: str) -> str:
 #   LIVEKIT_URL      — convention LiveKit Cloud (docs officielles)
 #   LIVEKIT_WS_URL   — ancien nom du projet, conservé par compatibilité
 # L'URL HTTP/HTTPS de l'API s'en déduit par conversion de schéma
-# (voir app.livekit.token.livekit_api_url).
+# (voir app.infrastructure.livekit.token.livekit_api_url).
 LIVEKIT_API_KEY = _env_or_default("LIVEKIT_API_KEY", "devkey")
 LIVEKIT_API_SECRET = _env_or_default("LIVEKIT_API_SECRET", "devsecret")
 LIVEKIT_HOST = _env_or_default(
@@ -190,7 +190,7 @@ if _looks_masked(LIVEKIT_API_SECRET):
 
 
 # ------------------------------------------------------------------
-# LiveKit Agents — modèles du tuteur vocal ( worker app.livekit.agent )
+# LiveKit Agents — modèles du tuteur vocal ( worker app.infrastructure.livekit.agent )
 # ------------------------------------------------------------------
 # Tous via LiveKit Inference : mêmes LIVEKIT_API_KEY / SECRET que le
 # reste du projet, aucune clé provider à gérer. Les noms doivent

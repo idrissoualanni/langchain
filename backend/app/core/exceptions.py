@@ -37,6 +37,13 @@ class AppError(Exception):
     #: code court utilisé dans les logs/observabilité (jamais de secret)
     code: str = "app_error"
 
+    #: status HTTP par défaut (taxonomie §63). Les familles 4xx
+    #: (validation_error, authorization_error, not_found) sont gérées
+    #: par HTTPException explicites dans les routes ; AppError couvre
+    #: les erreurs internes d'exécution → 500 par défaut, surchargeable
+    #: par sous-classe si un taxon doit devenir 4xx.
+    status_code: int = 500
+
     def __init__(self, message: str = "", *, cause: Exception | None = None):
         self.cause = cause
         super().__init__(message or self.__class__.__name__)

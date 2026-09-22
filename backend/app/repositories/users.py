@@ -1,4 +1,4 @@
-"""Repository des utilisateurs (façade au-dessus de ``app.db.users``)."""
+"""Repository des utilisateurs (façade au-dessus de ``app.infrastructure.database.users``)."""
 from __future__ import annotations
 
 from app.infrastructure.database import users as _users_db

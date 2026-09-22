@@ -5,7 +5,7 @@
 # comparaison de sources → synthèse sourcée → ResearchResult (§8).
 #
 # Exports publics (aucun second contrat créé : ResearchResult provient
-# du registre existant app.graph.subgraphs.contracts).
+# du registre unique §8 dans app/schemas/workflow.py).
 from app.schemas.workflow import ResearchResult
 from app.graph.subgraphs.research.nodes import (
     build_initial_state,

@@ -6,7 +6,7 @@
 #   - Config      : app.subjects.registry (SubjectConfig YAML)
 #   - Knowledge   : app.context.knowledge_retriever
 #   - Tools       : app.subjects.tool_registry (resolve_tools)
-#   - User memory : app.agent.memory (SqliteStore, namespace user)
+#   - User memory : app.services.memory (SqliteStore, namespace user)
 #   - Thread      : app.context.thread_context (léger, §32)
 #   - Learning    : app.learning.learning_context (V6, §24 —
 #                   sélection PERTINENTE, jamais tout le profil)

@@ -234,124 +234,27 @@ def _build_input(
     }
 
 
-async def run_agent_stream(
+async def _yield_post_invoke_events(
+    *,
+    result,
+    duration_ms: int,
     user_id: str,
     thread_id: str,
-    message: str,
-    model: str | None = None,
-    workflow: str | None = None,
-    payload: dict | None = None,
+    config,
+    agent,
+    interaction_count: int,
 ) -> AsyncIterator[dict]:
-    """Exécute un run complet en streamant les événements du pipeline.
+    """Émet les événements post-invoke du run stream (§47).
 
-    Pipeline émis (événements réels, jamais simulés) :
-      RUN_START → STATE_LOAD → USER_MESSAGE →
-      (ROUTING → CONTEXT_BUILD → PROMPT_BUILD → LLM → TOOLS …) →
-      ASSISTANT_MESSAGE → CHECKPOINT_SAVED → RUN_END
+    Isolé dans son propre async generator pour que le caller
+    (run_agent_stream) puisse ceinturer TOUT le post-traitement dans
+    le bloc de sanitization : aucune exception (get_state,
+    normalize_response, sérialisation checkpointer…) ne doit couper le
+    flux SSE sans événement ERROR.
 
-    Mission Assistant UI : "model" optionnel (ModelSelector) —
-    sélectionne l'instance d'agent correspondante (graph.get_agent).
-    workflow/payload : hint + entrée structurée du composer (§8).
+    Pipeline : ASSISTANT_MESSAGE → (WORKFLOW_RESULT §8) →
+    CHECKPOINT_SAVED → RUN_END.
     """
-    from app.graph.main import get_agent  # lazy (anti-cycle)
-    agent = get_agent(model or None)
-    config = _config_for(thread_id, user_id)
-    context = _runtime_context(user_id, thread_id)
-
-    log_event(
-        "RUN_START",
-        message=f"Run started",
-        user_id=user_id,
-        thread_id=thread_id,
-    )
-    yield {
-        "event": "RUN_START",
-        "level": "INFO",
-        "user_id": user_id,
-        "thread_id": thread_id,
-        "message": "Run started",
-    }
-
-    # ----- State existant (checkpointer, §7) -----
-    previous = agent.get_state(config)
-    previous_values = previous.values if previous else {}
-    interaction_count = (
-        previous_values.get("interaction_count", 0) + 1
-    )
-    previous_message_count = len(
-        previous_values.get("messages", [])
-    )
-
-    log_event(
-        "STATE_LOAD",
-        message=f"State loaded | messages={previous_message_count} | interaction={interaction_count}",
-        user_id=user_id,
-        thread_id=thread_id,
-    )
-    yield {
-        "event": "STATE_LOAD",
-        "level": "INFO",
-        "user_id": user_id,
-        "thread_id": thread_id,
-        "message": f"State loaded ({previous_message_count} messages)",
-        "interaction_count": interaction_count,
-    }
-
-    log_event(
-        "USER_MESSAGE",
-        message=message,
-        user_id=user_id,
-        thread_id=thread_id,
-    )
-    yield {
-        "event": "USER_MESSAGE",
-        "level": "INFO",
-        "user_id": user_id,
-        "thread_id": thread_id,
-        "message": message,
-    }
-
-    input_state = _build_input(
-        user_id, message, interaction_count, workflow, payload
-    )
-
-    start = time.perf_counter()
-
-    try:
-        # Timeout réel + retries BORNÉS transitoires (mission §3) :
-        # asyncio.wait_for + retry policy (jamais sur validation/
-        # authorization, see app/models/retry.py).
-        result = await invoke_llm_with_retry(
-            lambda: agent.invoke(
-                input_state, config=config, context=context
-            ),
-            user_id=user_id,
-            thread_id=thread_id,
-            label=f"run_agent:{thread_id}",
-            max_attempts=MODEL_RETRY_ATTEMPTS,
-            timeout_seconds=AGENT_TIMEOUT_SECONDS,
-        )
-    except Exception as exc:
-        # §47 : la cause technique détaillée reste DANS LE LOG (jamais
-        # exposée au client) — le flux SSE reçoit un message générique.
-        log_event(
-            "ERROR",
-            level="ERROR",
-            message=f"Agent error: {exc}",
-            user_id=user_id,
-            thread_id=thread_id,
-        )
-        yield {
-            "event": "ERROR",
-            "level": "ERROR",
-            "user_id": user_id,
-            "thread_id": thread_id,
-            "message": "Le run agent a échoué — cause technique journalisée.",
-        }
-        return
-
-    duration_ms = int((time.perf_counter() - start) * 1000)
-
     response_content = _extract_response(result)
 
     log_event(
@@ -485,6 +388,158 @@ async def run_agent_stream(
         "duration_ms": duration_ms,
         "interaction_count": interaction_count,
     }
+
+
+async def run_agent_stream(
+    user_id: str,
+    thread_id: str,
+    message: str,
+    model: str | None = None,
+    workflow: str | None = None,
+    payload: dict | None = None,
+) -> AsyncIterator[dict]:
+    """Exécute un run complet en streamant les événements du pipeline.
+
+    Pipeline émis (événements réels, jamais simulés) :
+      RUN_START → STATE_LOAD → USER_MESSAGE →
+      (ROUTING → CONTEXT_BUILD → PROMPT_BUILD → LLM → TOOLS …) →
+      ASSISTANT_MESSAGE → CHECKPOINT_SAVED → RUN_END
+
+    Mission Assistant UI : "model" optionnel (ModelSelector) —
+    sélectionne l'instance d'agent correspondante (graph.get_agent).
+    workflow/payload : hint + entrée structurée du composer (§8).
+    """
+    from app.graph.main import get_agent  # lazy (anti-cycle)
+    agent = get_agent(model or None)
+    config = _config_for(thread_id, user_id)
+    context = _runtime_context(user_id, thread_id)
+
+    log_event(
+        "RUN_START",
+        message=f"Run started",
+        user_id=user_id,
+        thread_id=thread_id,
+    )
+    yield {
+        "event": "RUN_START",
+        "level": "INFO",
+        "user_id": user_id,
+        "thread_id": thread_id,
+        "message": "Run started",
+    }
+
+    # ----- State existant (checkpointer, §7) -----
+    previous = agent.get_state(config)
+    previous_values = previous.values if previous else {}
+    interaction_count = (
+        previous_values.get("interaction_count", 0) + 1
+    )
+    previous_message_count = len(
+        previous_values.get("messages", [])
+    )
+
+    log_event(
+        "STATE_LOAD",
+        message=f"State loaded | messages={previous_message_count} | interaction={interaction_count}",
+        user_id=user_id,
+        thread_id=thread_id,
+    )
+    yield {
+        "event": "STATE_LOAD",
+        "level": "INFO",
+        "user_id": user_id,
+        "thread_id": thread_id,
+        "message": f"State loaded ({previous_message_count} messages)",
+        "interaction_count": interaction_count,
+    }
+
+    log_event(
+        "USER_MESSAGE",
+        message=message,
+        user_id=user_id,
+        thread_id=thread_id,
+    )
+    yield {
+        "event": "USER_MESSAGE",
+        "level": "INFO",
+        "user_id": user_id,
+        "thread_id": thread_id,
+        "message": message,
+    }
+
+    input_state = _build_input(
+        user_id, message, interaction_count, workflow, payload
+    )
+
+    start = time.perf_counter()
+
+    try:
+        # Timeout réel + retries BORNÉS transitoires (mission §3) :
+        # asyncio.wait_for + retry policy (jamais sur validation/
+        # authorization, see app/models/retry.py).
+        result = await invoke_llm_with_retry(
+            lambda: agent.invoke(
+                input_state, config=config, context=context
+            ),
+            user_id=user_id,
+            thread_id=thread_id,
+            label=f"run_agent:{thread_id}",
+            max_attempts=MODEL_RETRY_ATTEMPTS,
+            timeout_seconds=AGENT_TIMEOUT_SECONDS,
+        )
+    except Exception as exc:
+        # §47 : la cause technique détaillée reste DANS LE LOG (jamais
+        # exposée au client) — le flux SSE reçoit un message générique.
+        log_event(
+            "ERROR",
+            level="ERROR",
+            message=f"Agent error: {exc}",
+            user_id=user_id,
+            thread_id=thread_id,
+        )
+        yield {
+            "event": "ERROR",
+            "level": "ERROR",
+            "user_id": user_id,
+            "thread_id": thread_id,
+            "message": "Le run agent a échoué — cause technique journalisée.",
+        }
+        return
+
+    duration_ms = int((time.perf_counter() - start) * 1000)
+
+    # ------------------------------------------------------------------
+    # §47 : le POST-invoke fait partie du run. S'il lève (get_state,
+    # normalize_response, sérialisation checkpointer…), le flux SSE ne
+    # doit JAMAIS se couper sans événement ERROR — on sanitize pareil
+    # que pour l'invoke (cause technique dans les logs uniquement).
+    # ------------------------------------------------------------------
+    try:
+        _yield_post_invoke_events(
+            result=result,
+            duration_ms=duration_ms,
+            user_id=user_id,
+            thread_id=thread_id,
+            config=config,
+            agent=agent,
+            interaction_count=interaction_count,
+        )
+    except Exception as exc:
+        log_event(
+            "ERROR",
+            level="ERROR",
+            message=f"Post-invoke stream error: {exc}",
+            user_id=user_id,
+            thread_id=thread_id,
+        )
+        yield {
+            "event": "ERROR",
+            "level": "ERROR",
+            "user_id": user_id,
+            "thread_id": thread_id,
+            "message": "Le run agent a échoué après génération — cause technique journalisée.",
+        }
+        return
 
 
 def run_agent(

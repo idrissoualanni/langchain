@@ -4,7 +4,7 @@ Distinction architecturale :
 - Repository = accès aux données (où et comment les données sont
   stockées : requêtes SQL, store LangGraph, registre en mémoire).
   AUCUNE logique métier ici : chaque fonction délègue au module
-  sous-jacent (``app.db.*`` ou ``app.services.*``).
+  sous-jacent (``app.infrastructure.database.*`` ou ``app.services.*``).
 - Service = logique métier (validation, règles, orchestration,
   calculs, déduplication, scoring).
 

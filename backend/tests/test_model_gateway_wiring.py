@@ -247,13 +247,15 @@ class TestLimits:
         (AGENT_TIMEOUT_SECONDS via wait_for, I/O boundary)."""
         import inspect
 
-        from app.agent import runner
-        from app.graph.main import compile_main_graph
+        from app.services.agent import runner
+        from app.graph.main.edges import register_nodes
+        from app.graph.main import graph as graph_mod
 
-        source = inspect.getsource(compile_main_graph)
-        assert "retry_policy=" in source
-        assert "timeout=AGENT_TIMEOUT_SECONDS" not in source
-        assert "is_transient_error" in source
+        nodes_src = inspect.getsource(register_nodes)
+        assert "retry_policy=" in nodes_src
+        assert "timeout=AGENT_TIMEOUT_SECONDS" not in nodes_src
+        assert "is_transient_error" in inspect.getsource(graph_mod)
+        assert "retry_on=is_transient_error" in inspect.getsource(graph_mod)
 
         runner_source = inspect.getsource(runner)
         assert "AGENT_TIMEOUT_SECONDS" in runner_source

@@ -171,7 +171,7 @@ def _build_subgraph_agent(model_name):
     Le thread state est persisté par le CHECKPOINTER UNIQUE du
     graphe parent (POC-3) : le sous-graphe hérite le checkpointer
     de son contexte d'exécution. Le store long terme est un
-    singleton module (app.agent.memory.get_store) — pas besoin de
+    singleton module (app.services.memory.get_store) — pas besoin de
     le passer ici (POC-3).
 
     Instanciation via Model Gateway SEULEMENT (§1 mission) : jamais

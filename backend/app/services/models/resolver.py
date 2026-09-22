@@ -192,13 +192,13 @@ def resolve_model_for_purpose(
 
 def _get_user_assignment(user_id: str, purpose: str) -> ModelAssignment | None:
     """Récupère un assignment user-specific (stub — sera DB)."""
-    # TODO: Implémenter depuis DB app.db.model_assignments
+    # TODO: Implémenter depuis DB app.infrastructure.database.model_assignments
     return None
 
 
 def _get_group_assignment(group_id: str, purpose: str) -> ModelAssignment | None:
     """Récupère un assignment group-specific (stub — sera DB)."""
-    # TODO: Implémenter depuis DB app.db.group_model_assignments
+    # TODO: Implémenter depuis DB app.infrastructure.database.group_model_assignments
     return None
 
 

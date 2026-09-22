@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
 from app.services.agent.runner import run_agent, run_agent_stream
+from app.logging.events import log_event
 from app.schemas import ChatRequest, ChatResponse
 from app.auth.resolver import CurrentUser, get_current_user
 from app.infrastructure.database.connections import init_db
@@ -152,18 +153,45 @@ async def api_chat_stream(
     _validate_chat(payload_obj, current)
 
     async def gen():
-        async for event in run_agent_stream(
-            user_id=payload_obj.user_id,
-            thread_id=payload_obj.thread_id,
-            message=payload_obj.message,
-            model=payload_obj.model,
-            workflow=payload_obj.workflow,
-            payload=payload_obj.payload,
-        ):
-            # Format SSE textuel : event: X\ndata: {...}\n\n
+        # §47 : dernier rempart — si le stream lève (y compris dans le
+        # post-traitement du runner), on n'envoie PAS de connexion coupée
+        # nette : un événement ERROR générique est émis avant fermeture.
+        try:
+            async for event in run_agent_stream(
+                user_id=payload_obj.user_id,
+                thread_id=payload_obj.thread_id,
+                message=payload_obj.message,
+                model=payload_obj.model,
+                workflow=payload_obj.workflow,
+                payload=payload_obj.payload,
+            ):
+                # Format SSE textuel : event: X\ndata: {...}\n\n
+                yield (
+                    f"event: {event.get('event', 'LOG')}\n"
+                    f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                )
+        except Exception as exc:  # noqa: BLE001 — §47, cause dans les logs
+            log_event(
+                "ERROR",
+                level="ERROR",
+                message=f"Stream error: {exc}",
+                user_id=payload_obj.user_id,
+                thread_id=payload_obj.thread_id,
+            )
             yield (
-                f"event: {event.get('event', 'LOG')}\n"
-                f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                "event: ERROR\n"
+                "data: "
+                + json.dumps(
+                    {
+                        "event": "ERROR",
+                        "level": "ERROR",
+                        "user_id": payload_obj.user_id,
+                        "thread_id": payload_obj.thread_id,
+                        "message": "Stream interrompu — cause technique journalisée.",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n\n"
             )
 
     return StreamingResponse(

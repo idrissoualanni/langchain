@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 from app.schemas.context import SearchResponse, SearchResult  # noqa: E402
-from app.graph.subgraphs import contracts as subgraph_contracts  # noqa: E402
+from app.schemas.workflow import ResearchResult as WORKFLOW_RESULT_REGISTRY  # noqa: E402
 from app.graph.subgraphs.research import (  # noqa: E402
     ResearchResult,
     ResearchState,
@@ -270,8 +270,10 @@ class TestGraph:
 
     def test_uses_existing_contract(self):
         # AUCUN second contrat : ResearchResult est l'objet du registre
-        # existant (app.graph.subgraphs.contracts).
-        assert ResearchResult is subgraph_contracts.ResearchResult
+        # unique §8 (app.schemas.workflow), exposé par le package
+        # subgraphs.research (alias). Le shim contracts.py est supprimé
+        # (refactor §30).
+        assert ResearchResult is WORKFLOW_RESULT_REGISTRY
 
     def test_full_ok_run_workspace_result(self, stub_ok):
         result = invoke_research_workflow(

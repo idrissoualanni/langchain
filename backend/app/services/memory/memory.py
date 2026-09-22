@@ -161,7 +161,7 @@ def _semantic_relevance(
 ) -> float | None:
     """Vue sémantique (cosine provider embeddings) — None si KO.
 
-    Import lazy : évite le cycle app.agent → app.context → memory.
+    Import lazy : évite le cycle app.services.agent → app.services.context → memory.
     Échec → None (fallback lexical, jamais d'exception).
     """
     try:

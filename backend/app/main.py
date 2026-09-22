@@ -139,7 +139,7 @@ async def app_error_handler(request: Request, exc: AppError):
         extra={"code": exc.code},
     )
     return JSONResponse(
-        status_code=500,
+        status_code=exc.status_code,
         content={
             "detail": exc.detail(),
             "code": exc.code,

@@ -1,4 +1,4 @@
-"""Repository des threads (façade au-dessus de ``app.db.threads``)."""
+"""Repository des threads (façade au-dessus de ``app.infrastructure.database.threads``)."""
 from __future__ import annotations
 
 from app.infrastructure.database import threads as _threads_db
