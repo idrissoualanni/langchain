@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from langgraph.graph import END, START
 
-from app.agent.orchestration import (
+from app.services.agent.orchestration import (
     context_node,
     fallback_node,
     learning_node,

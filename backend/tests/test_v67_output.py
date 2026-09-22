@@ -16,7 +16,7 @@ def check(label, cond, detail=""):
     )
 
 
-from app.agent.normalizer import (  # noqa: E402
+from app.services.agent.normalizer import (  # noqa: E402
     normalize_response,
     response_from_activity,
     response_from_clarification,

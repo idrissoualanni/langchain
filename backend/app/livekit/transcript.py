@@ -20,7 +20,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.graph.main import get_agent
-from app.agent.runner import _config_for
+from app.services.agent.runner import _config_for
 
 logger = logging.getLogger("agent-tutor.livekit")
 

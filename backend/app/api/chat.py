@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
-from app.agent.runner import run_agent, run_agent_stream
+from app.services.agent.runner import run_agent, run_agent_stream
 from app.schemas import ChatRequest, ChatResponse
 from app.auth.resolver import CurrentUser, get_current_user
 from app.db.connections import init_db

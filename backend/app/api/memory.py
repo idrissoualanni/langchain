@@ -7,7 +7,7 @@
 # user_id query, s'il est fourni, doit correspondre ( 403 sinon ).
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.agent.runner import (
+from app.services.agent.runner import (
     get_thread_history,
     get_thread_state,
 )

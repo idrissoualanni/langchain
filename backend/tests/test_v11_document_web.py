@@ -29,7 +29,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from langgraph.checkpoint.memory import MemorySaver
 from langchain.agents import create_agent
 
-from app.agent.middleware import build_middleware_stack
+from app.services.agent.middleware import build_middleware_stack
 from app.agent.pedagogical_tools import pedagogical_tools
 from app.graph.main.state import CustomAgentState
 
@@ -502,7 +502,7 @@ def test_middleware_forces_user_on_document_tools():
             }
         })()
 
-    from app.agent.middleware import DOCUMENT_TOOL_NAMES
+    from app.services.agent.middleware import DOCUMENT_TOOL_NAMES
     check(
         "51a: DOCUMENT_TOOL_NAMES exporté",
         {"upload_document", "search_documents", "list_documents",

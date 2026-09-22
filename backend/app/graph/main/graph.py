@@ -32,8 +32,8 @@ from app.config import (
     MODEL_NAME,
     MODEL_RETRY_ATTEMPTS,
 )
-from app.agent.middleware import build_middleware_stack
-from app.agent.prompts import SYSTEM_PROMPT
+from app.services.agent.middleware import build_middleware_stack
+from app.services.agent.prompts import SYSTEM_PROMPT
 from app.graph.main.edges import (
     register_edges,
     register_nodes,

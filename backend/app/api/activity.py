@@ -15,7 +15,7 @@ from app.agent.code_tools import (
     run_python_isolated,
     static_security_scan,
 )
-from app.agent.runner import get_thread_state
+from app.services.agent.runner import get_thread_state
 from app.schemas import (
     CodeRunRequest,
     CodeRunResponse,

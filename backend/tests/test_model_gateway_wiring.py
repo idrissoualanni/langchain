@@ -215,7 +215,7 @@ class TestLimits:
     def test_runner_config_includes_recursion_limit(self):
         """La config d'invocation du runner porte TOUJOURS la borne
         recursion_limit (voie LangGraph officielle, mission §3)."""
-        from app.agent.runner import _config_for
+        from app.services.agent.runner import _config_for
         from app.config import AGENT_RECURSION_LIMIT
 
         config = _config_for("thread-42", user_id="user-1")

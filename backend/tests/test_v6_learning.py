@@ -189,7 +189,7 @@ check(
 # Test I - Context Builder : contexte learning pertinent
 # ============================================================
 from app.context import build_context, build_system_prompt
-from app.agent.prompts import CORE_PROMPT
+from app.services.agent.prompts import CORE_PROMPT
 
 ctx = build_context(
     user_id=u_b,

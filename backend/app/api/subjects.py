@@ -6,7 +6,7 @@
 # POST /api/subjects/preview/context      → contexte + prompt SANS LLM
 from fastapi import APIRouter, HTTPException
 
-from app.agent.prompts import CORE_PROMPT
+from app.services.agent.prompts import CORE_PROMPT
 from app.schemas import (
     ContextPreviewRequest,
     ContextPreviewResponse,

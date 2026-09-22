@@ -9,7 +9,7 @@
 #
 # Phase 1 = STANDARDISER, pas recréer : l'assemblage existant
 # (app/agent/graph.py) délègue à compile_main_graph (app/graph/main.py)
-# — mêmes nodes métier (app.agent.orchestration), mêmes services,
+# — mêmes nodes métier (app.services.agent.orchestration), mêmes services,
 # même checkpointer/store. Seuls INTAKE et WORKFLOW_ROUTER sont
 # ajoutés (nouveaux nodes, non-cassants).
 from app.graph.main.state import MainState

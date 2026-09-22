@@ -1,7 +1,7 @@
 # Nodes du Main Graph (Phase 1).
 #
 # Les nodes métier existants (ROUTER/RETRIEVAL/FALLBACK/CONTEXT/
-# LEARNING/AGENT/RESPONSE) restent dans app.agent.orchestration (§48
+# LEARNING/AGENT/RESPONSE) restent dans app.services.agent.orchestration (§48
 # — source de vérité unique) ; app.agent.graph les cablait déjà.
 # Phase 1 ajoute DEUX nodes d'orchestration propres au Main Graph :
 #

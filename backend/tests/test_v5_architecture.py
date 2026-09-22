@@ -263,7 +263,7 @@ check(
 # On teste via wrap_model_call du middleware dynamic_prompt (API
 # réelle du décorateur) avec un handler noop.
 # ============================================================
-from app.agent.middleware import tutor_dynamic_prompt
+from app.services.agent.middleware import tutor_dynamic_prompt
 from langchain.agents.middleware import ModelRequest
 from langchain_core.messages import HumanMessage
 
@@ -310,7 +310,7 @@ def _capture_handler(request):
 
 _capture_handler.last_prompt = None
 
-from app.agent.prompts import CORE_PROMPT
+from app.services.agent.prompts import CORE_PROMPT
 
 # Cas 1 : sans user_id dans le runtime → CORE_PROMPT seul
 req_nouser = _make_request(user_id=None)
@@ -387,7 +387,7 @@ check(
     "context_schema=AgentContext" in src,
 )
 # runner.py passe context= Ã  invoke
-import app.agent.runner as runner_mod
+import app.services.agent.runner as runner_mod
 
 rsrc = inspect.getsource(runner_mod)
 check(
@@ -437,7 +437,7 @@ check(
 # Â§55 â€” DYNAMIC PROMPT (changement mÃ©moire visible au prochain appel)
 # ============================================================
 from app.context import build_system_prompt
-from app.agent.prompts import CORE_PROMPT
+from app.services.agent.prompts import CORE_PROMPT
 
 p1 = build_system_prompt(CORE_PROMPT, ctx_a, TEST_USER, "t")
 save_fact(TEST_USER, category="preference", content="Aime les schema colores")

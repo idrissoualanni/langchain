@@ -283,7 +283,7 @@ def _dummy_agent_node(state, config=None):
 
 # Node minimal : une fonction node suffit pour vérifier la structure.
 graph = StateGraph(MainState)
-from app.agent.orchestration import (  # noqa: E402
+from app.services.agent.orchestration import (  # noqa: E402
     context_node,
     fallback_node,
     learning_node,
