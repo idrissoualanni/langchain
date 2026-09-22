@@ -10,7 +10,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.schemas.activity import summarize_activity
-from app.agent.code_tools import (
+from app.tools.coding import (
     MAX_CODE_CHARS,
     run_python_isolated,
     static_security_scan,

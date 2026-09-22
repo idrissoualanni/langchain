@@ -16,8 +16,11 @@ from app.schemas.activity import (
     ActivityContract,
     activity_to_contract,
 )
-from app.graph.main import get_agent
 from app.logging.events import log_event
+
+# get_agent (factory du graphe) est importé LAZY dans les fonctions :
+# store (service) → graph (assemblage) au runtime uniquement, jamais
+# à l'import (cycle graph ↔ services interdit).
 
 # Channel state LangGraph qui porte l'activité du thread (V5.2).
 ACTIVITY_CHANNEL = "learning_activity"
@@ -26,6 +29,7 @@ _ACTIVITY_LOG_CHANNEL = "activity_log"
 
 def _state_values(user_id: str, thread_id: str) -> dict:
     """Values du checkpoint courant (channel activity incluse)."""
+    from app.graph.main import get_agent  # lazy (anti-cycle)
     agent = get_agent()
     try:
         snapshot = agent.get_state(
@@ -110,6 +114,7 @@ def save_activity(
 
     Retourne True si le checkpoint a été mis à jour.
     """
+    from app.graph.main import get_agent  # lazy (anti-cycle)
     agent = get_agent()
     config = {
         "configurable": {"thread_id": thread_id, "user_id": user_id}

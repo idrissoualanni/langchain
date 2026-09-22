@@ -30,7 +30,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain.agents import create_agent
 
 from app.services.agent.middleware import build_middleware_stack
-from app.agent.pedagogical_tools import pedagogical_tools
+from app.tools.pedagogical import pedagogical_tools
 from app.graph.main.state import CustomAgentState
 
 PASS = 0

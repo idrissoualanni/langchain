@@ -16,9 +16,9 @@ def _implemented_tool_names() -> set[str]:
     """Noms des tools réellement enregistrés dans l'agent.
 
     Import tardif : évite le cycle tools.py → memory.py ↔ registry.
-    La liste vient de app.agent.tools.all_tools (source unique).
+    La liste vient de app.tools.all_tools (source unique).
     """
-    from app.agent.tools import all_tools
+    from app.tools import all_tools
 
     return {t.name for t in all_tools}
 

@@ -1,8 +1,5 @@
-# SHIM de compatibilité (refactor — phase migration).
-#
-# Les pedagogical tools ont déménagé vers app/tools/pedagogical/.
-# SUPPRESSION prévue phase cleanup (§30 mission) après vérification.
-from app.tools.pedagogical import (
+# Tools pédagogiques — exposés au LLM (exercices, quiz, évaluation).
+from app.tools.pedagogical.pedagogical import (
     assess_understanding,
     create_exercise,
     create_quiz,

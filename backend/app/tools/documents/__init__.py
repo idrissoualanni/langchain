@@ -1,8 +1,5 @@
-# SHIM de compatibilité (refactor — phase migration).
-#
-# Les document tools ont déménagé vers app/tools/documents/.
-# SUPPRESSION prévue phase cleanup (§30 mission) après vérification.
-from app.tools.documents import (
+# Tools documents — RAG / user knowledge exposés au LLM.
+from app.tools.documents.documents import (
     delete_document,
     document_tools,
     list_documents,

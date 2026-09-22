@@ -400,7 +400,7 @@ except ImportError:
 check("40: pas de Learning Engine complet", not engine_exists)
 
 # - tools learning enregistres (19)
-from app.agent.tools import all_tools
+from app.tools import all_tools
 
 learning_tool_names = {
     "get_learning_profile",

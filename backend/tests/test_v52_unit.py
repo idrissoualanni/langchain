@@ -25,9 +25,9 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain.agents import create_agent
 
 from app.services.agent.middleware import build_middleware_stack
-from app.agent.pedagogical_tools import pedagogical_tools
+from app.tools.pedagogical import pedagogical_tools
 from app.graph.main.state import CustomAgentState
-from app.agent.code_tools import (
+from app.tools.coding import (
     code_tools,
     run_python_isolated,
     static_security_scan,
@@ -1263,7 +1263,7 @@ def test_sandbox_security():
     )
 
     # Garde disponibilité : biology n'autorise PAS execute_code
-    from app.agent.code_tools import _code_tools_enabled
+    from app.tools.coding import _code_tools_enabled
 
     check(
         "s10: python autorise execute_code (config)",
@@ -1286,7 +1286,7 @@ def test_sandbox_security():
 
 def test_agent1_intact():
     print("\n--- §52 tools Learning Profile de l'agent 1 intacts ---")
-    from app.agent.tools import all_tools
+    from app.tools import all_tools
 
     names = {t.name for t in all_tools}
     for expected in (

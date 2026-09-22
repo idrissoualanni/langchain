@@ -9,12 +9,15 @@ import asyncio
 import time
 from typing import AsyncIterator
 
-from app.graph.main import get_agent
 from app.config import (
     AGENT_RECURSION_LIMIT,
     AGENT_TIMEOUT_SECONDS,
     MODEL_RETRY_ATTEMPTS,
 )
+
+# get_agent (factory du graphe) est importé LAZY dans les fonctions :
+# runner (service) → graph (assemblage) au runtime uniquement, jamais
+# à l'import (cycle graph ↔ services interdit).
 from app.schemas.context import AgentContext
 from app.logging.events import log_event
 from app.services.models.retry import (
@@ -77,6 +80,7 @@ def _message_to_dict(message) -> dict:
 
 def get_thread_state(user_id: str, thread_id: str) -> dict | None:
     """State courant d'un thread depuis le checkpointer (None si vide)."""
+    from app.graph.main import get_agent  # lazy (anti-cycle)
     agent = get_agent()
     snapshot = agent.get_state(_config_for(thread_id, user_id))
     if not snapshot or not snapshot.values:
@@ -146,6 +150,7 @@ def _checkpoint_summary(
 
 def get_thread_history(user_id: str, thread_id: str) -> list[dict]:
     """Historique des checkpoints d'un thread (chronologique)."""
+    from app.graph.main import get_agent  # lazy (anti-cycle)
     agent = get_agent()
 
     snapshots = []
@@ -248,6 +253,7 @@ async def run_agent_stream(
     sélectionne l'instance d'agent correspondante (graph.get_agent).
     workflow/payload : hint + entrée structurée du composer (§8).
     """
+    from app.graph.main import get_agent  # lazy (anti-cycle)
     agent = get_agent(model or None)
     config = _config_for(thread_id, user_id)
     context = _runtime_context(user_id, thread_id)
@@ -474,6 +480,7 @@ def run_agent(
     Mission Assistant UI : "model" optionnel (ModelSelector).
     workflow/payload : hint + entrée structurée du composer (§8).
     """
+    from app.graph.main import get_agent  # lazy (anti-cycle)
     agent = get_agent(model or None)
     config = _config_for(thread_id, user_id)
     context = _runtime_context(user_id, thread_id)

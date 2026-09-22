@@ -41,10 +41,8 @@ from app.graph.main.edges import (
 )
 from app.graph.main.state import CustomAgentState, MainState
 
-# Import direct depuis tools.py (le fichier) pour éviter le cycle avec le package
-from app.agent import tools as tools_module
-
-all_tools = tools_module.all_tools
+# Tools LLM (source unique app/tools/ — agrégat all_tools).
+from app.tools import all_tools
 from app.schemas.context import AgentContext
 from app.logging.events import log_event
 from app.services.models.retry import is_transient_error

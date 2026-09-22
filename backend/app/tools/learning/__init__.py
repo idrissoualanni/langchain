@@ -1,8 +1,5 @@
-# SHIM de compatibilité (refactor — phase migration).
-#
-# Les learning tools ont déménagé vers app/tools/learning/.
-# SUPPRESSION prévue phase cleanup (§30 mission) après vérification.
-from app.tools.learning import (
+# Tools learning — exposition LLM du Learning Profile.
+from app.tools.learning.learning import (
     get_learning_profile,
     get_learning_topic,
     learning_tools,

@@ -46,7 +46,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from pydantic import BaseModel, Field
 import time
 
-from app.agent.tools.coding.tools import get_coding_tools, execute_code_tool, analyze_code_tool, explain_error_tool
+from app.tools.coding import get_coding_tools, execute_code_tool, analyze_code_tool, explain_error_tool
 from app.services.sandbox.executor import execute_code
 from app.services.learning.engine import decide
 from app.services.learning.decision import LearningDecision, LearningAction
