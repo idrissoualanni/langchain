@@ -17,6 +17,7 @@ import {
   Sun,
   User,
   Video,
+  Mic,
 } from 'lucide-react';
 import { UserButton } from '@clerk/clerk-react';
 import { useHealth } from '@/hooks/useHealth';
@@ -45,13 +46,19 @@ interface NavItem {
   icon: typeof Bot;
 }
 
-const USER_NAV: NavItem[] = [
+const MAIN_NAV: NavItem[] = [
   { to: '/assistant', label: 'Assistant', icon: Bot },
   { to: '/learning', label: 'Learning', icon: GraduationCap },
   { to: '/documents', label: 'Documents', icon: FileText },
-  { to: '/video', label: 'Vidéo', icon: Video },
-  { to: '/profile', label: 'Profile', icon: User },
+  { to: '/memory', label: 'Mémoire', icon: ScrollText },
 ];
+
+const WORKSPACE_NAV: NavItem[] = [
+  { to: '/video', label: 'Vidéo', icon: Video },
+  { to: '/voice', label: 'Voix', icon: Mic },
+];
+
+const PROFILE_NAV: NavItem = { to: '/profile', label: 'Profil', icon: User };
 
 const SETTINGS_NAV: NavItem = {
   to: '/settings',
@@ -69,7 +76,7 @@ function NavEntry({ item }: { item: NavItem }) {
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={isActive} tooltip={label}>
-        <NavLink to={to}>
+        <NavLink to={to} aria-current={isActive ? 'page' : undefined}>
           <Icon />
           <span>{label}</span>
         </NavLink>
@@ -102,13 +109,32 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="flex-none gap-0">
+      <SidebarContent className="flex min-h-0 flex-1 gap-0 overflow-hidden">
         <SidebarGroup>
-          <SidebarMenu>
-            {USER_NAV.map((item) => (
-              <NavEntry key={item.to} item={item} />
-            ))}
-          </SidebarMenu>
+          <SidebarGroupLabel className="font-mono text-[10px] tracking-[0.1em] uppercase">
+            principal
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {MAIN_NAV.map((item) => (
+                <NavEntry key={item.to} item={item} />
+              ))}
+              <NavEntry key={PROFILE_NAV.to} item={PROFILE_NAV} />
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="font-mono text-[10px] tracking-[0.1em] uppercase">
+            workspace
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {WORKSPACE_NAV.map((item) => (
+                <NavEntry key={item.to} item={item} />
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
         </SidebarGroup>
 
         {isAdmin && (
@@ -140,19 +166,19 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
+
+        <SidebarSeparator className="my-2" />
+
+        {/* Conversations — ThreadList officiel Assistant UI */}
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="text-muted-foreground px-4 pt-2 pb-1 font-mono text-[10px] tracking-[0.1em] uppercase">
+            conversations
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+            <ThreadList />
+          </div>
+        </div>
       </SidebarContent>
-
-      <SidebarSeparator />
-
-      {/* Conversations — ThreadList officiel Assistant UI */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="text-muted-foreground px-4 pt-3 pb-1 font-mono text-[10px] tracking-[0.1em] uppercase">
-          conversations
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-          <ThreadList />
-        </div>
-      </div>
 
       <SidebarFooter className="gap-2 border-t">
         {/* Paramètres — regroupés dans le pied de la sidebar */}

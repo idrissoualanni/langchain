@@ -2,62 +2,69 @@
 
 import * as React from "react";
 import { Loader2, Mic, MicOff } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { apiFetch, ApiError } from "@/api/base";
 
 function VoiceButton() {
   const [started, setStarted] = React.useState(false);
   const [connecting, setConnecting] = React.useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleClick = React.useCallback(async () => {
+    // Le bouton voix ouvre une VRAIE session vocale ( page /voice ) :
+    // on déclenche le dispatch puis on navigue. La page se connecte à
+    // la room et porte l'interface ( visualizer, état agent, mémoire ).
     try {
       if (!started) {
         setConnecting(true);
-        const res = await fetch("/api/livekit/agent/start", { method: "POST" });
-        if (res.ok) {
-          setStarted(true);
-        } else if (res.status === 503) {
-          // Le serveur LiveKit n'est pas démarré (ex: local). On l'indique
-          // clairement à l'utilisateur plutôt que de rester bloqué en
-          // "Connexion".
-          const data = await res.json().catch(() => null);
-          toast({
-            title: "Serveur LiveKit indisponible",
-            description:
-              data?.detail ??
-              "Le serveur LiveKit n'est pas démarré. La voix reste désactivée.",
-          });
-        } else {
-          // Autre erreur serveur (500, 401, …) : ne pas rester silencieux.
-          const data = await res.json().catch(() => null);
-          toast({
-            title: "Démarrage de la voix impossible",
-            description:
-              data?.detail ?? `Erreur HTTP ${res.status}`,
-            variant: "destructive",
-          });
-        }
-        setConnecting(false);
+        // apiFetch retourne le JSON déjà parsé et LÈVE une ApiError
+        // ( status + message ) sur toute réponse non-2xx : on ne gère donc
+        // plus un objet Response ici.
+        await apiFetch("/api/livekit/agent/start", { method: "POST" });
+        setStarted(true);
+        navigate("/voice");
       } else {
-        const res = await fetch("/api/livekit/agent/stop", { method: "POST" });
-        if (res.status === 503) {
-          const data = await res.json().catch(() => null);
-          toast({
-            title: "Serveur LiveKit indisponible",
-            description:
-              data?.detail ??
-              "Le serveur LiveKit n'est pas démarré. L'agent est déjà arrêté.",
-          });
-        }
+        await apiFetch("/api/livekit/agent/stop", { method: "POST" });
         setStarted(false);
       }
     } catch (error) {
+      const apiError = error instanceof ApiError ? error : null;
+
+      if (apiError && apiError.status === 503) {
+        // Le serveur LiveKit n'est pas démarré ( ex: local ). On l'indique
+        // clairement à l'utilisateur plutôt que de rester bloqué en
+        // "Connexion" — pas de variant "destructive", ce n'est pas un bug.
+        toast({
+          title: "Serveur LiveKit indisponible",
+          description:
+            apiError.message ??
+            (started
+              ? "Le serveur LiveKit n'est pas démarré. L'agent est déjà arrêté."
+              : "Le serveur LiveKit n'est pas démarré. La voix reste désactivée."),
+        });
+      } else {
+        // Autre erreur serveur ( 500, 401, … ) : ne pas rester silencieux.
+        toast({
+          title: started
+            ? "Arrêt de la voix impossible"
+            : "Démarrage de la voix impossible",
+          description:
+            apiError?.message ??
+            (error instanceof Error ? error.message : "Erreur inconnue"),
+          variant: "destructive",
+        });
+      }
+
+      // Échec de l'arrêt → l'agent est de toute façon arrêté côté serveur
+      // ( ou jamais démarré ) : on revient à l'état "voix désactivée".
+      if (started) {
+        setStarted(false);
+      }
       console.error(error);
-      toast({
-        title: "Erreur de connexion vocale",
-        description: error instanceof Error ? error.message : "Erreur inconnue",
-      });
+    } finally {
       setConnecting(false);
     }
   }, [started, toast]);

@@ -51,11 +51,19 @@ from app.config import (
 )
 from app.graph.nodes import (
     activity_node,
+    coding_node,
+    document_node,
     intake_node,
     problem_node,
+    research_node,
     route_after_activity,
+    route_after_coding,
+    route_after_document,
     route_after_problem,
+    route_after_research_node,
+    route_after_video,
     route_after_workflow_router,
+    video_node,
     workflow_router_node,
 )
 from app.graph.state import MainState
@@ -103,6 +111,10 @@ def compile_main_graph(subgraph_agent, checkpointer, store):
     graph.add_node("workflow_router", workflow_router_node)
     graph.add_node("activity", activity_node)
     graph.add_node("problem", problem_node)
+    graph.add_node("research", research_node)
+    graph.add_node("coding", coding_node)
+    graph.add_node("video", video_node)
+    graph.add_node("document", document_node)
     graph.add_node("context", context_node)
     graph.add_node("learning", learning_node)
     graph.add_node(
@@ -129,9 +141,18 @@ def compile_main_graph(subgraph_agent, checkpointer, store):
         route_after_workflow_router,
         # Phase 2 : "main" → context, "activity" → node ACTIVITY
         # (continuation §16). Phase 3 : "problem" → node PROBLEM
-        # (ProblemSubgraph §21). Les subgraphs restants rempliront
-        # ce mapping aux Phases 4-7.
-        {"context": "context", "activity": "activity", "problem": "problem"},
+        # (ProblemSubgraph §21). Phases 4-7 : research (§26), coding
+        # (§22), video (§28), document (§30) — WIRED_WORKFLOWS est
+        # COMPLET : tout workflow connu a une branche réelle.
+        {
+            "context": "context",
+            "activity": "activity",
+            "problem": "problem",
+            "research": "research",
+            "coding": "coding",
+            "video": "video",
+            "document": "document",
+        },
     )
 
     # ACTIVITY (continuation) rejoint toujours la chaîne principale :
@@ -149,6 +170,30 @@ def compile_main_graph(subgraph_agent, checkpointer, store):
     graph.add_conditional_edges(
         "problem",
         route_after_problem,
+        {"context": "context"},
+    )
+
+    # RESEARCH / CODING / VIDEO / DOCUMENT : même pattern — le subgraph
+    # produit son résultat §8 dans workflow_result, puis revient sur la
+    # chaîne principale (CONTEXT → LEARNING → AGENT → RESPONSE).
+    graph.add_conditional_edges(
+        "research",
+        route_after_research_node,
+        {"context": "context"},
+    )
+    graph.add_conditional_edges(
+        "coding",
+        route_after_coding,
+        {"context": "context"},
+    )
+    graph.add_conditional_edges(
+        "video",
+        route_after_video,
+        {"context": "context"},
+    )
+    graph.add_conditional_edges(
+        "document",
+        route_after_document,
         {"context": "context"},
     )
 

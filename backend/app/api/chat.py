@@ -17,6 +17,7 @@ from app.api.schemas import ChatRequest, ChatResponse
 from app.auth.resolver import CurrentUser, get_current_user
 from app.db.connections import init_db
 from app.db.threads import get_thread, thread_belongs_to_user
+from app.logging.events import log_event
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -67,6 +68,8 @@ def api_chat(
         thread_id=payload.thread_id,
         message=payload.message,
         model=payload.model,
+        workflow=payload.workflow,
+        payload=payload.payload,
     )
     return ChatResponse(**result)
 
@@ -77,6 +80,8 @@ async def api_chat_stream(
     thread_id: str,
     message: str,
     model: str | None = None,
+    workflow: str | None = None,
+    payload: str | None = None,
     current: CurrentUser = Depends(get_current_user),
 ):
     """Envoyer un message — stream SSE des événements du pipeline.
@@ -86,16 +91,41 @@ async def api_chat_stream(
     query n'est qu'une VÉRIFICATION anti-usurpation — 403 s'il ne
     correspond pas à la session.
 
+    payload : JSON string (query param) — entrée structurée du
+    workflow (§8). Un JSON invalide est ignoré + tracé, jamais un
+    400 (le run continue sur la chaîne principale).
+
     Événements : RUN_START, STATE_LOAD, USER_MESSAGE, ASSISTANT_MESSAGE,
     CHECKPOINT_SAVED, RUN_END (+ TOOL_START/TOOL_END/TOOL_ERROR temps réel
     via le bus d'événements pendant le run).
     """
+    parsed_payload: dict = {}
+    if payload:
+        try:
+            decoded = json.loads(payload)
+            if isinstance(decoded, dict):
+                parsed_payload = decoded
+            else:
+                log_event(
+                    "CHAT_PAYLOAD_IGNORED",
+                    level="WARNING",
+                    message="payload JSON n'est pas un object — ignoré",
+                )
+        except json.JSONDecodeError:
+            log_event(
+                "CHAT_PAYLOAD_IGNORED",
+                level="WARNING",
+                message="payload JSON invalide — ignoré",
+            )
+
     try:
-        payload = ChatRequest(
+        payload_obj = ChatRequest(
             user_id=user_id,
             thread_id=thread_id,
             message=message,
             model=model,
+            workflow=workflow,
+            payload=parsed_payload,
         )
     except ValidationError as exc:
         raise HTTPException(
@@ -103,14 +133,16 @@ async def api_chat_stream(
             detail=json.loads(exc.json())[0]["msg"],
         )
 
-    _validate_chat(payload, current)
+    _validate_chat(payload_obj, current)
 
     async def gen():
         async for event in run_agent_stream(
-            user_id=payload.user_id,
-            thread_id=payload.thread_id,
-            message=payload.message,
-            model=payload.model,
+            user_id=payload_obj.user_id,
+            thread_id=payload_obj.thread_id,
+            message=payload_obj.message,
+            model=payload_obj.model,
+            workflow=payload_obj.workflow,
+            payload=payload_obj.payload,
         ):
             # Format SSE textuel : event: X\ndata: {...}\n\n
             yield (

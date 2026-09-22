@@ -42,6 +42,9 @@ import {
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import { Dialog } from '../components/ui/dialog';
+import { DropZone } from '../components/ui/drop-zone';
+import { EmptyState } from '../components/ui/empty-state';
+import { ErrorState } from '../components/ui/error-state';
 
 const MAX_BYTES = 2_000_000;
 
@@ -333,7 +336,7 @@ export function DocumentsPage() {
         </Card>
       ) : (
         <div className="space-y-5">
-          {/* Upload */}
+          {/* Upload — drag & drop (§13) */}
           <Card>
             <CardHeader className="flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-[13px]">
@@ -341,19 +344,25 @@ export function DocumentsPage() {
                 Ajouter un document
               </CardTitle>
               <span className="font-mono text-[10px] text-muted-foreground/60">
-                md · txt · rst · pdf (max 2 Mo)
+                md · txt · rst · pdf (max 2 Mo) · glisser-déposer
               </span>
             </CardHeader>
             <CardContent className="space-y-3">
+              <DropZone
+                accept=".md,.txt,.rst,.pdf"
+                maxBytes={MAX_BYTES}
+                onFiles={(files) => onFilePick(files[0])}
+              />
               <textarea
                 className="w-full resize-y rounded-lg border border-border bg-background p-3 font-mono text-xs leading-relaxed text-foreground focus:outline-none focus:ring-1 focus:ring-live/40"
-                rows={5}
+                rows={4}
                 placeholder={
                   isPdfPick
                     ? '(contenu PDF encodé en base64 — prêt pour indexation)'
-                    : 'Collez le contenu texte de votre document ici (cours, notes, code, syntheses)...'
+                    : 'Ou collez le contenu texte ici (cours, notes, code, synthèses)...'
                 }
                 value={isPdfPick ? (fileName ? '(fichier sélectionné)' : '') : pasted}
+                onChange={(e) => setPasted(e.target.value)}
                 disabled={isPdfPick}
               />
               {isPdfPick && fileName && (
@@ -485,11 +494,15 @@ export function DocumentsPage() {
                           <span className="font-mono text-[11px] font-semibold text-live">
                             {h.filename || h.doc_id}
                           </span>
-                          <span className="font-mono text-[9px] text-muted-foreground/60">
-                            score {h.relevance.toFixed(3)} · lex{' '}
-                            {h.lexical_score.toFixed(2)} · sem{' '}
-                            {h.semantic_score.toFixed(2)}
-                          </span>
+                          <details className="ml-auto">
+                            <summary className="cursor-pointer list-none font-mono text-[9px] text-muted-foreground/60 hover:text-foreground">
+                              scores
+                            </summary>
+                            <span className="font-mono text-[9px] text-muted-foreground/60">
+                              {h.relevance.toFixed(3)} · lex {h.lexical_score.toFixed(2)} · sem{' '}
+                              {h.semantic_score.toFixed(2)}
+                            </span>
+                          </details>
                         </div>
                         <p className="line-clamp-3 text-xs leading-relaxed text-foreground/85">
                           {h.content}
@@ -587,27 +600,17 @@ export function DocumentsPage() {
                   chargement…
                 </div>
               ) : error ? (
-                <div className="rounded-md bg-error/10 px-3 py-2 font-mono text-[11px] text-error">
-                  {error}
-                </div>
+                <ErrorState message={error} details={error} />
               ) : visibleDocuments.length === 0 ? (
-                <div className="py-8 text-center">
-                  <FileText
-                    size={28}
-                    className="mx-auto mb-3 text-muted-foreground/30"
-                    strokeWidth={1.6}
-                  />
-                  <p className="text-sm font-medium text-foreground">
-                    {tab === 'shared'
-                      ? 'Aucun document partagé avec vous'
-                      : 'Aucun document'}
-                  </p>
-                  <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-                    {tab === 'shared'
-                      ? 'Le partage de documents n’est pas encore disponible — aucun document ne vous a été partagé.'
-                      : 'Aucun document indexé pour le moment dans cette catégorie.'}
-                  </p>
-                </div>
+                <EmptyState
+                  icon={<FileText />}
+                  title={tab === 'shared' ? 'Aucun document partagé' : 'Aucun document'}
+                  description={
+                    tab === 'shared'
+                      ? 'Le partage n’est pas encore disponible.'
+                      : 'Ajoutez votre premier document ci-dessus pour commencer.'
+                  }
+                />
               ) : (
                 <ul className="divide-y divide-border">
                   {visibleDocuments.map((d) => (
@@ -689,7 +692,7 @@ export function DocumentsPage() {
           }
         }}
         title={previewDoc?.filename ?? 'Document'}
-        className="max-w-2xl"
+        className="sm:max-w-2xl"
       >
         {previewLoading ? (
           <div className="flex items-center gap-2 py-6 font-mono text-[11px] text-muted-foreground">

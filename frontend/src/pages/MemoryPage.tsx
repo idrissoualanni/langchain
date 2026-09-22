@@ -71,15 +71,15 @@ export function MemoryPage() {
 
   return (
     <div className="h-full overflow-y-auto p-6">
-      {/* En-tÃªte */}
+      {/* En-tête — humain (§12) : ce que l'agent sait, pourquoi c'est utile */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-foreground">
             <Database size={16} className="text-live" strokeWidth={1.8} />
-            Memory
+            Mémoire
           </h1>
-          <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-            sqlite Â· checkpoints.db Â· langgraph state
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+            Ce que l’agent sait de vous, ce qu’il a mémorisé et comment cela personnalise vos apprentissages.
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2 font-mono text-[11px]">
@@ -216,26 +216,28 @@ export function MemoryPage() {
             </CardContent>
           </Card>
 
-          {/* Identifiants + compteurs */}
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-            {stats.map(({ label, value, mono, truncate }) => (
+          {/* Métriques humaines — IDs cachés (§12) */}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            {stats.slice(2).map(({ label, value }) => (
               <Card key={label} className="p-3.5">
                 <div className="mb-1 font-mono text-[9px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/70">
                   {label}
                 </div>
-                <div
-                  className={`${
-                    mono
-                      ? 'font-mono text-[11px] text-live'
-                      : 'text-lg font-semibold text-foreground'
-                  } ${truncate ? 'truncate' : ''}`}
-                  title={value}
-                >
-                  {mono && value !== 'â€”' ? value.slice(0, 14) + 'â€¦' : value}
-                </div>
+                <div className="text-lg font-semibold text-foreground">{value}</div>
               </Card>
             ))}
           </div>
+          <details className="rounded-lg border border-border bg-muted/20 px-4 py-2">
+            <summary className="cursor-pointer font-mono text-[11px] text-muted-foreground hover:text-foreground">
+              Détails techniques (IDs, checkpoints)
+            </summary>
+            <div className="mt-2 grid grid-cols-2 gap-2 font-mono text-[11px]">
+              <span className="text-muted-foreground">user</span>
+              <span className="truncate text-live">{state?.user_id ?? '—'}</span>
+              <span className="text-muted-foreground">thread</span>
+              <span className="truncate text-live">{currentThread?.thread_id ?? '—'}</span>
+            </div>
+          </details>
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             {/* Timeline des checkpoints */}

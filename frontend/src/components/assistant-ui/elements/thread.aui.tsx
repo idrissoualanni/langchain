@@ -24,6 +24,7 @@ import {
   ToolGroupTrigger,
 } from "@/components/assistant-ui/elements/tool-group.aui";
 import { TooltipIconButton } from "@/components/assistant-ui/elements/tooltip-icon-button";
+import { useComposerMentions } from "@/hooks/use-composer-mentions";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -68,6 +69,7 @@ import {
 } from "react";
 import { ActivityTrigger } from "@/components/assistant-ui/elements/activity.aui";
 import { VoiceButton } from "@/components/assistant-ui/elements/voice.aui";
+import { useNavigate } from "react-router-dom";
 
 export type ThreadGroupPart = MessagePrimitive.GroupedParts.GroupPart;
 
@@ -280,8 +282,59 @@ const ThreadSuggestionItem: FC = () => {
 };
 
 const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
+  // Brief §20 / mentions : le popover @ expose les déclencheurs de
+  // workflow (deep-research, code, agenda…). Les termes sont extraits
+  // au send (store.sendMessage → parseComposerTerms) : le popover est
+  // l'aperçu, le transport se fait dans le payload + workflow_hint.
+  const { adapter, directive } = useComposerMentions();
+
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
+      <ComposerPrimitive.Unstable_TriggerPopoverRoot>
+        <ComposerPrimitive.Unstable_TriggerPopover
+          char="@"
+          adapter={adapter}
+          className="aui-mention-popover absolute bottom-full left-0 right-0 z-50 mb-2 max-h-72 overflow-y-auto rounded-xl border border-border bg-popover p-2 shadow-md"
+        >
+          <ComposerPrimitive.Unstable_TriggerPopover.Directive
+            formatter={directive.formatter}
+            onInserted={directive.onInserted}
+          />
+          <ComposerPrimitive.Unstable_TriggerPopoverItems>
+            {(items) => (
+              <div className="flex flex-col gap-1">
+                {items.length === 0 ? (
+                  <div className="text-muted-foreground px-3 py-2 text-xs">
+                    Aucun terme ne correspond
+                  </div>
+                ) : (
+                  items.map((item) => (
+                    <ComposerPrimitive.Unstable_TriggerPopoverItem
+                      key={item.id}
+                      item={item}
+                      className="aui-mention-item flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none data-[highlighted]:bg-accent"
+                    >
+                      <span aria-hidden className="text-base">
+                        {typeof item.metadata?.icon === "string"
+                          ? item.metadata.icon
+                          : "•"}
+                      </span>
+                      <span className="flex flex-col">
+                        <span className="font-medium">{item.label}</span>
+                        {item.description ? (
+                          <span className="text-muted-foreground text-xs">
+                            {item.description}
+                          </span>
+                        ) : null}
+                      </span>
+                    </ComposerPrimitive.Unstable_TriggerPopoverItem>
+                  ))
+                )}
+              </div>
+            )}
+          </ComposerPrimitive.Unstable_TriggerPopoverItems>
+        </ComposerPrimitive.Unstable_TriggerPopover>
+      </ComposerPrimitive.Unstable_TriggerPopoverRoot>
       <ComposerPrimitive.AttachmentDropzone asChild>
         <div
           data-slot="aui_composer-shell"
@@ -310,6 +363,7 @@ const ComposerAction: FC = () => {
   // par le composer officiel (setText + send) pour bénéficier des
   // pièces jointes et du run config, comme un envoi clavier.
   const aui = useAui();
+  const navigate = useNavigate();
   const isRunning = useAuiState((s) => s.thread.isRunning);
 
   const handleActivityTrigger = (instruction: string) => {
@@ -327,38 +381,28 @@ const ComposerAction: FC = () => {
         <VoiceButton />
       </div>
       <div className="flex items-center gap-1.5">
-        <AuiIf condition={(s) => s.thread.capabilities.dictation}>
-          <AuiIf condition={(s) => s.composer.dictation == null}>
-            <ComposerPrimitive.Dictate asChild>
-              <TooltipIconButton
-                tooltip="Voice input"
-                side="bottom"
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="aui-composer-dictate text-muted-foreground hover:text-foreground size-7 rounded-full"
-                aria-label="Start voice input"
-              >
-                <MicIcon className="aui-composer-dictate-icon size-4" />
-              </TooltipIconButton>
-            </ComposerPrimitive.Dictate>
-          </AuiIf>
-          <AuiIf condition={(s) => s.composer.dictation != null}>
-            <ComposerPrimitive.StopDictation asChild>
-              <TooltipIconButton
-                tooltip="Stop dictation"
-                side="bottom"
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="aui-composer-stop-dictation text-destructive size-7 rounded-full"
-                aria-label="Stop voice input"
-              >
-                <SquareIcon className="aui-composer-stop-dictation-icon size-3.5 animate-pulse fill-current" />
-              </TooltipIconButton>
-            </ComposerPrimitive.StopDictation>
-          </AuiIf>
-        </AuiIf>
+        {/*
+          Dictée : le bouton micro natif Assistant UI ( ComposerPrimitive
+          .Dictate ) était inerte — adapters.dictation n'est pas câblé et la
+          capacité n'est jamais annoncée. On l'ouvre donc sur la session
+          vocale LiveKit en mode dictée : le STT Inference retranscrit la
+          parole, la page /voice renvoie le texte au composer via le même
+          canal officiel que ActivityTrigger ( setText + send ).
+        */}
+        <TooltipIconButton
+          tooltip="Dictée vocale"
+          side="bottom"
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="aui-composer-dictate text-muted-foreground hover:text-foreground size-7 rounded-full"
+          aria-label="Dictée vocale"
+          onClick={() =>
+            navigate("/voice?mode=dictate&return=/assistant")
+          }
+        >
+          <MicIcon className="aui-composer-dictate-icon size-4" />
+        </TooltipIconButton>
         <AuiIf condition={(s) => !s.thread.isRunning}>
           <ComposerPrimitive.Send asChild>
             <TooltipIconButton

@@ -13,6 +13,7 @@ export default defineConfig({
     alias: {
       '@': path.resolve(dirname, 'src'),
     },
+    preserveSymlinks: true, // évite optimizeSafeRealPathSync → spawn EPERM
   },
   server: {
     port: 5173,

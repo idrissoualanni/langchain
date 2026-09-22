@@ -195,13 +195,37 @@ def _extract_response(result: dict) -> str:
     return ""
 
 
-def _build_input(user_id: str, message: str, interaction_count: int) -> dict:
+def _build_input(
+    user_id: str,
+    message: str,
+    interaction_count: int,
+    workflow: str | None = None,
+    payload: dict | None = None,
+) -> dict:
     """Input state du run (§62 : user_id dans le state persisté,
-    interaction_count compteur du thread)."""
+    interaction_count compteur du thread).
+
+    workflow : hint émis par le composer (@mention → terme). Canal
+    dédié workflow_hint consommé par WORKFLOW_ROUTER. Chaîne vide si
+    aucun hint (comportement historique préservé).
+    payload : entrée structurée du workflow (§8 SubgraphInput) —
+    research_mode, source vidéo… Canal dédié payload consommé par les
+    nodes subgraph. Sanitised ici : clés str non vides, valeurs
+    scalaires uniquement (jamais de nested, jamais de code exécutable).
+    """
+    clean: dict = {}
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if not isinstance(key, str) or not key.strip():
+                continue
+            if isinstance(value, (str, int, float, bool)) or value is None:
+                clean[key.strip()] = value
     return {
         "messages": [{"role": "user", "content": message}],
         "user_id": user_id,
         "interaction_count": interaction_count,
+        "workflow_hint": (workflow or "").strip(),
+        "payload": clean,
     }
 
 
@@ -210,6 +234,8 @@ async def run_agent_stream(
     thread_id: str,
     message: str,
     model: str | None = None,
+    workflow: str | None = None,
+    payload: dict | None = None,
 ) -> AsyncIterator[dict]:
     """Exécute un run complet en streamant les événements du pipeline.
 
@@ -220,6 +246,7 @@ async def run_agent_stream(
 
     Mission Assistant UI : "model" optionnel (ModelSelector) —
     sélectionne l'instance d'agent correspondante (graph.get_agent).
+    workflow/payload : hint + entrée structurée du composer (§8).
     """
     agent = get_agent(model or None)
     config = _config_for(thread_id, user_id)
@@ -278,7 +305,9 @@ async def run_agent_stream(
         "message": message,
     }
 
-    input_state = _build_input(user_id, message, interaction_count)
+    input_state = _build_input(
+        user_id, message, interaction_count, workflow, payload
+    )
 
     start = time.perf_counter()
 
@@ -437,10 +466,13 @@ def run_agent(
     thread_id: str,
     message: str,
     model: str | None = None,
+    workflow: str | None = None,
+    payload: dict | None = None,
 ) -> dict:
     """Mode synchrone (POST /api/chat) — même pipeline, sans stream.
 
     Mission Assistant UI : "model" optionnel (ModelSelector).
+    workflow/payload : hint + entrée structurée du composer (§8).
     """
     agent = get_agent(model or None)
     config = _config_for(thread_id, user_id)
@@ -473,7 +505,9 @@ def run_agent(
         thread_id=thread_id,
     )
 
-    input_state = _build_input(user_id, message, interaction_count)
+    input_state = _build_input(
+        user_id, message, interaction_count, workflow, payload
+    )
 
     # Timeout réel + retries BORNÉS transitoires (mission §3) — même
     # politique que le mode async (app/models/retry.py).

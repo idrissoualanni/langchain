@@ -23,6 +23,10 @@ import {
   deleteThread as apiDeleteThread,
   streamChat,
 } from './api';
+// Composer : parsing des termes (@deep-research…) au send — les
+// mentions déclenchent désormais un workflow réel au lieu d'être
+// décoratives.
+import { parseComposerTerms } from '../hooks/use-composer-mentions';
 // Panneau d'activité (spec §38) : les événements activity.* du run
 // sont dispatchés vers le store d'activité dédié.
 import {
@@ -229,6 +233,14 @@ export const useAssistantStore = create<AssistantStore>((set, get) => ({
     currentAbort = new AbortController();
     const model = get().selectedModel;
 
+    // Composer : les @mentions deviennent des termes. On extrait le
+    // workflow + le payload (§8) et on retire les termes du texte
+    // envoyé au modèle — le "@" ne doit plus polluer la requête.
+    // La bulle utilisateur affiche le texte ORIGINAL (ce que
+    // l'utilisateur a tapé), le backend reçoit la version nettoyée.
+    const terms = parseComposerTerms(text);
+    const queryToSend = terms.query.trim() || text;
+
     const patchAssistant = (
       patch: Partial<StoreMessage>,
     ) => {
@@ -253,7 +265,7 @@ export const useAssistantStore = create<AssistantStore>((set, get) => ({
       await streamChat(
         userId,
         threadId,
-        text,
+        queryToSend,
         model,
         {
           onAssistantChunk: (chunk) => {
@@ -364,6 +376,8 @@ export const useAssistantStore = create<AssistantStore>((set, get) => ({
           },
         },
         currentAbort.signal,
+        terms.workflow || null,
+        terms.payload,
       );
     } catch (e) {
       if ((e as Error).name !== 'AbortError') {

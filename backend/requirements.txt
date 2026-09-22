@@ -25,6 +25,10 @@ tavily-python
 
 # Realtime
 livekit-api
+# Agent tuteur vocal — worker STT/LLM/TTS via LiveKit Inference.
+# Versions pinnées au moment de l'ajout ( livekit-agents 1.8.2 ).
+livekit-agents>=1.8.2
+livekit-plugins-silero>=1.8.2
 
 # Data / RAG
 sqlalchemy

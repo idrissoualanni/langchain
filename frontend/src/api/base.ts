@@ -17,9 +17,7 @@ export class ApiError extends Error {
 
 /** Retourne le token d'authentification courant (Clerk ou dev). */
 async function authHeader(): Promise<Record<string, string>> {
-  const clerk = (window as any).__clerkGetToken as
-    | ((opts?: any) => Promise<string | null>)
-    | undefined;
+  const clerk = window.__clerkGetToken;
   if (clerk) {
     try {
       const token = await clerk();

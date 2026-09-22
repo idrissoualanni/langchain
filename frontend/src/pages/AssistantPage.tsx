@@ -1,4 +1,4 @@
-// Page /assistant — document interactif (brief §17)
+// Page /assistant — document interactif (brief §17) — refonte §8
 //
 // Le runtime Assistant UI et le ThreadList officiel sont montés au
 // niveau du shell (App.tsx) : la Sidebar porte les conversations, la
@@ -15,6 +15,9 @@ import { useAgentResponseDataUI } from '../assistant-ui/AgentResponseDataUI';
 import { useToolUIs } from '../assistant-ui/tool-uis';
 import { useAssistantStore } from '../assistant-ui/store';
 import { useHealth } from '../hooks/useHealth';
+import { InlineError } from '../components/ui/error-state';
+import { useActivityStore } from '../hooks/use-activity-store';
+import { ActivityCard } from '../components/agent/activity-card';
 
 /**
  * Sélecteur de modèle intégré au Composer (brief §19).
@@ -75,24 +78,48 @@ const THREAD_COMPONENTS: ThreadComponents = {
   ),
 };
 
-/** Bandeau d'erreur run (états error UX) — règle rouge discrète (brief §30). */
+/** Bandeau d'erreur run — humain + dismiss (§24). */
 function RunErrorBanner() {
   const error = useAssistantStore((s) => s.error);
   const setError = useAssistantStore((s) => s.setError);
   if (!error) return null;
   return (
-    <div
-      role="alert"
-      className="border-destructive/40 bg-destructive/5 text-destructive mx-auto mb-2 flex w-full max-w-[44rem] items-start gap-2 rounded-[var(--radius-document)] border-s-2 px-3 py-2 text-sm"
-    >
-      <span className="min-w-0 flex-1 break-words">{error}</span>
-      <button
-        type="button"
-        onClick={() => setError(null)}
-        className="text-destructive/70 hover:text-destructive shrink-0 text-xs underline"
-      >
-        masquer
-      </button>
+    <div className="mx-auto w-full max-w-[44rem] px-2 pt-2">
+      <InlineError message={error} onDismiss={() => setError(null)} />
+    </div>
+  );
+}
+
+/** Header d'activité sticky — ce que fait l'agent maintenant (§6) */
+function AgentActivityHeader() {
+  const isRunning = useAssistantStore((s) => s.isRunning);
+  const activities = useActivityStore((s) => s.activities);
+  const running = activities.find((a) => a.status === 'running');
+  if (!isRunning && !running) return null;
+  return (
+    <div className="mx-auto w-full max-w-[44rem] px-2">
+      <div className="flex items-center gap-2 rounded-lg border border-live/20 bg-live/5 px-3 py-2 font-mono text-[11px]">
+        <span className="size-2 animate-pulse rounded-full bg-live" />
+        <span className="text-live">
+          {running ? running.title : 'L’agent réfléchit…'}
+        </span>
+        <span className="ml-auto text-muted-foreground">
+          {running ? `${running.type} · en cours` : 'streaming'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Liste compacte des activités récentes sous le thread */
+function RecentActivities() {
+  const activities = useActivityStore((s) => s.activities);
+  if (activities.length === 0) return null;
+  return (
+    <div className="mx-auto w-full max-w-[44rem] space-y-2 px-2 pb-2">
+      {activities.slice(0, 3).map((a) => (
+        <ActivityCard key={a.id} kind={a.type} title={a.title} status={a.status} progress={a.progress} />
+      ))}
     </div>
   );
 }
@@ -106,9 +133,11 @@ function AssistantRuntimeChildren() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <RunErrorBanner />
-      <div className="min-h-0 flex-1">
+      <AgentActivityHeader />
+      <div className="min-h-0 flex-1 overflow-hidden">
         <Thread components={THREAD_COMPONENTS} />
       </div>
+      <RecentActivities />
     </div>
   );
 }

@@ -12,8 +12,13 @@
 #                     émise par le node WORKFLOW_ROUTER.
 #   workflow_result : SubgraphResult.model_dump() — résultat structuré
 #                     produit par UN subgraph (§8) quand un workflow
-#                     en exécute un (Phases 2-7). Présent dès Phase 1
+#                     en exécute un (Phases 2-7). Présent dès la Phase 1
 #                     pour fixer le contrat, toujours dict vide sinon.
+#   payload         : entrée STRUCTURÉE d'un workflow (§8 SubgraphInput)
+#                     — research_mode (deep-research/academic-search/
+#                     news-search), source vidéo (filename/source_url)…
+#                     Canal d'ENTRÉE écrit par le runner depuis le
+#                     composer, consommé par les nodes subgraph.
 from pydantic import Field
 
 from app.agent.state import CustomAgentState
@@ -43,4 +48,17 @@ class MainState(CustomAgentState):
         default_factory=dict,
         description="SubgraphResult.model_dump() — résultat structuré "
         "produit par UN subgraph (§8), vide en Phase 1",
+    )
+    workflow_hint: str = Field(
+        default="",
+        description="Hint de workflow émis par le composer (@mention "
+        "→ terme). Canal d'ENTRÉE consommé par WORKFLOW_ROUTER — "
+        "validation contre KNOWN_WORKFLOWS, inconnu → ignoré + tracé.",
+    )
+    payload: dict = Field(
+        default_factory=dict,
+        description="Entrée structurée d'un workflow (§8 SubgraphInput) : "
+        "research_mode (deep-research/academic-search/news-search), "
+        "source vidéo (filename/source_url/duration). Canal d'ENTRÉE "
+        "écrit par le runner, consommé par les nodes subgraph.",
     )

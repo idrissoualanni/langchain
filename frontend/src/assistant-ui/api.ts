@@ -252,6 +252,11 @@ export async function streamChat(
   model: string | null,
   handlers: StreamHandlers,
   signal: AbortSignal,
+  /** Hint de workflow + payload structuré (§8) issus des termes du
+   *  composer (@deep-research → workflow=research…). Optionnels —
+   *  absence = routage déterministe habituel. */
+  workflow?: string | null,
+  payload?: Record<string, string> | null,
 ): Promise<void> {
   const params = new URLSearchParams({
     user_id: userId,
@@ -259,6 +264,12 @@ export async function streamChat(
     message,
   });
   if (model) params.set('model', model);
+  if (workflow) params.set('workflow', workflow);
+  // Le payload est un objet → sérialisé en JSON dans l'URL (le backend
+  // le décode ; un JSON invalide y est ignoré + tracé, jamais un 400).
+  if (payload && Object.keys(payload).length > 0) {
+    params.set('payload', JSON.stringify(payload));
+  }
 
   // Mission Identité (§17) : le token passe en HEADER ( jamais en
   // URL ) — fetch streaming SSE , solution compatible headers.
@@ -279,6 +290,10 @@ export async function streamChat(
         thread_id: threadId,
         message,
         ...(model ? { model } : {}),
+        ...(workflow ? { workflow } : {}),
+        ...(payload && Object.keys(payload).length > 0
+          ? { payload }
+          : {}),
       }),
     });
     handlers.onAssistantChunk?.(fallback.response);

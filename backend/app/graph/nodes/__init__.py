@@ -23,15 +23,40 @@
 #                   ↺evaluate→validate→artifact) et produit le contrat
 #                   ProblemResult (§8) avant de rejoindre la chaîne.
 #
+# Phases 4-7 ajoutent les subgraphs restants (tous câblés maintenant —
+# WIRED_WORKFLOWS est complet, un hint du composer aboutit à un node) :
+#
+#   RESEARCH        (graph/nodes/research.py) — ResearchSubgraph §26
+#   CODING          (graph/nodes/coding.py) — CodingSubgraph §22
+#   VIDEO           (graph/nodes/video.py) — VideoSubgraph §28
+#   DOCUMENT        (graph/nodes/document.py) — DocumentSubgraph §30
+#                   (contrat générique §8 + MCP agenda §40)
+#
 # Node = étape d'un workflow ; le plus MINGRE possible (§3/§89).
 from app.graph.nodes.activity import (
     activity_node,
     route_after_activity,
 )
+from app.graph.nodes.coding import (
+    coding_node,
+    route_after_coding,
+)
+from app.graph.nodes.document import (
+    document_node,
+    route_after_document,
+)
 from app.graph.nodes.intake import intake_node
 from app.graph.nodes.problem import (
     problem_node,
     route_after_problem,
+)
+from app.graph.nodes.research import (
+    research_node,
+    route_after_research_node,
+)
+from app.graph.nodes.video import (
+    video_node,
+    route_after_video,
 )
 from app.graph.nodes.workflow_router import (
     route_after_workflow_router,
@@ -48,4 +73,12 @@ __all__ = [
     "route_after_activity",
     "problem_node",
     "route_after_problem",
+    "research_node",
+    "route_after_research_node",
+    "coding_node",
+    "route_after_coding",
+    "video_node",
+    "route_after_video",
+    "document_node",
+    "route_after_document",
 ]

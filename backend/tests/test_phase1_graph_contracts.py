@@ -240,15 +240,32 @@ check(
     route_after_workflow_router({"workflow": {"workflow": "problem"}}) == "problem",
 )
 
-# WIRED_WORKFLOWS contient uniquement une branche réellement câblée
-# Phase 3 : "main" + "activity" + "problem" (§21) sont câblés.
+# WIRED_WORKFLOWS couvre tous les workflows connus : chaque branche du
+# router correspond à un node RÉEL du graphe compilé (Phases 2-7 :
+# activity, problem, research, coding, video, document + main).
+_expected_wired = {
+    "main": "context",
+    "activity": "activity",
+    "problem": "problem",
+    "research": "research",
+    "coding": "coding",
+    "video": "video",
+    "document": "document",
+}
 check(
-    "C: WIRED_WORKFLOWS Phase 3 = {main, activity, problem} câblés",
-    WIRED_WORKFLOWS == {
-        "main": "context",
-        "activity": "activity",
-        "problem": "problem",
-    },
+    "C: WIRED_WORKFLOWS couvre les 7 workflows connus",
+    WIRED_WORKFLOWS == _expected_wired,
+    str(WIRED_WORKFLOWS),
+)
+# Chaque cible est bien un node du graphe compilé (sinon la branche
+# pointerait vers un node fantôme → dead edge).
+check(
+    "C: chaque cible WIRED_WORKFLOWS est un node câblé",
+    all(
+        target in {"context", "activity", "problem", "research",
+                   "coding", "video", "document"}
+        for target in WIRED_WORKFLOWS.values()
+    ),
     str(WIRED_WORKFLOWS),
 )
 

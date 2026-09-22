@@ -41,15 +41,15 @@ export function Dialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} />
-      {/* Panel */}
-      <div className={cn('relative w-full max-w-md rounded-xl border border-border bg-card shadow-2xl', className)}>
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+      {/* Panel — responsive (§20) : 95vw sur mobile */}
+      <div className={cn('relative flex max-h-[90vh] w-full max-w-[95vw] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl sm:max-w-lg', className)}>
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-          <button onClick={handleClose} className="text-muted-foreground transition-colors hover:text-foreground">
+          <button onClick={handleClose} aria-label="Fermer" className="text-muted-foreground transition-colors hover:text-foreground">
             <X size={16} />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
       </div>
     </div>
   );

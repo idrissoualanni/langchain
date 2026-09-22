@@ -80,6 +80,17 @@ class ChatRequest(BaseModel):
     # None/absent → modèle par défaut (MODEL_NAME, env). Aucun autre
     # comportement backend ne dépend de ce champ.
     model: str | None = Field(default=None, max_length=100)
+    # Composer (@mentions → termes) : hint de workflow optionnel. Validé
+    # contre KNOWN_WORKFLOWS par le WORKFLOW_ROUTER ; une valeur inconnue
+    # est ignorée + tracée (jamais silencieuse, jamais d'erreur 400 — le
+    # message reste traité sur la chaîne principale).
+    workflow: str | None = Field(default=None, max_length=50)
+    # Composer (@mentions → termes) : entrée structurée du workflow
+    # (§8 SubgraphInput). Ex : {"research_mode": "deep-research"} pour
+    # orienter la synthèse du ResearchSubgraph, {"source_url": …} pour
+    # le VideoSubgraph. Dict plat de scalaires, clés/valeurs bornées.
+    # Jamais d'exécution de code, jamais de secret (§41).
+    payload: dict = Field(default_factory=dict)
 
     @field_validator("user_id")
     @classmethod

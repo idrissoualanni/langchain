@@ -285,7 +285,7 @@ export function TracesPage() {
               </div>
             ) : (
               <table className="w-full text-sm">
-                <thead>
+                <thead className="bg-card sticky top-0">
                   <tr className="text-muted-foreground border-b text-left text-xs">
                     <th className="pb-2 font-medium">Modèle</th>
                     <th className="pb-2 font-medium">Provider</th>

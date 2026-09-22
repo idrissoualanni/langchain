@@ -200,15 +200,16 @@ LIVEKIT_AGENT_STT_MODEL = _env_or_default(
     "LIVEKIT_AGENT_STT_MODEL", "deepgram/nova-3"
 )
 LIVEKIT_AGENT_LLM_MODEL = _env_or_default(
-    "LIVEKIT_AGENT_LLM_MODEL", "google/gemini-2.5-flash"
+    "LIVEKIT_AGENT_LLM_MODEL", "google/gemma-4-31b-it"
 )
 LIVEKIT_AGENT_TTS_MODEL = _env_or_default(
-    "LIVEKIT_AGENT_TTS_MODEL", "cartesia/sonic-3"
+    "LIVEKIT_AGENT_TTS_MODEL", "rime/coda"
 )
 # Voice ID provider ( UUID Cartesia, nom Inworld… ). Vide = la voix par
 # défaut côté Inference ; on ne transmet alors pas le paramètre — un ID
 # inventé ferait échouer la première synthèse.
-LIVEKIT_AGENT_TTS_VOICE = _env_or_default("LIVEKIT_AGENT_TTS_VOICE", "")
+# "aurelie" : voix Rime testée en conditions réelles.
+LIVEKIT_AGENT_TTS_VOICE = _env_or_default("LIVEKIT_AGENT_TTS_VOICE", "aurelie")
 LIVEKIT_AGENT_LANGUAGE = _env_or_default("LIVEKIT_AGENT_LANGUAGE", "fr")
 
 

@@ -377,7 +377,12 @@ class ToolEventMiddleware(AgentMiddleware):
     accéder à la mémoire d'un autre utilisateur.
     """
 
-    def wrap_tool_call(self, request, handler):
+    def _prepare(self, request):
+        """Pré-exécution : forçage user_id + événement TOOL_START.
+
+        Retourne (request, name) — request pouvant avoir été recréé
+        par request.override() si le user_id a été forcé.
+        """
         call = request.tool_call or {}
         name = call.get("name", "unknown")
         args = call.get("args", {})
@@ -396,7 +401,6 @@ class ToolEventMiddleware(AgentMiddleware):
             forced_args = {**args, "user_id": user_id}
             call = {**call, "args": forced_args}
             request = request.override(tool_call=call)
-            args = forced_args
 
         log_event(
             "TOOL_START",
@@ -404,60 +408,89 @@ class ToolEventMiddleware(AgentMiddleware):
             user_id=user_id,
             thread_id=thread_id,
             tool_name=name,
-            extra={"input": _snapshot(args)},
+            extra={"input": _snapshot(call.get("args", {}))},
+        )
+        return request, name
+
+    def _success(self, name, result, start, request):
+        """Post-exécution : événement TOOL_END + durée."""
+        user_id, thread_id = _ids_from_runtime(
+            getattr(request, "runtime", None)
+        )
+        duration_ms = int((time.perf_counter() - start) * 1000)
+
+        output = getattr(result, "content", result)
+        log_event(
+            "TOOL_END",
+            message=f"Tool {name} completed in {duration_ms}ms",
+            user_id=user_id,
+            thread_id=thread_id,
+            tool_name=name,
+            extra={
+                "output": _snapshot(output),
+                "duration_ms": duration_ms,
+            },
+        )
+        return result
+
+    def _failure(self, name, exc, start, request):
+        """Échec : événement TOOL_ERROR + ToolMessage de repli.
+
+        Ne crasher JAMAIS le run : convertir l'exception en
+        ToolMessage d'erreur pour que le LLM puisse réagir.
+        """
+        user_id, thread_id = _ids_from_runtime(
+            getattr(request, "runtime", None)
+        )
+        duration_ms = int((time.perf_counter() - start) * 1000)
+        log_event(
+            "TOOL_ERROR",
+            level="ERROR",
+            message=f"Tool {name} failed: {exc}",
+            user_id=user_id,
+            thread_id=thread_id,
+            tool_name=name,
+            extra={
+                "error": str(exc)[:300],
+                "duration_ms": duration_ms,
+            },
+        )
+        from langchain_core.messages import ToolMessage
+
+        tool_call = getattr(request, "tool_call", None) or {}
+        call_id = tool_call.get("id") or ""
+        return ToolMessage(
+            content=(
+                f"Erreur lors de l'exécution du tool {name} : {exc}"
+            )[:500],
+            tool_call_id=call_id,
+            name=name,
         )
 
+    def wrap_tool_call(self, request, handler):
+        request, name = self._prepare(request)
         start = time.perf_counter()
-
         try:
-            result = handler(request)
-            duration_ms = int(
-                (time.perf_counter() - start) * 1000
+            return self._success(
+                name, handler(request), start, request
             )
-
-            output = getattr(result, "content", result)
-            log_event(
-                "TOOL_END",
-                message=f"Tool {name} completed in {duration_ms}ms",
-                user_id=user_id,
-                thread_id=thread_id,
-                tool_name=name,
-                extra={
-                    "output": _snapshot(output),
-                    "duration_ms": duration_ms,
-                },
-            )
-            return result
-
         except Exception as exc:
-            duration_ms = int(
-                (time.perf_counter() - start) * 1000
-            )
-            log_event(
-                "TOOL_ERROR",
-                level="ERROR",
-                message=f"Tool {name} failed: {exc}",
-                user_id=user_id,
-                thread_id=thread_id,
-                tool_name=name,
-                extra={
-                    "error": str(exc)[:300],
-                    "duration_ms": duration_ms,
-                },
-            )
-            # Ne pas crasher le run : convertir en ToolMessage
-            # d'erreur pour que le LLM puisse réagir.
-            from langchain_core.messages import ToolMessage
+            return self._failure(name, exc, start, request)
 
-            call_id = call.get("id") or ""
-            return ToolMessage(
-                content=(
-                    f"Erreur lors de l'exécution du tool {name} : "
-                    f"{exc}"
-                )[:500],
-                tool_call_id=call_id,
-                name=name,
-            )
+    async def awrap_tool_call(self, request, handler):
+        """Variante asynchrone — SAME logique, handler awaited.
+
+        Sans cette surcharge, la classe de base AgentMiddleware
+        lève NotImplementedError dès qu'un run asynchrone (Studio,
+        astream, ainvoke) atteint le moindre tool.
+        """
+        request, name = self._prepare(request)
+        start = time.perf_counter()
+        try:
+            result = await handler(request)
+            return self._success(name, result, start, request)
+        except Exception as exc:
+            return self._failure(name, exc, start, request)
 
 
 def build_middleware_stack() -> list:

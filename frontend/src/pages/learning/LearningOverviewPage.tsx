@@ -47,6 +47,42 @@ export function LearningOverviewPage() {
     data.goals.length > 0 ||
     data.observations.length > 0;
 
+  // NextAction (§10) : Que dois-je faire maintenant ?
+  const nextAction = (() => {
+    if (data.weakPoints.length > 0) {
+      const w = data.weakPoints[0];
+      return {
+        title: `Revoir : ${w.topic}`,
+        desc: w.points[0] ?? 'Un point à consolider',
+        to: '/learning/reviews',
+        label: 'Voir les révisions',
+      };
+    }
+    const active = data.goals.find((g) => g.status === 'active');
+    if (active) {
+      return {
+        title: active.description,
+        desc: active.subject,
+        to: '/learning/goals',
+        label: 'Continuer l’objectif',
+      };
+    }
+    if (data.observations.length > 0) {
+      return {
+        title: 'Continuer à apprendre',
+        desc: 'Reprenez une conversation avec l’assistant',
+        to: '/assistant',
+        label: 'Ouvrir l’assistant',
+      };
+    }
+    return {
+      title: 'Découvrir For You',
+      desc: 'Recommandations personnalisées',
+      to: '/learning/for-you',
+      label: 'Explorer',
+    };
+  })();
+
   return (
     <>
       <PageHeader
@@ -56,6 +92,34 @@ export function LearningOverviewPage() {
       />
 
       <div className="space-y-5 p-6">
+        {/* Que faire ensuite ? (§10) */}
+        {hasAny && (
+          <div className="rounded-[var(--radius-surface)] border border-live/20 bg-live/5 p-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-live">À faire ensuite</p>
+                <h3 className="mt-1 truncate text-sm font-semibold text-foreground">{nextAction.title}</h3>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{nextAction.desc}</p>
+              </div>
+              <Link
+                to={nextAction.to}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] bg-live px-3 py-2 text-xs font-medium text-white hover:bg-live/90"
+              >
+                {nextAction.label} <ArrowRight size={12} />
+              </Link>
+            </div>
+            {/* Fil Sujet → Topic → Mastery → Review (§11) */}
+            <div className="mt-3 flex flex-wrap gap-1.5 font-mono text-[10px] text-muted-foreground">
+              <span className="rounded bg-background px-2 py-0.5">Sujet</span>
+              <span>→</span>
+              <span className="rounded bg-background px-2 py-0.5">Topic</span>
+              <span>→</span>
+              <span className="rounded bg-background px-2 py-0.5">Mastery</span>
+              <span>→</span>
+              <span className="rounded bg-live/10 px-2 py-0.5 text-live">Review</span>
+            </div>
+          </div>
+        )}
         {loading && !hasAny ? (
           <Surface>
             <EmptyState

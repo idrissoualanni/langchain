@@ -5,22 +5,28 @@ import {
   LiveKitRoom,
   useAgent,
   useLocalParticipant,
-  useRoomContext,
+  useMaybeRoomContext,
+  useMaybeSessionContext,
   useTracks,
+  type UseAgentReturn,
 } from "@livekit/components-react";
 import { Track } from "livekit-client";
 import { useTheme } from "@/hooks/useTheme";
 import { AgentAudioVisualizerAura } from "@/components/agents-ui/agent-audio-visualizer-aura";
 import { AgentControlBar } from "@/components/agents-ui/agent-control-bar";
 import { AgentVideoTile } from "@/components/agents-ui/agent-video-tile";
-import { Loader2 } from "lucide-react";
-import { apiFetch } from "@/api/base";
+import { Loader2, Sparkles } from "lucide-react";
+import { apiFetch, ApiError } from "@/api/base";
+import { useToast } from "@/hooks/use-toast";
 
 interface LiveKitTokenResponse {
   token: string;
   url: string;
   room_name: string;
 }
+
+/** Résolution de capture du partage d'écran ( Full HD, priorité au détail ). */
+const SCREEN_SHARE_RESOLUTION = { width: 1920, height: 1080, frameRate: 30 };
 
 interface VideoSessionProps {
   /** Nom de la salle LiveKit (utilisé pour la récupération autonome du token). */
@@ -31,17 +37,35 @@ interface VideoSessionProps {
   url?: string;
 }
 
+const lkAudioProps = {
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+} as const;
+
 /**
  * VideoSession component
  *
- * - When `token` and `url` are provided (e.g. by a parent page that already
- *   renders a `<LiveKitRoom>`), they are used as-is and no nested room is
- *   created.
- * - Otherwise the component fetches its own token via un POST authentifié
- *   sur `/api/livekit/token` et enveloppe son UI dans un
- *   `<LiveKitRoom>` autonome.
+ * Robuste : détecte s'il existe déjà un `<LiveKitRoom>` ( ou un
+ * `<SessionProvider>`, qui fournit aussi le RoomContext ) parent via
+ * `useMaybeRoomContext()`. Si c'est le cas, on ne crée PAS de seconde
+ * salle (évite 2 connexions concurrentes vers LiveKit) et on rend le
+ * contenu directement à l'intérieur de la salle parente. Sinon, on
+ * enveloppe soi-même le contenu dans un `<LiveKitRoom>` autonome, en
+ * utilisant le token/URL fournis ou en les récupérant via
+ * `POST /api/livekit/token`.
+ *
+ * `VideoSessionContent` utilise `useMaybeRoomContext()` (jamais le hook
+ * strict `useRoomContext()` qui lève "No session provided" quand la salle
+ * n'est pas encore prête au premier rendu).
  */
 export function VideoSession({ roomName, token: tokenProp, url: urlProp }: VideoSessionProps) {
+  // Context room fourni par un éventuel <LiveKitRoom> ou <SessionProvider>
+  // parent ( en v2, SessionProvider fournit session ET room ).
+  // `useMaybeRoomContext()` retourne undefined sans crasher quand on n'est
+  // pas dans une salle — c'est le garde qui évite (a) l'erreur stricte au
+  // premier rendu et (b) la double connexion.
+  const parentProvidesRoom = Boolean(useMaybeRoomContext());
   const provided = Boolean(tokenProp && urlProp);
 
   const [fetchedToken, setFetchedToken] = useState<string>("");
@@ -50,7 +74,7 @@ export function VideoSession({ roomName, token: tokenProp, url: urlProp }: Video
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (provided) {
+    if (provided || parentProvidesRoom) {
       setLoading(false);
       return;
     }
@@ -59,8 +83,7 @@ export function VideoSession({ roomName, token: tokenProp, url: urlProp }: Video
 
     async function fetchToken() {
       try {
-        // POST authentifié via apiFetch (§19) — la route est POST-only,
-        // un GET avec query string renvoie 405.
+        // POST authentifié via apiFetch (§19) — la route est POST-only.
         const data = await apiFetch<LiveKitTokenResponse>(
           "/api/livekit/token",
           {
@@ -84,7 +107,9 @@ export function VideoSession({ roomName, token: tokenProp, url: urlProp }: Video
     return () => {
       cancelled = true;
     };
-  }, [provided, roomName]);
+  }, [provided, parentProvidesRoom, roomName]);
+
+  const content = <VideoSessionContent />;
 
   if (loading) {
     return (
@@ -100,27 +125,41 @@ export function VideoSession({ roomName, token: tokenProp, url: urlProp }: Video
   if (error) {
     return (
       <div className="p-4 text-red-500 bg-background">
-        Erreur de connexion LiveKit : {error}
+        Erreur de connexion LiveKit : {error}
       </div>
     );
   }
 
-  const content = <VideoSessionContent />;
-
-  if (provided) {
+  // Si un parent fournit déjà la room, on rend le contenu directement
+  // (aucune seconde salle, aucune 2e connexion).
+  if (parentProvidesRoom) {
     return content;
+  }
+
+  // Sinon on crée notre propre salle : token/URL fournis ou fetchés.
+  const token = tokenProp || fetchedToken;
+  const serverUrl = urlProp || fetchedUrl;
+
+  if (!token || !serverUrl) {
+    return (
+      <div className="p-4 text-red-500 bg-background">
+        Session vidéo indisponible : aucun token LiveKit reçu.
+      </div>
+    );
   }
 
   return (
     <LiveKitRoom
-      token={fetchedToken}
-      serverUrl={fetchedUrl}
+      token={token}
+      serverUrl={serverUrl}
       connect={true}
       video={true}
-      audio={{
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
+      audio={lkAudioProps}
+      // dynacast : met en pause les couches vidéo non consommées.
+      // adaptiveStream : adapte la qualité reçue à la taille de la tuile.
+      options={{
+        dynacast: true,
+        adaptiveStream: true,
       }}
       data-lk-theme="default"
       className="h-screen w-full bg-background"
@@ -131,18 +170,45 @@ export function VideoSession({ roomName, token: tokenProp, url: urlProp }: Video
 }
 
 function VideoSessionContent() {
-  // Thème résolu (clair/sombre) fourni par le hook projet — plus de valeur
-  // codée en dur.
+  // Thème résolu (clair/sombre) fourni par le hook projet.
   const { resolvedTheme } = useTheme();
+  const { toast } = useToast();
 
-  // LiveKit hooks for agent state and tracks
-  const { state: agentState } = useAgent();
+  // LiveKit hooks for agent state and tracks.
+  // NB : `useAgent()` SANS argument lit le SessionContext, qui n'est fourni
+  // que par <SessionProvider>. En v2, <LiveKitRoom> ne fournit QUE le
+  // RoomContext → l'appeler ici sans garde-feu lève "No session provided".
+  // On récupère donc la session de façon optionnelle et on ne monte le hook
+  // strict que si elle existe (composant enfant).
+  const session = useMaybeSessionContext();
+  const [agentState, setAgentState] = useState<UseAgentReturn["state"] | undefined>(undefined);
   const tracks = useTracks();
-  // Participant local (pour activer/désactiver micro, caméra, partage d'écran)
+  // Participant local : états réels ( micro, caméra, partage ) — l'UI ne
+  // peut plus se désynchroniser de la room, y compris quand le partage est
+  // arrêté côté système ( barre Chrome, onglet fermé, raccourci ).
   const { localParticipant } = useLocalParticipant();
-  // Room courante (pour la déconnexion) — les hooks doivent être appelés
-  // à l'intérieur d'un <LiveKitRoom>, ce qui est le cas ici.
-  const room = useRoomContext();
+  // Room courante (pour la déconnexion et l'invitation du tuteur).
+  // `useMaybeRoomContext()` ne crash jamais si le contexte n'est pas prêt.
+  const room = useMaybeRoomContext();
+
+  // Inviter le tuteur dans cette salle : la room est calculée côté serveur
+  // ( session_{user_id} ), identique à celle du token — l'agent rejoint
+  // donc bien la nôtre.
+  const [inviting, setInviting] = useState(false);
+  const [agentInvited, setAgentInvited] = useState(false);
+
+  // Tant que la salle n'est pas rattachée au contexte (connexion en cours),
+  // on garde un état stable — jamais d'erreur stricte.
+  if (!room) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+          <p className="text-muted-foreground">Connexion à la session vidéo…</p>
+        </div>
+      </div>
+    );
+  }
 
   // Filter video, screen‑share and audio tracks
   const videoTracks = tracks.filter(
@@ -151,36 +217,155 @@ function VideoSessionContent() {
   const screenShareTracks = tracks.filter(
     (trackRef) => trackRef.source === Track.Source.ScreenShare
   );
-  const audioTracks = tracks.filter(
-    (trackRef) => trackRef.source === Track.Source.Microphone
-  );
 
-  const isSpeaking = agentState === "speaking";
-  const isListening =
-    !isSpeaking && audioTracks.some((t) => t.participant.isLocal);
-  let visualState: "speaking" | "listening" | "idle" = "idle";
-  if (isSpeaking) visualState = "speaking";
-  else if (isListening) visualState = "listening";
+  // État agent réel ( et non une heuristique sur les pistes audio ) :
+  // AgentStateListener n'est plus du code mort depuis que la page fournit
+  // un <SessionProvider>.
+  const visualState: "speaking" | "listening" | "idle" =
+    agentState === "speaking"
+      ? "speaking"
+      : agentState === "listening"
+        ? "listening"
+        : "idle";
+
+  const agentLive =
+    agentState === "connecting" ||
+    agentState === "listening" ||
+    agentState === "thinking" ||
+    agentState === "speaking";
+
+  const inviteTutor = async () => {
+    setInviting(true);
+    try {
+      await apiFetch("/api/livekit/agent/start", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      setAgentInvited(true);
+    } catch (error) {
+      const apiError = error instanceof ApiError ? error : null;
+      toast({
+        title: "Agent indisponible",
+        description:
+          apiError?.message ??
+          (error instanceof Error ? error.message : "Erreur inconnue"),
+        variant: apiError?.status === 503 ? "default" : "destructive",
+      });
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const toggleScreenShare = async (enabled: boolean) => {
+    if (!enabled) {
+      await localParticipant.setScreenShareEnabled(false);
+      return;
+    }
+    try {
+      // contentHint 'detail' : préserve la lisibilité du texte et des UI,
+      // priorité au détail plutôt qu'au framerate ( doc livekit-client ).
+      await localParticipant.setScreenShareEnabled(
+        true,
+        {
+          resolution: SCREEN_SHARE_RESOLUTION,
+          contentHint: "detail",
+          audio: false,
+        },
+        {
+          screenShareEncoding: { maxBitrate: 3_000_000, maxFramerate: 30 },
+        }
+      );
+    } catch (e) {
+      // Toutes les erreurs sont signalées clairement : avant, un refus
+      // laissait le bouton sur "Arrêter le partage" alors que rien n'était
+      // partagé.
+      const dom = e as { name?: string; message?: string };
+      if (dom?.name === "NotAllowedError") {
+        toast({
+          title: "Partage refusé",
+          description:
+            "Vous avez refusé l'accès à l'écran. Autorisez-le dans les permissions du navigateur, puis réessayez.",
+          variant: "destructive",
+        });
+      } else if (dom?.name === "NotFoundError") {
+        toast({
+          title: "Aucun écran disponible",
+          description:
+            "Aucune source d'affichage n'a été trouvée sur cet appareil.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Partage d'écran impossible",
+          description:
+            (e instanceof Error ? e.message : "Erreur inconnue") +
+            " — vérifiez votre connexion et réessayez.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
 
   return (
     <div className="flex flex-col h-full w-full space-y-4 p-4">
-      {/* Main video area */}
+      {/*
+        Hook strict `useAgent` : ne peut être appelé QUE si une session
+        existe ( SessionProvider au-dessus ). Monté via un composant enfant
+        pour que l'appel de hook reste inconditionnel au niveau de ce
+        composant — sinon React casse l'ordre des hooks.
+      */}
+      {session ? (
+        <AgentStateListener session={session} onState={setAgentState} />
+      ) : null}
+
+      {/* Bandeau d'état : invitation du tuteur + état agent en direct. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {agentLive ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            <Sparkles className="h-3.5 w-3.5" />
+            Tuteur connecté · {agentState}
+          </span>
+        ) : agentInvited ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Le tuteur rejoint la salle…
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={inviteTutor}
+            disabled={inviting}
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {inviting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
+            Inviter le tuteur
+          </button>
+        )}
+      </div>
+
+      {/* Main video area — grille responsive : 1 colonne jusqu'à md. */}
       <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[400px]">
         {/* Local video tile */}
-        <div className="relative bg-muted rounded-lg overflow-hidden flex items-center justify-center">
-          {videoTracks.length > 0 ? (
+        <div className="relative bg-muted rounded-lg overflow-hidden flex items-center justify-center min-h-[220px]">
+          {videoTracks.some((t) => t.participant.isLocal) ? (
             <AgentVideoTile
-              trackRef={videoTracks[0]}
+              trackRef={videoTracks.find((t) => t.participant.isLocal)!}
               className="w-full h-full object-cover"
             />
           ) : (
             <div className="text-muted-foreground text-sm">Caméra désactivée</div>
           )}
-          <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">Moi</div>
+          <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+            Moi
+          </div>
         </div>
 
         {/* Remote or screen‑share tile */}
-        <div className="relative bg-muted rounded-lg overflow-hidden flex items-center justify-center">
+        <div className="relative bg-muted rounded-lg overflow-hidden flex items-center justify-center min-h-[220px]">
           {screenShareTracks.length > 0 ? (
             <AgentVideoTile
               trackRef={screenShareTracks[0]}
@@ -223,6 +408,12 @@ function VideoSessionContent() {
         </div>
 
         <AgentControlBar
+          // États contrôlés par les drapeaux réels du participant : le
+          // bouton partage ne peut plus rester sur "Arrêter" après une fin
+          // de partage déclenchée hors de l'UI.
+          microphoneEnabled={localParticipant.isMicrophoneEnabled}
+          cameraEnabled={localParticipant.isCameraEnabled}
+          screenShareEnabled={localParticipant.isScreenShareEnabled}
           onToggleMicrophone={async (muted) => {
             // `muted` = nouvel état coupé → on active le micro si non coupé
             await localParticipant.setMicrophoneEnabled(!muted);
@@ -230,16 +421,42 @@ function VideoSessionContent() {
           onToggleCamera={async (muted) => {
             await localParticipant.setCameraEnabled(!muted);
           }}
-          onToggleScreenShare={async (enabled) => {
-            await localParticipant.setScreenShareEnabled(enabled);
-          }}
+          onToggleScreenShare={toggleScreenShare}
           onDisconnect={() => {
             room.disconnect();
           }}
-          className="backdrop-blur-md bg-background/50 rounded-full p-2 flex gap-2"
+          className="backdrop-blur-md bg-background/50 rounded-full p-2"
           showScreenShareButton={true}
         />
       </div>
     </div>
   );
+}
+
+/**
+ * AgentStateListener
+ *
+ * Monté uniquement quand `useMaybeSessionContext()` a trouvé une session
+ * ( c'est-à-dire qu'un <SessionProvider> est présent au-dessus ). C'est le
+ * SEUL endroit où `useAgent()` peut être appelé sans risque : en
+ * @livekit/components-react v2, `useAgent()` sans argument lit le
+ * SessionContext — fourni par SessionProvider, PAS par LiveKitRoom — et
+ * lève "No session provided" quand il est absent. Ne rend rien ; il
+ * remonte juste l'état de l'agent ( speaking / listening / idle ) au
+ * parent pour piloter le visualiseur audio.
+ */
+function AgentStateListener({
+  session,
+  onState,
+}: {
+  session: NonNullable<ReturnType<typeof useMaybeSessionContext>>;
+  onState: (state: UseAgentReturn["state"] | undefined) => void;
+}) {
+  const { state } = useAgent(session);
+
+  useEffect(() => {
+    onState(state);
+  }, [state, onState]);
+
+  return null;
 }

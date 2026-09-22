@@ -83,17 +83,19 @@ def _capability_gate_reason(workflow: str) -> str | None:
     )
 
 # Workflows ayant UNE BRANCHE RÉELLE dans le graphe compilé.
-# Phase 2 : "activity" est câblé (continuation §16/§17 → node
-# ACTIVITY qui confirme le contrat puis revient sur la chaîne
-# principale). "main" reste la chaîne principale.
-# Phase 3 : "problem" est câblé (ProblemSubgraph §21 → node PROBLEM
-# qui exécute la résolution déterministe puis revient sur la chaîne).
-# Les subgraphs coding/research/video/document arrivent Phases 4-7
-# et étendent ce set.
+# Phase 2 : "activity" (continuation §16/§17). Phase 3 : "problem"
+# (ProblemSubgraph §21). Phases 4-7 : "research" (ResearchSubgraph
+# §26), "coding" (CodingSubgraph §22), "video" (VideoSubgraph §28),
+# "document" (DocumentSubgraph §30). TOUS les workflows connus sont
+# désormais câblés — un hint du composer aboutit à un node réel.
 WIRED_WORKFLOWS: dict[str, str] = {
     "main": "context",
     "activity": "activity",
     "problem": "problem",
+    "research": "research",
+    "coding": "coding",
+    "video": "video",
+    "document": "document",
 }
 
 # Gate de capabilities (mission §4) : un subgraph exigeant une
@@ -132,16 +134,42 @@ class WorkflowDecision(BaseModel):
     )
 
 
+def _workflow_hint(state: dict) -> str:
+    """Hint explicite du composer (@mention → terme, §31).
+
+    Le composer extrait le terme de la saisie et l'envoie dans le canal
+    workflow_hint. Un hint n'est accepté QUE s'il nomme un workflow
+    connu (KNOWN_WORKFLOWS) — sinon ignoré + tracé (jamais d'erreur,
+    le run continue sur la matrice déterministe).
+    """
+    hint = str((state or {}).get("workflow_hint") or "").strip().lower()
+    if not hint:
+        return ""
+    if hint not in KNOWN_WORKFLOWS:
+        log_event(
+            "WORKFLOW_HINT_IGNORED",
+            level="WARNING",
+            message=(
+                f"Workflow hint inconnu '{hint}' — ignoré, routage "
+                f"déterministe appliqué"
+            ),
+            extra={"operation": "workflow_router", "hint": hint},
+        )
+        return ""
+    return hint
+
+
 def decide_workflow(state: dict) -> WorkflowDecision:
     """Décide quel workflow exécuter — PURE (matrice déterministe).
 
     Consomme l'état courant et produit UNE décision, sans jamais
-    appeler de LLM (§3 : service interne). Phase 1 :
-      - la chaîne "main" par défaut (routing/knowledge déjà
-        résolus par ROUTER/GETRIEVAL/FALLBACK)
-      - "activity" si un activité attente de réponse (continuation
-        §16) — le WORKFLOW_ROUTER le signale dès maintenant, le
-        branchage effectif arrivera Phase 2.
+    appeler de LLM (§3 : service interne). Ordre de priorité :
+      1. "activity" si une activité attend une réponse (continuation
+         §16 — priorité absolue : l'évaluation ne concurrence jamais)
+      2. hint explicite du composer (@mention → workflow_hint), s'il
+         nomme un workflow connu
+      3. "problem" sur marqueurs déterministes (intent solve_problem)
+      4. "main" (chaîne principale)
     """
     workflow = "main"
     reason = "Chaîne principale : routage/retrieval fait (Phase 1)"
@@ -162,12 +190,20 @@ def decide_workflow(state: dict) -> WorkflowDecision:
             f"Activité en cours (status={status}, "
             f"id={attached}) — continuation (§16)"
         )
-    elif _intent_solve_problem(state):
-        workflow = "problem"
-        reason = (
-            "Requête de résolution d'énoncé (intent solve_problem, "
-            "marqueurs déterministes) — ProblemSubgraph (§21)"
-        )
+    else:
+        hint = _workflow_hint(state)
+        if hint:
+            workflow = hint
+            reason = (
+                f"Hint explicite du composer (workflow_hint="
+                f"'{hint}') — subgraph {hint}"
+            )
+        elif _intent_solve_problem(state):
+            workflow = "problem"
+            reason = (
+                "Requête de résolution d'énoncé (intent solve_problem, "
+                "marqueurs déterministes) — ProblemSubgraph (§21)"
+            )
 
     return WorkflowDecision(
         workflow=workflow, reason=reason, attached_to=attached
@@ -261,4 +297,5 @@ __all__ = [
     "KNOWN_WORKFLOWS",
     "_intent_solve_problem",
     "_capability_gate_reason",
+    "_workflow_hint",
 ]

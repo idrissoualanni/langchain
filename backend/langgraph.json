@@ -1,7 +1,11 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "agent": "./app/agent/graph.py:build_graph"
+    "main": "./app/agent/graph.py:build_graph",
+    "research": "./app/graph/subgraphs/research/nodes.py:compile_research_subgraph",
+    "coding": "./app/graph/subgraphs/coding/graph.py:create_coding_subgraph",
+    "video": "./app/graph/subgraphs/video/nodes.py:compile_video_subgraph",
+    "problem": "./app/graph/subgraphs/problem/nodes.py:compile_problem_subgraph"
   },
   "env": ".env"
 }
