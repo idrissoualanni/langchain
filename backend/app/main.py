@@ -27,7 +27,7 @@ from app.api.admin import (
     observability_router as admin_observability_router,
     dashboard_router as admin_dashboard_router,
 )
-from app.db.connections import init_db
+from app.infrastructure.database.connections import init_db
 from app.logging.events import log_event, setup_logging
 from app.logging.sse import sse_events
 from app.ws.logs import router as ws_router

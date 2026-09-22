@@ -1,23 +1,13 @@
-# Couche MCP (Model Context Protocol) — doc §39-§41.
+# SHIM de compatibilité (refactor — phase migration).
 #
-# MCP est une frontière d'intégration :
-#
-#   MCP Server → MCP Client/Toolset → Workflow / Agent
-#
-# Architecture (§39) : un registry déclare les serveurs autorisés avec
-# leurs capabilities, permissions et workflows cibles. Le toolset (§40)
-# charge les tools et les SCOPE par workflow — jamais d'exposition
-# globale au Main Agent. La sécurité (§41) : allowlist, timeouts, rate
-# limits, audit, failure isolation.
-#
-# Dépendances : mcp 1.29 (FastMCP), langchain-mcp-adapters 0.3.2
-# (MultiServerMCPClient / load_mcp_tools).
-from app.mcp.registry import (
+# MCP a déménagé vers app/infrastructure/mcp/.
+# SUPPRESSION prévue phase cleanup (§30 mission) après vérification.
+from app.infrastructure.mcp import (
     McpServerConfig,
+    get_mcp_tools,
     get_registry,
     list_servers,
 )
-from app.mcp.toolset import get_mcp_tools
 
 __all__ = [
     "McpServerConfig",

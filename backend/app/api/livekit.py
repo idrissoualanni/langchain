@@ -6,6 +6,8 @@ Endpoints pour la gestion des sessions LiveKit (voice/video).
 
 from fastapi import APIRouter, Depends, HTTPException
 import json
+import logging
+import time
 from livekit.api import (
     CreateAgentDispatchRequest,
     CreateRoomRequest,
@@ -15,8 +17,8 @@ from livekit.protocol.agent import JobStatus
 from pydantic import BaseModel
 from typing import Any, Optional
 
-from app.livekit.constants import TUTOR_AGENT_NAME
-from app.livekit.token import (
+from app.infrastructure.livekit.constants import TUTOR_AGENT_NAME
+from app.infrastructure.livekit.token import (
     generate_token,
     livekit_api_url,
     verify_token,
@@ -27,6 +29,8 @@ from app.livekit.token import (
 from app.auth.resolver import CurrentUser, get_current_user
 
 router = APIRouter(prefix="/api/livekit", tags=["livekit"])
+
+logger = logging.getLogger("agent-tutor.livekit")
 
 
 def _room_of(current_user: CurrentUser) -> str:
@@ -298,3 +302,74 @@ async def stop_agent(
                 f"est démarré sur {livekit_api_url()} ({exc})"
             ),
         )
+
+
+# ------------------------------------------------------------------
+# Capture d'écran navigateur — l'agent voit l'écran partagé
+# ------------------------------------------------------------------
+# Le worker maintient, par room, le dernier frame ScreenShare reçu
+# ( app.livekit.browser.ScreenShareCapturer ). Ces endpoints permettent au
+# frontend de savoir si l'agent "voit" l'écran et à l'utilisateur de
+# comprendre que sa question portera sur l'affichage.
+#
+# Note : la capture réelle dépend de video_enabled=True côté worker
+# ( RoomInputOptions ). Ce registre est l'état partagé backend/worker.
+
+
+_screen_share_registry: dict[str, dict[str, Any]] = {}
+
+
+def set_screen_sharing(room_name: str, enabled: bool) -> None:
+    """Met à jour l'état de capture pour une room — utilisé par le worker."""
+    if enabled:
+        _screen_share_registry[room_name] = {
+            "capturing": True,
+            "started_at": int(time.time()),
+        }
+    else:
+        _screen_share_registry.pop(room_name, None)
+
+
+@router.get("/screen-share/status")
+async def screen_share_status(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Indique si l'agent capte actuellement un écran partagé.
+
+    La capture est ponctuelle : le worker ne garde que le DERNIER frame
+    reçu, pas un flux continu. L'agent ne "regarde" donc l'écran qu'au
+    moment où l'étudiant pose une question — pas en permanence.
+    """
+    room_name = _room_of(current_user)
+    status = _screen_share_registry.get(room_name)
+
+    if status is None:
+        return {
+            "capturing": False,
+            "room": room_name,
+            "note": "Aucun partage actif — l'agent voit l'écran à la demande",
+        }
+
+    return {
+        "capturing": status.get("capturing", False),
+        "room": room_name,
+        "started_at": status.get("started_at"),
+    }
+
+
+@router.post("/screen-share/notify")
+async def screen_share_notify(
+    enabled: bool,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Informe le backend du début/fin de partage d'écran.
+
+    Le frontend appelle cet endpoint quand l'utilisateur active le partage
+    ( ou le coupe ). Le worker s'abonne alors à la piste ScreenShare de la
+    room via video_enabled=True.
+    """
+    room_name = _room_of(current_user)
+    set_screen_sharing(room_name, enabled)
+    logger.info("capture écran %s | room=%s", "activée" if enabled else "désactivée", room_name)
+
+    return {"status": "sharing" if enabled else "stopped", "room": room_name}

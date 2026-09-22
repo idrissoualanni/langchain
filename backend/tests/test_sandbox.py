@@ -16,7 +16,7 @@ Tests fonctionnels:
 """
 
 import pytest
-from app.services.sandbox.executor import (
+from app.infrastructure.sandbox.executor import (
     SecureSandbox,
     SandboxConfig,
     CodeExecutionRequest,

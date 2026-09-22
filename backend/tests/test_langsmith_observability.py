@@ -15,7 +15,7 @@ class TestLangSmithClient:
     
     def test_langsmith_client_creation(self):
         """Le client LangSmith peut être instancié."""
-        from app.observability.langsmith_client import LangSmithClient
+        from app.infrastructure.observability.langsmith_client import LangSmithClient
         
         with patch.dict(os.environ, {
             "LANGSMITH_ENABLED": "true",
@@ -29,7 +29,7 @@ class TestLangSmithClient:
     
     def test_langsmith_disabled_when_no_api_key(self):
         """Le client est désactivé sans API key."""
-        from app.observability.langsmith_client import LangSmithClient
+        from app.infrastructure.observability.langsmith_client import LangSmithClient
         
         with patch.dict(os.environ, {
             "LANGSMITH_ENABLED": "true",
@@ -40,7 +40,7 @@ class TestLangSmithClient:
     
     def test_langsmith_enabled_with_api_key(self):
         """Le client est activé avec une API key."""
-        from app.observability.langsmith_client import LangSmithClient
+        from app.infrastructure.observability.langsmith_client import LangSmithClient
         
         with patch.dict(os.environ, {
             "LANGSMITH_ENABLED": "true",
@@ -53,7 +53,7 @@ class TestLangSmithClient:
     
     def test_langsmith_disabled_by_env(self):
         """Le client peut être désactivé par variable d'environnement."""
-        from app.observability.langsmith_client import LangSmithClient
+        from app.infrastructure.observability.langsmith_client import LangSmithClient
         
         with patch.dict(os.environ, {
             "LANGSMITH_ENABLED": "false",
@@ -68,7 +68,7 @@ class TestLangSmithTracing:
     
     def test_get_langsmith_client(self):
         """La fonction get_langsmith_client retourne un singleton."""
-        from app.observability.langsmith_client import (
+        from app.infrastructure.observability.langsmith_client import (
             get_langsmith_client,
             langsmith_client,
         )
@@ -78,7 +78,7 @@ class TestLangSmithTracing:
     
     def test_traceable_decorator_exists(self):
         """Le décorateur traceable_agent_action existe."""
-        from app.observability.langsmith_client import traceable_agent_action
+        from app.infrastructure.observability.langsmith_client import traceable_agent_action
         
         assert callable(traceable_agent_action)
         
@@ -149,7 +149,7 @@ class TestLangSmithNonBlocking:
     
     def test_langsmith_error_does_not_crash_app(self):
         """Une erreur LangSmith ne fait pas planter l'application."""
-        from app.observability.langsmith_client import (
+        from app.infrastructure.observability.langsmith_client import (
             log_agent_observation,
             create_dataset,
             add_example_to_dataset,
@@ -178,7 +178,7 @@ class TestLangSmithMetadata:
     
     def test_set_trace_metadata_function_exists(self):
         """La fonction set_trace_metadata existe."""
-        from app.observability.langsmith_client import set_trace_metadata
+        from app.infrastructure.observability.langsmith_client import set_trace_metadata
         
         # Ne doit pas lever d'exception
         set_trace_metadata(
@@ -191,7 +191,7 @@ class TestLangSmithMetadata:
     
     def test_log_agent_observation_function_exists(self):
         """La fonction log_agent_observation existe."""
-        from app.observability.langsmith_client import log_agent_observation
+        from app.infrastructure.observability.langsmith_client import log_agent_observation
         
         # Ne doit pas lever d'exception
         log_agent_observation(
@@ -208,7 +208,7 @@ class TestLangSmithEvaluation:
     
     def test_create_dataset_function_exists(self):
         """La fonction create_dataset existe."""
-        from app.observability.langsmith_client import create_dataset
+        from app.infrastructure.observability.langsmith_client import create_dataset
         
         # Retourne None si LangSmith n'est pas configuré
         dataset_id = create_dataset("test_dataset", "Test description")
@@ -216,7 +216,7 @@ class TestLangSmithEvaluation:
     
     def test_add_example_to_dataset_function_exists(self):
         """La fonction add_example_to_dataset existe."""
-        from app.observability.langsmith_client import add_example_to_dataset
+        from app.infrastructure.observability.langsmith_client import add_example_to_dataset
         
         # Retourne False si LangSmith n'est pas configuré
         success = add_example_to_dataset(

@@ -32,9 +32,9 @@ from app.schemas import (
 )
 from app.auth.resolver import CurrentUser, get_current_user
 from app.config import ADMIN_CLERK_IDS, AUTH_MODE
-from app.db import users as users_db
-from app.db.connections import init_db
-from app.db.users import get_user, list_users
+from app.infrastructure.database import users as users_db
+from app.infrastructure.database.connections import init_db
+from app.infrastructure.database.users import get_user, list_users
 from app.logging.events import log_event
 
 router = APIRouter(prefix="/api/users", tags=["users"])

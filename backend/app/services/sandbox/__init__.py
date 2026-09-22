@@ -1,12 +1,14 @@
-"""Package sandbox pour l'exécution sécurisée de code."""
-
-from .executor import (
-    SecureSandbox,
-    SandboxConfig,
+# SHIM de compatibilité (refactor — phase migration).
+#
+# Le sandbox a déménagé vers app/infrastructure/sandbox/.
+# SUPPRESSION prévue phase cleanup (§30 mission) après vérification.
+from app.infrastructure.sandbox import (
     CodeExecutionRequest,
     CodeExecutionResult,
-    get_sandbox,
+    SandboxConfig,
+    SecureSandbox,
     execute_code,
+    get_sandbox,
 )
 
 __all__ = [

@@ -8,7 +8,7 @@ from app.config import (
     check_sqlite_health,
     langsmith_settings,
 )
-from app.observability.langsmith_client import get_langsmith_client
+from app.infrastructure.observability.langsmith_client import get_langsmith_client
 
 
 router = APIRouter(prefix="/api/health", tags=["health"])

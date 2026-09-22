@@ -38,8 +38,8 @@ def _require_owner_or_admin(user_id: str, current: CurrentUser) -> None:
 
     Implémentation alignée sur routes users (anti-énumération).
     """
-    from app.db.connections import init_db
-    from app.db.users import get_user
+    from app.infrastructure.database.connections import init_db
+    from app.infrastructure.database.users import get_user
 
     init_db()
     if current.is_admin:

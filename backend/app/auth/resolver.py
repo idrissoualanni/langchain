@@ -31,7 +31,7 @@ from app.config import (
     CLERK_JWT_LEEWAY,
     log_safe,
 )
-from app.db import users as users_db
+from app.infrastructure.database import users as users_db
 from app.logging.events import log_event
 
 

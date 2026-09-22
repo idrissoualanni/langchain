@@ -235,7 +235,7 @@ def test_knowledge_access_cross_group_isolation():
 
 def test_langsmith_client_not_enabled():
     """Test: LangSmith client existe."""
-    from app.observability.langsmith_client import get_langsmith_client
+    from app.infrastructure.observability.langsmith_client import get_langsmith_client
 
     client = get_langsmith_client()
     # Client existe toujours
@@ -245,7 +245,7 @@ def test_langsmith_client_not_enabled():
 
 def test_langsmith_trace_metadata():
     """Test: set_trace_metadata fonctionne."""
-    from app.observability.langsmith_client import set_trace_metadata
+    from app.infrastructure.observability.langsmith_client import set_trace_metadata
 
     # Ne doit pas crasher
     set_trace_metadata(
@@ -259,7 +259,7 @@ def test_langsmith_trace_metadata():
 
 def test_langsmith_log_functions_no_crash():
     """Test: fonctions de log ne crashent pas sans LangSmith."""
-    from app.observability.langsmith_client import (
+    from app.infrastructure.observability.langsmith_client import (
         log_agent_observation,
         create_dataset,
         add_example_to_dataset,

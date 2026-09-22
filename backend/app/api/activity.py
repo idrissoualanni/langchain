@@ -22,8 +22,8 @@ from app.schemas import (
     ThreadActivityResponse,
 )
 from app.auth.resolver import CurrentUser, get_current_user
-from app.db.connections import init_db
-from app.db.threads import get_thread, thread_belongs_to_user
+from app.infrastructure.database.connections import init_db
+from app.infrastructure.database.threads import get_thread, thread_belongs_to_user
 from app.logging.events import log_event
 
 router = APIRouter(prefix="/api/threads", tags=["activity"])

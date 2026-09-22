@@ -14,8 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.schemas import ThreadCreate, ThreadOut, ThreadRename
 from app.auth.resolver import CurrentUser, get_current_user
-from app.db.connections import init_db
-from app.db.threads import (
+from app.infrastructure.database.connections import init_db
+from app.infrastructure.database.threads import (
     create_thread,
     delete_thread,
     get_thread,
@@ -23,7 +23,7 @@ from app.db.threads import (
     rename_thread,
     thread_belongs_to_user,
 )
-from app.db.users import get_user
+from app.infrastructure.database.users import get_user
 
 router = APIRouter(prefix="/api", tags=["threads"])
 

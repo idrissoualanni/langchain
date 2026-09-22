@@ -5,7 +5,7 @@ from typing import Any
 from datetime import datetime, timedelta
 
 from app.config import CHECKPOINTS_DB_PATH
-from app.db.connections import get_conn
+from app.infrastructure.database.connections import get_conn
 from app.auth.resolver import require_admin as get_current_admin_user
 # from app.services.models.user import User
 # from app.services.models.thread import Thread

@@ -47,10 +47,10 @@ from pydantic import BaseModel, Field
 import time
 
 from app.tools.coding import get_coding_tools, execute_code_tool, analyze_code_tool, explain_error_tool
-from app.services.sandbox.executor import execute_code
+from app.infrastructure.sandbox.executor import execute_code
 from app.services.learning.engine import decide
 from app.services.learning.decision import LearningDecision, LearningAction
-from app.observability.langsmith_client import traceable_agent_action
+from app.infrastructure.observability.langsmith_client import traceable_agent_action
 
 
 # ============================================================================

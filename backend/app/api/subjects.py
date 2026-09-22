@@ -15,8 +15,8 @@ from app.schemas import (
 )
 from app.services.context import build_context
 from app.services.context.prompt_builder import build_system_prompt
-from app.db.connections import init_db
-from app.db.users import get_user
+from app.infrastructure.database.connections import init_db
+from app.infrastructure.database.users import get_user
 from app.subjects.registry import get_subject, list_subjects
 
 router = APIRouter(prefix="/api/subjects", tags=["subjects"])
