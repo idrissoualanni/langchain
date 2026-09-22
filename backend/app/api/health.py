@@ -1,5 +1,5 @@
 # Route Health — GET /api/health
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 
 from app.schemas import HealthResponse
 from app.config import (
@@ -30,8 +30,13 @@ def api_health() -> HealthResponse:
 
 
 @router.get("/ready")
-def health_ready() -> dict:
-    """Vérifie que le service est prêt à accepter des requêtes."""
+def health_ready(response: Response) -> dict:
+    """Vérifie que le service est prêt à accepter des requêtes.
+
+    §62 : un readiness qui répond 200 même non-prêt est un anti-pattern
+    (le scheduler/orchestrateur ne détecte jamais l'indisponibilité) →
+    HTTP 503 tant qu'un composant critique (Ollama/SQLite) est KO.
+    """
     ollama_ok = check_ollama_health()
     sqlite_ok = check_sqlite_health()
     
@@ -39,6 +44,8 @@ def health_ready() -> dict:
     agent_ok = True
     
     ready = ollama_ok and sqlite_ok and agent_ok
+    if not ready:
+        response.status_code = 503
     
     return {
         "ready": ready,

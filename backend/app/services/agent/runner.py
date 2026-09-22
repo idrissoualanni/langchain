@@ -332,6 +332,8 @@ async def run_agent_stream(
             timeout_seconds=AGENT_TIMEOUT_SECONDS,
         )
     except Exception as exc:
+        # §47 : la cause technique détaillée reste DANS LE LOG (jamais
+        # exposée au client) — le flux SSE reçoit un message générique.
         log_event(
             "ERROR",
             level="ERROR",
@@ -344,7 +346,7 @@ async def run_agent_stream(
             "level": "ERROR",
             "user_id": user_id,
             "thread_id": thread_id,
-            "message": f"Agent error: {exc}",
+            "message": "Le run agent a échoué — cause technique journalisée.",
         }
         return
 
@@ -423,6 +425,24 @@ async def run_agent_stream(
         "response": response_content,
         "agent_response": agent_response,
     }
+
+    # §8 : si un subgraph a produit un workflow_result (document,
+    # coding, video, problem, research…), il EST persisté dans le
+    # state — on le stream comme événement dédié pour le frontend
+    # (au lieu de le laisser enterré dans le checkpoint).
+    workflow_result = (result or {}).get("workflow_result")
+    if workflow_result:
+        yield {
+            "event": "WORKFLOW_RESULT",
+            "level": "INFO",
+            "user_id": user_id,
+            "thread_id": thread_id,
+            "message": (
+                f"Workflow result ({workflow_result.get('workflow')}) — "
+                f"status={workflow_result.get('status')}"
+            ),
+            "workflow_result": workflow_result,
+        }
 
     new_state = agent.get_state(config)
     new_count = len(new_state.values.get("messages", []))

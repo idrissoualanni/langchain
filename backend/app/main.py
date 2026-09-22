@@ -2,8 +2,9 @@
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.graph.main import get_agent
 from app.api import (
@@ -116,6 +117,54 @@ app.add_api_route(
 
 # WebSocket — alternative logs temps réel
 app.include_router(ws_router)
+
+
+# ----------------------------------------------------------------------
+# Error taxonomy (§63) — la hiérarchie AppError (core/exceptions.py)
+# est convertie en réponses HTTP COHÉRENTES {code, detail}. Sans ces
+# handlers, une AppError remonterait en 500 générique et le frontend
+# ne pourrait pas distinguer les familles d'erreur (routing, retrieval,
+# model, memory…). Le message renvoyé est sanitized via .detail()
+# (pas de secret, cause technique tronquée à 300 c.).
+# ----------------------------------------------------------------------
+from app.core.exceptions import AppError
+
+
+@app.exception_handler(AppError)
+async def app_error_handler(request: Request, exc: AppError):
+    log_event(
+        "APP_ERROR",
+        level="ERROR",
+        message=exc.detail(),
+        extra={"code": exc.code},
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": exc.detail(),
+            "code": exc.code,
+            "error": True,
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    # §63 : dernier rempart — jamais de stack trace brute au client ;
+    # le 500 reste cohérent avec les autres réponses d'erreur.
+    log_event(
+        "UNHANDLED_ERROR",
+        level="ERROR",
+        message=f"Exception non gérée: {type(exc).__name__}: {exc}",
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Erreur interne — consultez les logs.",
+            "code": "unhandled_error",
+            "error": True,
+        },
+    )
 
 
 @app.get("/")

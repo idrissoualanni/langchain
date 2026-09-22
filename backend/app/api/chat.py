@@ -63,14 +63,30 @@ def api_chat(
 ) -> ChatResponse:
     """Envoyer un message — réponse complète après le run."""
     _validate_chat(payload, current)
-    result = run_agent(
-        user_id=payload.user_id,
-        thread_id=payload.thread_id,
-        message=payload.message,
-        model=payload.model,
-        workflow=payload.workflow,
-        payload=payload.payload,
-    )
+    try:
+        result = run_agent(
+            user_id=payload.user_id,
+            thread_id=payload.thread_id,
+            message=payload.message,
+            model=payload.model,
+            workflow=payload.workflow,
+            payload=payload.payload,
+        )
+    except Exception:  # noqa: BLE001 — 500 contrôlé (jamais stack leak)
+        log_event(
+            "CHAT_RUN_ERROR",
+            level="ERROR",
+            message=(
+                f"run_agent en échec | thread={payload.thread_id} | "
+                f"user={payload.user_id}"
+            ),
+            user_id=payload.user_id,
+            thread_id=payload.thread_id,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Le run agent a échoué — réessayez ou consultez les logs.",
+        )
     return ChatResponse(**result)
 
 

@@ -4,7 +4,7 @@
 # GET  /api/subjects/{id}                 → une matière
 # GET  /api/subjects/{id}/topics          → topics d'une matière
 # POST /api/subjects/preview/context      → contexte + prompt SANS LLM
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.services.agent.prompts import CORE_PROMPT
 from app.schemas import (
@@ -17,6 +17,7 @@ from app.services.context import build_context
 from app.services.context.prompt_builder import build_system_prompt
 from app.infrastructure.database.connections import init_db
 from app.infrastructure.database.users import get_user
+from app.auth.resolver import CurrentUser, get_current_user
 from app.subjects.registry import get_subject, list_subjects
 
 router = APIRouter(prefix="/api/subjects", tags=["subjects"])
@@ -72,22 +73,40 @@ def api_subject_topics(subject_id: str) -> list[TopicOut]:
 )
 def api_context_preview(
     payload: ContextPreviewRequest,
+    current: CurrentUser = Depends(get_current_user),
 ) -> ContextPreviewResponse:
     """Prévisualise le contexte + prompt SANS appeler le LLM.
 
-    Route dev : expose la sélection interne (router, knowledge,
-    mémoire). À protéger/limiter si exposée en production (§35).
-    Alias canonique V5 : POST /api/context/preview (§44).
+    Ownership vérifié : on ne prévisualise que PROPRE contexte
+    (ou admin) — la sélection interne / mémoire privée n'est pas
+    lisible par autrui (§47). Alias canonique V5 : POST
+    /api/context/preview (§44).
     """
-    return build_context_preview(payload)
+    return build_context_preview(payload, current)
 
 
 def build_context_preview(
     payload: ContextPreviewRequest,
+    current: CurrentUser | None = None,
 ) -> ContextPreviewResponse:
     """Handler partagé preview (utilisé par /api/context/preview
-    et /api/subjects/preview/context)."""
+    et /api/subjects/preview/context).
+
+    Ownership (§10) : le user_id du body ne définit PAS l'identité —
+    il doit être CELUI de la session (admin excepté), sinon 403.
+    """
     init_db()
+    if current is not None and not current.is_admin:
+        if payload.user_id != current.user_id:
+            target = get_user(payload.user_id)
+            if target is None:
+                raise HTTPException(
+                    status_code=404, detail="Utilisateur introuvable"
+                )
+            raise HTTPException(
+                status_code=403,
+                detail="Accès refusé : ressource d'un autre utilisateur",
+            )
     if get_user(payload.user_id) is None:
         raise HTTPException(
             status_code=404, detail="Utilisateur introuvable"
