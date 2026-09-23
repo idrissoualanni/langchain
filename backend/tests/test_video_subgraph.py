@@ -502,3 +502,77 @@ class TestGraphStructure:
 
     def test_max_attempts_default_bounded(self):
         assert MAX_ATTEMPTS_DEFAULT == 3
+
+# ============================================================
+# H. TRANSCRIPTION RÉELLE (faster-whisper)
+# ============================================================
+
+from app.config import VIDEO_TRANSCRIPTION_MODE
+from app.graph.subgraphs.video.transcribe import (
+    resolve_transcriber,
+    whisper_transcriber,
+    _whisper_available,
+)
+
+
+class TestTranscriptionMode:
+    """Résolution du transcriber selon la config et la disponibilité."""
+
+    def test_offline_mode_returns_none(self, monkeypatch):
+        monkeypatch.setattr(
+            "app.graph.subgraphs.video.transcribe.VIDEO_TRANSCRIPTION_MODE",
+            "offline",
+        )
+        assert resolve_transcriber() is None
+
+    def test_whisper_forced_but_absent_raises(self, monkeypatch):
+        monkeypatch.setattr(
+            "app.graph.subgraphs.video.transcribe.VIDEO_TRANSCRIPTION_MODE",
+            "whisper",
+        )
+        monkeypatch.setattr(
+            "app.graph.subgraphs.video.transcribe._whisper_available",
+            lambda: False,
+        )
+        with pytest.raises(VideoFatalError):
+            resolve_transcriber()
+
+    def test_auto_falls_back_without_lib(self, monkeypatch):
+        monkeypatch.setattr(
+            "app.graph.subgraphs.video.transcribe.VIDEO_TRANSCRIPTION_MODE",
+            "auto",
+        )
+        monkeypatch.setattr(
+            "app.graph.subgraphs.video.transcribe._whisper_available",
+            lambda: False,
+        )
+        # Aucune injection explicite → repli sur le bouchon.
+        reset_services()
+        assert resolve_transcriber() is None
+
+
+@pytest.mark.skipif(
+    not _whisper_available(), reason="faster-whisper non installé"
+)
+class TestWhisperTranscriber:
+    """Transcription réelle — nécessite faster-whisper (CPU)."""
+
+    def test_audio_sans_parole_echec_controle(self, tmp_path):
+        # Vidéo silencieuse (ffmpeg testsrc) → pas d'audio exploitable.
+        import subprocess
+
+        video = tmp_path / "silence.mp4"
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi",
+                    "-i", "testsrc=duration=2:size=160x120:rate=10",
+                    "-c:v", "libx264", str(video),
+                ],
+                check=True, timeout=60, capture_output=True,
+            )
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+            pytest.skip("ffmpeg indisponible")
+
+        with pytest.raises(VideoFatalError):
+            whisper_transcriber(local_path=str(video), filename="silence.mp4")

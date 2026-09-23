@@ -38,6 +38,10 @@ from app.graph.subgraphs.video.segment import (
     segment_transcript,
 )
 from app.graph.subgraphs.video.state import VideoState
+from app.graph.subgraphs.video.transcribe import (
+    resolve_transcriber,
+    whisper_transcriber,
+)
 
 __all__ = [
     "MAX_ATTEMPTS_DEFAULT",
@@ -60,4 +64,5 @@ __all__ = [
     "search_video_segments",
     "segment_transcript",
     "use_services",
+    "whisper_transcriber",
 ]

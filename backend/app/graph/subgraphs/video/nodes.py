@@ -207,7 +207,13 @@ def validate_upload_node(state) -> dict:
         or Path(tempfile.gettempdir()) / "video_subgraph" / user_id / video_id
     )
     meta["working_dir"] = str(working_dir)
-    meta["store_dir"] = str(options.get("store_dir") or (working_dir / "store"))
+    # Store PARTAGÉ par utilisateur (et non par vidéo) : le retrieval
+    # (retrieval.py default_store_dir) doit retrouver les vidéos indexées
+    # sans connaître le working_dir de chaque ingestion.
+    meta["store_dir"] = str(
+        options.get("store_dir")
+        or Path(tempfile.gettempdir()) / "video_subgraph" / user_id / "store"
+    )
     base["metadata"] = meta
     base["status"] = "validated"
     base["progress"] = PROGRESS_VALIDATED

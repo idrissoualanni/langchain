@@ -131,7 +131,15 @@ def _downloader() -> Downloader:
 
 
 def _transcriber() -> Transcriber:
-    return _active["transcriber"] or _default_transcriber
+    transcriber = _active.get("transcriber")
+    if transcriber is not None:
+        return transcriber  # injection explicite (tests)
+    # Résolution automatique : whisper réel si disponible, sinon bouchon
+    # pédagogique (repli hors-ligne, déterministe).
+    from app.graph.subgraphs.video.transcribe import resolve_transcriber
+
+    resolved = resolve_transcriber()
+    return resolved if resolved is not None else _default_transcriber
 
 
 # ---------------------------------------------------------------------

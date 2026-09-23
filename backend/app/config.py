@@ -29,6 +29,23 @@ CHECKPOINTS_DB_PATH = DATABASE_DIR / "checkpoints.db"
 LOG_PATH = LOG_DIR / "agent.log"
 
 
+# ------------------------------------------------------------------
+# Base de données — SQLAlchemy dual-dialect
+# ------------------------------------------------------------------
+# DATABASE_URL définie (Neon/PostgreSQL, déploiement Render) →
+# PostgreSQL partout. Absente → SQLite local (développement).
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+USE_POSTGRES = bool(DATABASE_URL)
+
+# Origines CORS autorisées (backend) — séparées par virgules.
+# Défaut : frontend dev Vite local (rien d'autre par défaut).
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.getenv("ALLOWED_ORIGINS", "").split(",")
+    if o.strip()
+] or ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
 def log_safe(value) -> str:
     """Version tronquée/sécurisée d'une valeur pour les logs — jamais de secret."""
     if value is None:
@@ -244,6 +261,32 @@ MODEL_REQUEST_TIMEOUT_SECONDS = _as_int("MODEL_REQUEST_TIMEOUT_SECONDS", 60)
 MODEL_RETRY_ATTEMPTS = _as_int("MODEL_RETRY_ATTEMPTS", 2)
 MODEL_PROVIDER_RETRIES = _as_int("MODEL_PROVIDER_RETRIES", 3)
 
+# ---------------------------------------------------------------
+# Vidéo — transcription réelle (faster-whisper).
+#
+# VIDEO_TRANSCRIPTION_MODE :
+#   "auto"    → whisper si faster-whisper est installé, sinon bouchon
+#               pédagogique hors-ligne (comportement historique) ;
+#   "whisper" → whisper forcé (erreur si la lib est absente) ;
+#   "offline" → bouchon forcé (tests/unitaires, aucun réseau).
+# ---------------------------------------------------------------
+VIDEO_TRANSCRIPTION_MODE = (
+    os.getenv("VIDEO_TRANSCRIPTION_MODE", "auto").strip().lower()
+)
+VIDEO_WHISPER_MODEL = os.getenv(
+    "VIDEO_WHISPER_MODEL", "tiny"
+).strip().lower() or "tiny"
+VIDEO_WHISPER_DEVICE = os.getenv(
+    "VIDEO_WHISPER_DEVICE", "cpu"
+).strip().lower() or "cpu"
+VIDEO_WHISPER_COMPUTE = os.getenv(
+    "VIDEO_WHISPER_COMPUTE", "int8"
+).strip().lower() or "int8"
+# Forcer la langue du transcript ("" = détection automatique).
+VIDEO_WHISPER_LANGUAGE = os.getenv(
+    "VIDEO_WHISPER_LANGUAGE", ""
+).strip().lower()
+
 
 # ------------------------------------------------------------------
 # Health checks
@@ -263,16 +306,14 @@ def check_ollama_health() -> bool:
 
 
 def check_sqlite_health() -> bool:
-    """Vérifie l'accès aux bases SQLite (app.db + checkpoints.db)."""
-    import sqlite3
-
+    """Vérifie l'accès à la base de données (SQLite local ou PostgreSQL via DATABASE_URL)."""
     try:
-        conn = sqlite3.connect(APP_DB_PATH, timeout=2)
-        conn.execute("SELECT 1")
-        conn.close()
-        conn = sqlite3.connect(CHECKPOINTS_DB_PATH, timeout=2)
-        conn.execute("SELECT 1")
-        conn.close()
+        from sqlalchemy import text
+
+        from app.infrastructure.database.connections import get_engine
+
+        with get_engine().connect() as conn:
+            conn.execute(text("SELECT 1"))
         return True
     except Exception:
         return False

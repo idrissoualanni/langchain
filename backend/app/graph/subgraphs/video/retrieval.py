@@ -19,7 +19,7 @@ import re
 import tempfile
 from pathlib import Path
 
-from app.graph.subgraphs.video.persist import VideoKnowledgeStore
+from app.graph.subgraphs.video.persist import VideoKnowledgeStore, _slug
 
 _WORD_RE = re.compile(r"[a-zA-ZÀ-ÿà-ÿ0-9]+")
 
@@ -31,17 +31,22 @@ _SEARCH_STOPWORDS = {
 }
 
 
-def default_store_dir() -> Path:
+def default_store_dir(user_id: str = "") -> Path:
     """Racine de stockage par défaut (hors-ligne, sous le temp système).
 
-    Un agent de wiring peut fournir une racine persistante réelle ;
-    cette valeur n'écrit rien dans le dépôt.
+    Doit rester COHÉRENTE avec le store_dir par défaut calculé par
+    validate_upload (nodes.py) : ingestion et retrieval partagent la
+    même racine, isolée par user_id. Sans user_id, racine globale
+    (rétro-compat).
     """
-    return Path(tempfile.gettempdir()) / "video_subgraph" / "store"
+    base = Path(tempfile.gettempdir()) / "video_subgraph"
+    if not user_id:
+        return base / "store"
+    return base / _slug(user_id) / "store"
 
 
-def get_default_store() -> VideoKnowledgeStore:
-    return VideoKnowledgeStore(default_store_dir())
+def get_default_store(user_id: str = "") -> VideoKnowledgeStore:
+    return VideoKnowledgeStore(default_store_dir(user_id))
 
 
 def _tokens(text: str) -> set[str]:
@@ -85,7 +90,7 @@ def get_video(
     user_id: str, video_id: str, store: VideoKnowledgeStore | None = None
 ) -> dict | None:
     """Vidéo stockée (payload complet) — None si absente/inaccessible."""
-    return (store or get_default_store()).get_video(user_id, video_id)
+    return (store or get_default_store(user_id)).get_video(user_id, video_id)
 
 
 def get_video_segments(
@@ -115,7 +120,7 @@ def search_video_segments(
        error}
     results = [{video_id, filename, segment, relevance}]
     """
-    store = store or get_default_store()
+    store = store or get_default_store(user_id)
     sq = (query or "").strip()
     if not user_id or not sq:
         return {"status": "unavailable", "query": sq, "results": [], "error": ""}
