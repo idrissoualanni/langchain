@@ -536,11 +536,13 @@ Ne fais pas une longue présentation.
 
 # Plan Render free : 512 Mi de RAM. Chaque processus idle est un
 # interpréteur Python complet avec Silero VAD ( torch/onnxruntime )
-# déjà chargé en mémoire → ~200-300 Mi PAR processus. La valeur par
-# défaut ( 3 ) provoque un OOM garanti sous 512 Mi. On descend à 1 :
-# le worker reste réactif ( un agent prêt immédiatement ) tout en
-# restant sous le plafond mémoire.
-server = AgentServer(num_idle_processes=1)
+# chargé en mémoire → ~200-300 Mi PAR processus. Avec 1 idle + le
+# process principal on dépasse encore le plafond ( OOM ).
+# num_idle_processes=0 : aucun agent préchargé — le worker en lance
+# un à la demande quand un job arrive ( cold start de quelques
+# secondes, acceptable pour un tuteur vocal ). C'est le SEUL réglage
+# qui tienne sous 512 Mi.
+server = AgentServer(num_idle_processes=0)
 
 
 @server.rtc_session(
