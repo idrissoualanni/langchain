@@ -1,4 +1,6 @@
 # CRUD Threads — UUID backend, liés à un user
+# Requêtes portables SQLite/PostgreSQL : text() + paramètres nommés
+# (:name), jamais « ? » (voir connections.AppConn).
 import datetime as dt
 import uuid
 
@@ -23,8 +25,14 @@ def create_thread(user_id: str, name: str) -> dict | None:
 
     conn = get_conn()
     conn.execute(
-        "INSERT INTO threads (thread_id, user_id, name, created_at) VALUES (?, ?, ?, ?)",
-        (thread_id, user_id, name, created_at),
+        "INSERT INTO threads (thread_id, user_id, name, created_at) "
+        "VALUES (:thread_id, :user_id, :name, :created_at)",
+        {
+            "thread_id": thread_id,
+            "user_id": user_id,
+            "name": name,
+            "created_at": created_at,
+        },
     )
     conn.commit()
 
@@ -47,8 +55,8 @@ def list_threads(user_id: str) -> list[dict]:
     """Liste les threads d'un utilisateur (plus récents en premier)."""
     rows = get_conn().execute(
         "SELECT thread_id, user_id, name, created_at FROM threads "
-        "WHERE user_id = ? ORDER BY created_at DESC",
-        (user_id,),
+        "WHERE user_id = :user_id ORDER BY created_at DESC",
+        {"user_id": user_id},
     ).fetchall()
     return [dict(row) for row in rows]
 
@@ -56,8 +64,9 @@ def list_threads(user_id: str) -> list[dict]:
 def get_thread(thread_id: str) -> dict | None:
     """Retourne un thread (avec user_id) ou None."""
     row = get_conn().execute(
-        "SELECT thread_id, user_id, name, created_at FROM threads WHERE thread_id = ?",
-        (thread_id,),
+        "SELECT thread_id, user_id, name, created_at FROM threads "
+        "WHERE thread_id = :thread_id",
+        {"thread_id": thread_id},
     ).fetchone()
     return dict(row) if row else None
 
@@ -65,8 +74,8 @@ def get_thread(thread_id: str) -> dict | None:
 def thread_belongs_to_user(thread_id: str, user_id: str) -> bool:
     """Sécurité : vérifie qu'un thread appartient bien à un utilisateur."""
     row = get_conn().execute(
-        "SELECT 1 FROM threads WHERE thread_id = ? AND user_id = ?",
-        (thread_id, user_id),
+        "SELECT 1 FROM threads WHERE thread_id = :thread_id AND user_id = :user_id",
+        {"thread_id": thread_id, "user_id": user_id},
     ).fetchone()
     return row is not None
 
@@ -83,8 +92,8 @@ def rename_thread(thread_id: str, name: str) -> dict | None:
         return None
 
     get_conn().execute(
-        "UPDATE threads SET name = ? WHERE thread_id = ?",
-        (name, thread_id),
+        "UPDATE threads SET name = :name WHERE thread_id = :thread_id",
+        {"name": name, "thread_id": thread_id},
     )
     # commit via get_conn (connexion partagée)
     get_conn().commit()
@@ -110,7 +119,8 @@ def delete_thread(thread_id: str) -> bool:
         return False
 
     get_conn().execute(
-        "DELETE FROM threads WHERE thread_id = ?", (thread_id,)
+        "DELETE FROM threads WHERE thread_id = :thread_id",
+        {"thread_id": thread_id},
     )
     get_conn().commit()
 

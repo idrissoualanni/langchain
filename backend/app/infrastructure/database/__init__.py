@@ -6,7 +6,7 @@
 # (ex : app.infrastructure.database.users).
 from app.infrastructure.database.connections import (
     MIGRATIONS,
-    SCHEMA,
+    SCHEMA_STATEMENTS,
     UNIQUE_INDEX,
     get_conn,
     init_db,
@@ -28,7 +28,7 @@ from app.infrastructure.database.users import (
 
 __all__ = [
     "MIGRATIONS",
-    "SCHEMA",
+    "SCHEMA_STATEMENTS",
     "UNIQUE_INDEX",
     "get_conn",
     "init_db",

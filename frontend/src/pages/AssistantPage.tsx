@@ -17,7 +17,6 @@ import { useAssistantStore } from '../assistant-ui/store';
 import { useHealth } from '../hooks/useHealth';
 import { InlineError } from '../components/ui/error-state';
 import { useActivityStore } from '../hooks/use-activity-store';
-import { ActivityCard } from '../components/agent/activity-card';
 import { ActivityPanel } from '../components/assistant-ui/elements/activity-panel.aui';
 
 /**

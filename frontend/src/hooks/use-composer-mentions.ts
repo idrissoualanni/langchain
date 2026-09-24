@@ -105,13 +105,11 @@ export function useComposerMentions() {
   return unstable_useMentionAdapter({
     items: COMPOSER_TERMS.map((t) => ({
       id: t.id,
-      type: t.id,
+      type: "mention",
       label: t.label,
       description: t.description,
       icon: t.icon,
     })),
-    // Aucun tool du model context n'est exposé dans le popover —
-    // seuls les termes de workflow explicites le sont.
     includeModelContextTools: false,
   });
 }

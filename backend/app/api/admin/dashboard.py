@@ -1,16 +1,18 @@
-"""Admin Dashboard API - Métriques globales et KPIs."""
+"""Admin Dashboard API - Métriques globales et KPIs.
+
+Requêtes portables SQLite/PostgreSQL : text() + paramètres nommés
+(:name), jamais « ? » (voir connections.AppConn).
+"""
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import Any
 from datetime import datetime, timedelta
 
-from app.config import CHECKPOINTS_DB_PATH
-from app.infrastructure.database.connections import get_conn
+from app.infrastructure.database.connections import (
+    get_checkpoint_conn,
+    get_conn,
+)
 from app.auth.resolver import require_admin as get_current_admin_user
-# from app.services.models.user import User
-# from app.services.models.thread import Thread
-# from app.services.models.activity import Activity
-# from app.services.models.learning_profile import LearningProfile
 
 router = APIRouter(prefix="/dashboard", tags=["admin-dashboard"])
 
@@ -29,8 +31,6 @@ def _activity_stats() -> dict[str, Any]:
     checkpoint de chaque thread ( instantané courant ), pas l'historique
     complet — sinon on recompterait N fois la même activité.
     """
-    import sqlite3
-
     try:
         from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
     except ImportError:  # langgraph non installé — zéros honnêtes
@@ -38,20 +38,19 @@ def _activity_stats() -> dict[str, Any]:
 
     stats = {"total": 0, "completed": 0, "completion_rate": 0.0}
     try:
-        conn = sqlite3.connect(CHECKPOINTS_DB_PATH)
-        try:
-            rows = conn.execute(
-                """
-                SELECT c.type, c.checkpoint
-                FROM checkpoints c
-                INNER JOIN (
-                    SELECT thread_id, MAX(checkpoint_id) AS cid
-                    FROM checkpoints GROUP BY thread_id
-                ) m ON c.thread_id = m.thread_id AND c.checkpoint_id = m.cid
-                """,
-            ).fetchall()
-        finally:
-            conn.close()
+        # Base des checkpoints : db checkpoints LangGraph en SQLite,
+        # même base que l'app en PostgreSQL (get_checkpoint_conn).
+        conn = get_checkpoint_conn()
+        rows = conn.execute(
+            """
+            SELECT c.type, c.checkpoint
+            FROM checkpoints c
+            INNER JOIN (
+                SELECT thread_id, MAX(checkpoint_id) AS cid
+                FROM checkpoints GROUP BY thread_id
+            ) m ON c.thread_id = m.thread_id AND c.checkpoint_id = m.cid
+            """,
+        ).fetchall()
     except Exception:
         return stats
 
@@ -101,19 +100,19 @@ async def get_dashboard_metrics(
     total_users = conn.execute('SELECT COUNT(*) FROM users').fetchone()[0] or 0
     # Active users 24h based on distinct user_id in threads created >= last_24h
     active_users_24h = conn.execute(
-        "SELECT COUNT(DISTINCT user_id) FROM threads WHERE created_at >= ?",
-        (last_24h.isoformat(),)
+        "SELECT COUNT(DISTINCT user_id) FROM threads WHERE created_at >= :cutoff",
+        {"cutoff": last_24h.isoformat()},
     ).fetchone()[0] or 0
     active_users_7d = conn.execute(
-        "SELECT COUNT(DISTINCT user_id) FROM threads WHERE created_at >= ?",
-        (last_7d.isoformat(),)
+        "SELECT COUNT(DISTINCT user_id) FROM threads WHERE created_at >= :cutoff",
+        {"cutoff": last_7d.isoformat()},
     ).fetchone()[0] or 0
 
     # Métriques threads
     total_threads = conn.execute('SELECT COUNT(*) FROM threads').fetchone()[0] or 0
     active_threads_24h = conn.execute(
-        "SELECT COUNT(*) FROM threads WHERE created_at >= ?",
-        (last_24h.isoformat(),)
+        "SELECT COUNT(*) FROM threads WHERE created_at >= :cutoff",
+        {"cutoff": last_24h.isoformat()},
     ).fetchone()[0] or 0
 
     # Activités : réelles, lues dans le state des checkpoints
@@ -143,16 +142,17 @@ async def get_dashboard_metrics(
         "timestamp": now.isoformat()
     }
 
+
 @router.get("/activity-stats")
 async def get_activity_stats(
     days: int = Query(default=7, ge=1, le=365),
     current_user: dict = Depends(get_current_admin_user)
 ):
     """Statistiques d'activité sur les X derniers jours."""
-    
+
     # Compute the start date based on the days parameter
     start_date = datetime.utcnow() - timedelta(days=days)
-    
+
     conn = get_conn()
     stats = conn.execute(
         """
@@ -160,12 +160,12 @@ async def get_activity_stats(
                COUNT(*) as thread_count,
                COUNT(DISTINCT user_id) as user_count
         FROM threads
-        WHERE created_at >= ?
+        WHERE created_at >= :start_date
         GROUP BY date(created_at)
         """,
-        (start_date.isoformat(),)
+        {"start_date": start_date.isoformat()},
     ).fetchall()
-    
+
     return {
         "daily_stats": [
             {"date": row["date"], "threads": row["thread_count"], "users": row["user_count"]}

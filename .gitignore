@@ -1,4 +1,3 @@
-```gitignore
 # Python
 __pycache__/
 *.py[cod]
@@ -21,24 +20,36 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+.venv/
+venv/
 
-# Database
+# Node / frontend
+node_modules/
+dist-ssr/
+
+# Database (SQLite local)
 *.db
+*.sqlite3
 database/
+backend/database/
 
-# Environment
+# Environment / secrets
 .env
 .env.local
 .env.*
 !.env.example
+backend/.env
+frontend/.env
 
 # Testing
 .pytest_cache/
 .coverage
 htmlcov/
 coverage/
+playwright-report/
+test-results/
 
-# IDE
+# IDE / editeurs
 .vscode/
 .idea/
 *.swp
@@ -47,10 +58,28 @@ coverage/
 
 # Logs
 *.log
+*.log-err
+logs/
+backend/uv*.log-err
 
 # OS
 .DS_Store
 Thumbs.db
-```
+
 # Runtime local LangGraph Studio / API
 .langgraph_api/
+
+# ZCode & outillage local (inutile au deploiement)
+.zcode/
+.zcodeignore
+
+# Docs & rapports locaux non requis en production
+/docs/
+FRONTEND_UX_UI_REDESIGN_REPORT.md
+MEMORY.md
+PHASE12_COMPLETE.md
+
+# CLIs de deploiement (contextes locaux)
+.vercel/
+.neon
+.render

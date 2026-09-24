@@ -26,9 +26,35 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 from livekit import rtc
+
+logger = logging.getLogger("agent-tutor.livekit")
+
+
+# Registre partagé backend ↔ worker : pour chaque room, l'état de capture
+# ( un frame est-il disponible ? ). Le worker écrit, l'API lit
+# ( GET /screen-share/status ). browser n'importe rien de app.api — pas de
+# dépendance circulaire, le worker peut l'importer librement.
+_screen_share_registry: dict[str, dict[str, Any]] = {}
+
+
+def set_screen_sharing(room_name: str, enabled: bool) -> None:
+    """Met à jour l'état de capture pour une room — appelé par le worker."""
+    if enabled:
+        _screen_share_registry[room_name] = {
+            "capturing": True,
+            "started_at": int(time.time()),
+        }
+    else:
+        _screen_share_registry.pop(room_name, None)
+
+
+def screen_share_status(room_name: str) -> dict[str, Any] | None:
+    """État de capture pour une room — lu par l'API."""
+    return _screen_share_registry.get(room_name)
 
 logger = logging.getLogger("agent-tutor.livekit")
 

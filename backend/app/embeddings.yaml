@@ -16,6 +16,13 @@
 #   installable sur cette machine (disque saturé) ; pour
 #   l'activer : remplacer « active » ci-dessous par ollama-4b
 #   après « ollama pull qwen3-embedding:4b ». ZÉRO code à changer.
+#
+#   CLOUD GRATUIT (free tier) = cf-workers-ai (Cloudflare Workers
+#   AI, @cf/baai/bge-m3 multilingue FR+EN). Nécessite
+#   CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN (voir options
+#   ci-dessous + .env.example). Pour l'activer : remplacer
+#   « active » par cf-workers-ai (ou EMBEDDING_PROVIDER=cf-workers-ai).
+#   AUCUNE clé n'est inscrite ici : l'API token est lu dans l'env.
 active: ollama-0-6b
 
 providers:
@@ -46,6 +53,49 @@ providers:
   # disponible ; utilisé par défaut si ollama est absent.
   local-hash:
     provider_type: local-hash
+
+  # CLOUD GRATUIT — Cloudflare Workers AI (free tier : 10 000
+  # neurons/jour sans payer ; bge-m3 = 1075 neurons / M input
+  # tokens → ~9 M tokens/jour gratuits).
+  # provider_type: cf-workers-ai est résolu par provider.py
+  # (POST https://api.cloudflare.com/client/v4/accounts/<id>
+  # /ai/run/@cf/baai/bge-m3, body {"text": [...]}).
+  # MULTILINGUE FR+EN (bge-m3 = Multi-Linguality, 60k contexte) —
+  # contrairement aux @cf/baai/bge-*-en-v1.5 (anglais uniquement).
+  # dim 1024 = identique au bge-m3 local (ollama) : vecteurs
+  # compatibles dimension à dimension.
+  #
+  # SÉCURITÉ : AUCUNE clé ici. CLOUDFLARE_API_TOKEN est lu dans
+  # l'env (jamais dans ce fichier) — le YAML ne stocke que le
+  # NOM de la variable (api_token_env). account_id peut rester
+  # générique (env) ou être surchargé ci-dessous. Activation :
+  #   active: cf-workers-ai
+  #   (ou EMBEDDING_PROVIDER=cf-workers-ai)
+  cf-workers-ai:
+    provider_type: cf-workers-ai
+    model: "@cf/baai/bge-m3"
+    dim: 1024
+    timeout_s: 15
+    # account_id vide → résolu depuis l'env CLOUDFLARE_ACCOUNT_ID.
+    account_id: ""
+    # nom de l'env var contenant le token (jamais la valeur) :
+    api_token_env: CLOUDFLARE_API_TOKEN
+    # agrégat compatible OpenAI (/v1/embeddings) — non utilisé
+    # par le client REST direct ; documenté pour référence.
+    endpoint: https://api.cloudflare.com/client/v4
+
+  # Variante cloud du MÊME modèle local (qwen3-embedding:0.6b),
+  # si l'on préfère la parité exacte avec l'actif plutôt que
+  # bge-m3. Multilingue (famille Qwen3). Mêmes env que
+  # cf-workers-ai ; utiliser « cf-qwen-cloud » pour l'activer.
+  cf-qwen-cloud:
+    provider_type: cf-workers-ai
+    model: "@cf/qwen/qwen3-embedding-0.6b"
+    dim: 1024
+    timeout_s: 15
+    account_id: ""
+    api_token_env: CLOUDFLARE_API_TOKEN
+    endpoint: https://api.cloudflare.com/client/v4
 
   # Autres remplacements futurs (aucune ligne de code à changer) :
   ollama-8b:

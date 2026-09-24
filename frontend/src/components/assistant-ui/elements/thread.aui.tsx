@@ -44,7 +44,6 @@ import {
   type FileMessagePartComponent,
   type ImageMessagePartComponent,
   type ToolCallMessagePartComponent,
-  useAui,
   useAuiState,
 } from "@assistant-ui/react";
 import {
@@ -290,68 +289,68 @@ const Composer: FC<{ autoFocus: boolean }> = ({ autoFocus }) => {
 
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
-      <ComposerPrimitive.Unstable_TriggerPopoverRoot>
-        <ComposerPrimitive.Unstable_TriggerPopover
-          char="@"
-          adapter={adapter}
-          className="aui-mention-popover absolute bottom-full left-0 right-0 z-50 mb-2 max-h-72 overflow-y-auto rounded-xl border border-border bg-popover p-2 shadow-md"
-        >
-          <ComposerPrimitive.Unstable_TriggerPopover.Directive
-            formatter={directive.formatter}
-            onInserted={directive.onInserted}
-          />
-          <ComposerPrimitive.Unstable_TriggerPopoverItems>
-            {(items) => (
-              <div className="flex flex-col gap-1">
-                {items.length === 0 ? (
-                  <div className="text-muted-foreground px-3 py-2 text-xs">
-                    Aucun terme ne correspond
-                  </div>
-                ) : (
-                  items.map((item) => (
-                    <ComposerPrimitive.Unstable_TriggerPopoverItem
-                      key={item.id}
-                      item={item}
-                      className="aui-mention-item flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none data-[highlighted]:bg-accent"
-                    >
-                      <span aria-hidden className="text-base">
-                        {typeof item.metadata?.icon === "string"
-                          ? item.metadata.icon
-                          : "•"}
-                      </span>
-                      <span className="flex flex-col">
-                        <span className="font-medium">{item.label}</span>
-                        {item.description ? (
-                          <span className="text-muted-foreground text-xs">
-                            {item.description}
-                          </span>
-                        ) : null}
-                      </span>
-                    </ComposerPrimitive.Unstable_TriggerPopoverItem>
-                  ))
-                )}
-              </div>
-            )}
-          </ComposerPrimitive.Unstable_TriggerPopoverItems>
-        </ComposerPrimitive.Unstable_TriggerPopover>
-      </ComposerPrimitive.Unstable_TriggerPopoverRoot>
       <ComposerPrimitive.AttachmentDropzone asChild>
-        <div
-          data-slot="aui_composer-shell"
-          className="border-border data-[dragging=true]:border-ring flex w-full cursor-text flex-col gap-2 rounded-(--composer-radius) border bg-(--composer-bg) p-(--composer-padding) transition-[border-color] data-[dragging=true]:border-dashed data-[dragging=true]:bg-[color-mix(in_oklab,var(--color-muted)_50%,var(--color-background))]"
-        >
-          <ComposerAttachments />
-          <MentionBadge />
-          <ComposerPrimitive.Input
-            placeholder="Écrire un message…"
-            className="aui-composer-input caret-primary placeholder:text-muted-foreground/60 max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base leading-6 outline-none"
-            rows={1}
-            autoFocus={autoFocus}
-            enterKeyHint="send"
-            aria-label="Message"
-          />
-          <ComposerAction />
-        </div>
+        <ComposerPrimitive.Unstable_TriggerPopoverRoot>
+          <ComposerPrimitive.Unstable_TriggerPopover
+            char="@"
+            adapter={adapter}
+            className="aui-mention-popover absolute bottom-full left-0 right-0 z-50 mb-2 max-h-72 overflow-y-auto rounded-xl border border-border bg-popover p-2 shadow-md"
+          >
+            <ComposerPrimitive.Unstable_TriggerPopover.Directive
+              formatter={directive.formatter}
+              onInserted={directive.onInserted}
+            />
+            <ComposerPrimitive.Unstable_TriggerPopoverItems>
+              {(items) => (
+                <div className="flex flex-col gap-1">
+                  {items.length === 0 ? (
+                    <div className="text-muted-foreground px-3 py-2 text-xs">
+                      Aucun terme ne correspond
+                    </div>
+                  ) : (
+                    items.map((item) => (
+                      <ComposerPrimitive.Unstable_TriggerPopoverItem
+                        key={item.id}
+                        item={item}
+                        className="aui-mention-item flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm outline-none data-[highlighted]:bg-accent"
+                      >
+                        <span aria-hidden className="text-base">
+                          {typeof item.metadata?.icon === "string"
+                            ? item.metadata.icon
+                            : "•"}
+                        </span>
+                        <span className="flex flex-col">
+                          <span className="font-medium">{item.label}</span>
+                          {item.description ? (
+                            <span className="text-muted-foreground text-xs">
+                              {item.description}
+                            </span>
+                          ) : null}
+                        </span>
+                      </ComposerPrimitive.Unstable_TriggerPopoverItem>
+                    ))
+                  )}
+                </div>
+              )}
+            </ComposerPrimitive.Unstable_TriggerPopoverItems>
+          </ComposerPrimitive.Unstable_TriggerPopover>
+          <div
+            data-slot="aui_composer-shell"
+            className="border-border data-[dragging=true]:border-ring flex w-full cursor-text flex-col gap-2 rounded-(--composer-radius) border bg-(--composer-bg) p-(--composer-padding) transition-[border-color] data-[dragging=true]:border-dashed data-[dragging=true]:bg-[color-mix(in_oklab,var(--color-muted)_50%,var(--color-background))]"
+          >
+            <ComposerAttachments />
+            <MentionBadge />
+            <ComposerPrimitive.Input
+              placeholder="Écrire un message…  Tapez @ pour les workflows"
+              className="aui-composer-input caret-primary placeholder:text-muted-foreground/60 max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base leading-6 outline-none"
+              rows={1}
+              autoFocus={autoFocus}
+              enterKeyHint="send"
+              aria-label="Message"
+            />
+            <ComposerAction />
+          </div>
+        </ComposerPrimitive.Unstable_TriggerPopoverRoot>
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
   );

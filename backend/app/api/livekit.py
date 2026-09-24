@@ -17,6 +17,10 @@ from livekit.protocol.agent import JobStatus
 from pydantic import BaseModel
 from typing import Any, Optional
 
+from app.infrastructure.livekit.browser import (
+    screen_share_status,
+    set_screen_sharing as _notify_set,
+)
 from app.infrastructure.livekit.constants import TUTOR_AGENT_NAME
 from app.infrastructure.livekit.token import (
     generate_token,
@@ -320,15 +324,15 @@ _screen_share_registry: dict[str, dict[str, Any]] = {}
 
 
 def set_screen_sharing(room_name: str, enabled: bool) -> None:
-    """Met à jour l'état de capture pour une room — utilisé par le worker."""
-    if enabled:
-        _screen_share_registry[room_name] = {
-            "capturing": True,
-            "started_at": int(time.time()),
-        }
-    else:
-        _screen_share_registry.pop(room_name, None)
+    """Passe-relai vers browser.set_screen_sharing.
 
+    Le worker appelle directement app.infrastructure.livekit.browser ( pas
+    ce module : importer l'API depuis le worker créerait une dépendance
+    circulaire, l'API important elle-même le worker indirectement ).
+    Cette facade garde la compatibilité si du code l'utilise.
+    """
+    from app.infrastructure.livekit.browser import set_screen_sharing as _set
+    _set(room_name, enabled)
 
 @router.get("/screen-share/status")
 async def screen_share_status(
@@ -341,7 +345,7 @@ async def screen_share_status(
     moment où l'étudiant pose une question — pas en permanence.
     """
     room_name = _room_of(current_user)
-    status = _screen_share_registry.get(room_name)
+    status = screen_share_status(room_name)
 
     if status is None:
         return {
@@ -369,7 +373,7 @@ async def screen_share_notify(
     room via video_enabled=True.
     """
     room_name = _room_of(current_user)
-    set_screen_sharing(room_name, enabled)
+    _notify_set(room_name, enabled)
     logger.info("capture écran %s | room=%s", "activée" if enabled else "désactivée", room_name)
 
     return {"status": "sharing" if enabled else "stopped", "room": room_name}

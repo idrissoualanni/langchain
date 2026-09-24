@@ -15,12 +15,15 @@
 #   - similarité COSINE encapsulée ICI (mission §7 : jamais
 #     dispersée dans le code métier).
 #
-# Interchangeable : une implémentation ollama/OpenAI future
+# Interchangeable : une implémentation ollama/cloud future
 # implémente le même Protocol et s'installe via
 # set_embedding_provider() — aucune autre ligne à changer.
+# Providers : local-hash, ollama (local), cf-workers-ai
+# (Cloudflare Workers AI — cloud gratuit, voir embeddings.yaml).
 from __future__ import annotations
 
 import math
+import os
 import threading
 import time
 from typing import Protocol
@@ -37,6 +40,7 @@ from app.services.context.semantic.embedding_registry import (
 from app.core.exceptions import (
     ModelTimeoutError,
     ProviderUnavailableError,
+    RateLimitError,
 )
 
 # Dimension de l'embedding local (espace de hachage). Choisie
@@ -253,6 +257,175 @@ class _TransientEmbedError(Exception):
     """Erreur transitoire (500/OOM) — retentée une fois."""
 
 
+class CloudflareWorkersAIEmbeddingProvider:
+    """Provider CLOUD GRATUIT — Cloudflare Workers AI (REST).
+
+    Résolu depuis embeddings.yaml (provider_type: cf-workers-ai).
+    Free tier : 10 000 neurons/jour (bge-m3 = 1075 neurons / M
+    input tokens). Modèles multilingues FR+EN (@cf/baai/bge-m3,
+    @cf/qwen/qwen3-embedding-0.6b) — contrairement aux
+    @cf/baai/bge-*-en-v1.5 (anglais seul).
+
+    SÉCURITÉ : AUCUNE clé en clair. Le token API vient de l'env
+    (nom lu dans options.api_token_env, défaut CLOUDFLARE_API_TOKEN)
+    — jamais du YAML. L'account_id vient de options.account_id ou
+    de l'env CLOUDFLARE_ACCOUNT_ID.
+
+    Indisponible (401/403 token, 404 modèle, 429 quota, timeout,
+    connexion) → ProviderUnavailableError / RateLimitError /
+    ModelTimeoutError : le retriever passe unavailable et le
+    routing retombe sur le lexical (même fail-safe qu'ollama §15).
+    """
+
+    _API_BASE = "https://api.cloudflare.com/client/v4"
+
+    def __init__(self, config: EmbeddingConfig):
+        self.name = f"cf-workers-ai:{config.model or 'default'}"
+        self._model = config.model
+        self._timeout = float(config.options.get("timeout_s", 15))
+        # account_id : option YAML > env. Vide autorisé (env).
+        self._account_id = (
+            config.options.get("account_id", "").strip()
+            or os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
+        )
+        env_var = (
+            config.options.get("api_token_env", "")
+            or "CLOUDFLARE_API_TOKEN"
+        )
+        # Le NOM de l'env var est dans le YAML ; la VALEUR jamais.
+        self._api_token = os.getenv(env_var, "").strip()
+        base = (
+            config.options.get("endpoint", "").strip()
+            or self._API_BASE
+        ).rstrip("/")
+        self._url = (
+            f"{base}/accounts/{self._account_id}/ai/run/{self._model}"
+        )
+
+    def _headers(self) -> dict:
+        return {
+            "Authorization": f"Bearer {self._api_token}",
+            "Content-Type": "application/json",
+        }
+
+    def _classify(self, status: int, msg: str) -> Exception:
+        """Code HTTP → exception contrôlée (hiérarchie §16)."""
+        if status in (401, 403):
+            return ProviderUnavailableError(
+                "Cloudflare: token invalide/insuffisant (vérifiez "
+                "CLOUDFLARE_API_TOKEN, scope 'Workers AI Read')"
+            )
+        if status == 404:
+            return ProviderUnavailableError(
+                f"modèle '{self._model}' indisponible sur ce compte "
+                "(vérifiez CLOUDFLARE_ACCOUNT_ID)"
+            )
+        if status == 429:
+            return RateLimitError(
+                "quota Workers AI atteint (free tier : "
+                "10 000 neurons/jour)"
+            )
+        if status >= 500:
+            # transitoire côté Cloudflare → retenté par embed_text
+            return _TransientEmbedError(f"HTTP {status}: {msg}")
+        return ProviderUnavailableError(
+            f"Cloudflare embeddings indisponible (HTTP {status}): {msg}"
+        )
+
+    def _extract(self, payload) -> list[float]:
+        """Réponse CF v4 → 1er vecteur (data = [[...]] dans result).
+
+        CF v4 enveloppe le résultat dans « result » ; on accepte
+        aussi une réponse nue pour rester robuste.
+        """
+        if not isinstance(payload, dict):
+            raise ProviderUnavailableError("réponse Cloudflare illisible")
+        if payload.get("success") is False:
+            errs = payload.get("errors") or []
+            code = errs[0].get("code") if errs else None
+            msg = errs[0].get("message", "") if errs else "inconnu"
+            # code 7000041 = quota dépassé (free tier) → RateLimit
+            if code in (7000041, 7000042) or "limit" in str(msg).lower():
+                return RateLimitError(f"quota Workers AI: {msg}")
+            return ProviderUnavailableError(f"Cloudflare erreur {code}: {msg}")
+        data = payload.get("data")
+        # enveloppe v4 : le vrai payload est sous « result »
+        if data is None:
+            data = (payload.get("result") or {}).get("data")
+        if not data or not isinstance(data, list):
+            raise ProviderUnavailableError("réponse embeddings vide")
+        vec = data[0]
+        if not isinstance(vec, (list, tuple)) or not vec:
+            raise ProviderUnavailableError("vecteur embedding vide")
+        return [float(x) for x in vec]
+
+    def _embed_once(self, text: str) -> list[float]:
+        import requests  # dépendance déjà déclarée (requirements.txt)
+
+        try:
+            resp = requests.post(
+                self._url,
+                json={"text": text or " "},
+                headers=self._headers(),
+                timeout=self._timeout,
+            )
+        except requests.exceptions.Timeout as exc:
+            raise ModelTimeoutError(
+                f"embedding timeout ({self._timeout}s)"
+            ) from exc
+        except requests.exceptions.ConnectionError as exc:
+            raise ProviderUnavailableError(
+                f"Cloudflare injoignable: {exc}"
+            ) from exc
+        if resp.status_code != 200:
+            raise self._classify(
+                resp.status_code,
+                (resp.text or "")[:200],
+            )
+        try:
+            payload = resp.json()
+        except ValueError as exc:
+            raise ProviderUnavailableError(
+                "réponse non-JSON de Cloudflare"
+            ) from exc
+        return self._extract(payload)
+
+    def embed_text(self, text: str) -> list[float]:
+        """texte → embedding via REST Workers AI.
+
+        Un 5xx (transitoire) est retenté une fois (même politique
+        qu'ollama) ; tout échec devient une exception contrôlée de
+        la hiérarchie §16 — jamais une exception brute vers le
+        pipeline (fail-safe retriever §15).
+        """
+        if not self._account_id:
+            raise ProviderUnavailableError(
+                "CLOUDFLARE_ACCOUNT_ID manquant (env ou option YAML)"
+            )
+        if not self._api_token:
+            raise ProviderUnavailableError(
+                "CLOUDFLARE_API_TOKEN manquant (env) — créez un token "
+                "avec le scope 'Workers AI Read' sur "
+                "https://dash.cloudflare.com/profile/api-tokens"
+            )
+        try:
+            return self._embed_once(text)
+        except _TransientEmbedError:
+            time.sleep(0.6)
+            try:
+                return self._embed_once(text)
+            except _TransientEmbedError as exc:
+                raise ProviderUnavailableError(
+                    f"Cloudflare embeddings indisponible: {exc}"
+                ) from exc
+        except (ProviderUnavailableError, ModelTimeoutError, RateLimitError):
+            raise
+        except Exception as exc:
+            raise ProviderUnavailableError(
+                f"Cloudflare embeddings indisponible: {exc}"
+            ) from exc
+
+
 # ------------------------------------------------------------------
 # Provider actif — résolu par la registry (embeddings.yaml),
 # thread-safe, ré-installable (tests §25, providers externes)
@@ -264,9 +437,10 @@ _active_provider: EmbeddingProvider | None = None
 def get_embedding_provider() -> EmbeddingProvider:
     """Provider actif depuis embeddings.yaml (addendum).
 
-    ollama (référence 4B) par défaut ; local-hash si YAML vide.
-    L'instance est MAINTENUE : le client ollama est réutilisé
-    entre appels (pas de reconnexion par requête).
+    ollama (référence 4B) par défaut ; cf-workers-ai (cloud
+    gratuit Cloudflare, activable par EMBEDDING_PROVIDER) ;
+    local-hash si YAML vide. L'instance est MAINTENUE : le client
+    est réutilisé entre appels (pas de reconnexion par requête).
     """
     global _active_provider
     with _provider_lock:
@@ -274,6 +448,10 @@ def get_embedding_provider() -> EmbeddingProvider:
             cfg = get_embedding_config()
             if cfg.provider_type == "ollama":
                 _active_provider = OllamaEmbeddingProvider(cfg)
+            elif cfg.provider_type == "cf-workers-ai":
+                _active_provider = (
+                    CloudflareWorkersAIEmbeddingProvider(cfg)
+                )
             else:
                 _active_provider = LocalHashEmbeddingProvider()
         return _active_provider
@@ -293,6 +471,7 @@ __all__ = [
     "EmbeddingProvider",
     "LocalHashEmbeddingProvider",
     "OllamaEmbeddingProvider",
+    "CloudflareWorkersAIEmbeddingProvider",
     "cosine_similarity",
     "get_embedding_provider",
     "set_embedding_provider",

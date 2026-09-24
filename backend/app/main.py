@@ -32,6 +32,7 @@ from app.infrastructure.database.connections import init_db
 from app.logging.events import log_event, setup_logging
 from app.logging.sse import sse_events
 from app.ws.logs import router as ws_router
+from app.config import ALLOWED_ORIGINS
 
 
 @asynccontextmanager
@@ -73,13 +74,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — frontend dev Vite
+# CORS — frontend (dev Vite local + domaines Vercel via env)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

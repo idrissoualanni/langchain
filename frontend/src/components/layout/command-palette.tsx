@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Command } from 'cmdk';
 import { Bot, FileText, GraduationCap, Database, Settings, Video, Mic, LayoutDashboard } from 'lucide-react';
-import { Dialog } from '@/components/ui/dialog';
+import { Dialog } from '@/components/ui/Dialog';
 
 const COMMANDS = [
   { label: 'Assistant', to: '/assistant', icon: Bot },

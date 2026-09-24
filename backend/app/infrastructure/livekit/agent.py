@@ -64,6 +64,10 @@ from app.config import (
     LIVEKIT_AGENT_TTS_VOICE,
 )
 
+from app.infrastructure.livekit.browser import (
+    ScreenShareCapturer,
+    set_screen_sharing,
+)
 from app.infrastructure.livekit.transcript import (
     persist_transcript,
     thread_id_from_metadata,
@@ -530,7 +534,13 @@ Ne fais pas une longue présentation.
 # SERVEUR LIVEKIT
 # ============================================================================
 
-server = AgentServer()
+# Plan Render free : 512 Mi de RAM. Chaque processus idle est un
+# interpréteur Python complet avec Silero VAD ( torch/onnxruntime )
+# déjà chargé en mémoire → ~200-300 Mi PAR processus. La valeur par
+# défaut ( 3 ) provoque un OOM garanti sous 512 Mi. On descend à 1 :
+# le worker reste réactif ( un agent prêt immédiatement ) tout en
+# restant sous le plafond mémoire.
+server = AgentServer(num_idle_processes=1)
 
 
 @server.rtc_session(

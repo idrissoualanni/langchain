@@ -46,7 +46,8 @@ class EmbeddingConfig:
     """Config résolue d'UN provider d'embeddings."""
 
     name: str                      # clé YAML (ex: ollama)
-    provider_type: str             # type d'implémentation (ollama/local-hash)
+    provider_type: str             # type d'implémentation (ollama /
+    #                                cf-workers-ai / local-hash)
     model: str = ""                 # nom du modèle (vide pour local-hash)
     dim: int | None = None
     options: dict = field(default_factory=dict)

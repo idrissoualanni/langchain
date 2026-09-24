@@ -1,9 +1,16 @@
 # CRUD Users — UUID générés côté backend
+# Requêtes portables SQLite/PostgreSQL : text() + paramètres nommés
+# (:name), jamais « ? » (voir connections.AppConn).
 import datetime as dt
 import uuid
 
 from app.logging.events import log_event
 from app.infrastructure.database.connections import get_conn
+
+_SELECT_USER = (
+    "SELECT user_id, name, created_at, clerk_user_id, role "
+    "FROM users "
+)
 
 
 def _now_iso() -> str:
@@ -23,8 +30,14 @@ def create_user(
     conn = get_conn()
     conn.execute(
         "INSERT INTO users (user_id, name, created_at, clerk_user_id, role) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (user_id, name, created_at, clerk_user_id, role),
+        "VALUES (:user_id, :name, :created_at, :clerk_user_id, :role)",
+        {
+            "user_id": user_id,
+            "name": name,
+            "created_at": created_at,
+            "clerk_user_id": clerk_user_id,
+            "role": role,
+        },
     )
     conn.commit()
 
@@ -46,8 +59,7 @@ def create_user(
 def list_users() -> list[dict]:
     """Liste tous les utilisateurs (plus récents en premier)."""
     rows = get_conn().execute(
-        "SELECT user_id, name, created_at, clerk_user_id, role "
-        "FROM users ORDER BY created_at DESC"
+        _SELECT_USER + "ORDER BY created_at DESC"
     ).fetchall()
     return [dict(row) for row in rows]
 
@@ -55,9 +67,8 @@ def list_users() -> list[dict]:
 def get_user(user_id: str) -> dict | None:
     """Retourne un utilisateur ou None."""
     row = get_conn().execute(
-        "SELECT user_id, name, created_at, clerk_user_id, role "
-        "FROM users WHERE user_id = ?",
-        (user_id,),
+        _SELECT_USER + "WHERE user_id = :user_id",
+        {"user_id": user_id},
     ).fetchone()
     return dict(row) if row else None
 
@@ -69,8 +80,7 @@ def get_user_by_clerk_id(clerk_user_id: str) -> dict | None:
     clé clerk_user_id est UNIQUE en base ).
     """
     row = get_conn().execute(
-        "SELECT user_id, name, created_at, clerk_user_id, role "
-        "FROM users WHERE clerk_user_id = ?",
-        (clerk_user_id,),
+        _SELECT_USER + "WHERE clerk_user_id = :clerk_user_id",
+        {"clerk_user_id": clerk_user_id},
     ).fetchone()
     return dict(row) if row else None

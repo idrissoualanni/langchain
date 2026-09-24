@@ -34,3 +34,8 @@ livekit-plugins-silero>=1.8.2
 sqlalchemy
 beautifulsoup4
 pymupdf          # extraction PDF ( app/rag/documents.py — import fitz )
+
+# PostgreSQL ( Neon ) — obligatoire des que DATABASE_URL est definie.
+# psycopg 3 en mode binaire : pas de compilation ( contrairement a psycopg2 ).
+# Sert aussi au checkpointer LangGraph ( langgraph-checkpoint-postgres ).
+psycopg[binary]>=3.2
