@@ -54,6 +54,14 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:${PORT}/api/health || exit 1
 
-# Par défaut : le serveur web. Le worker LiveKit surcharge la commande
-# ( voir render.yaml ) avec : python -m app.infrastructure.livekit.agent start
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Une seule image, deux rôles :
+#   - RUN_AS_WORKER=1 → worker LiveKit ( connexion persistante,
+#     aucun port web — Render le voit comme un service inactif,
+#     c'est normal et voulu ) ;
+#   - sinon → serveur web FastAPI ( port $PORT ).
+# Le shell form permet l'expansion de $RUN_AS_WORKER et $PORT.
+CMD if [ "$RUN_AS_WORKER" = "1" ]; then \
+        exec python -m app.infrastructure.livekit.agent start; \
+    else \
+        exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}; \
+    fi
