@@ -12,10 +12,21 @@ const clerkKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as
   | undefined;
 const devMode = import.meta.env.VITE_AUTH_MODE === 'dev';
 
+// Sur un domaine *.vercel.app, Clerk sert son Frontend API via le
+// proxy app-origin /__clerk ( pas de sous-domaine clerk.<domain>
+// possible : Vercel contrôle le DNS ). Sans proxyUrl explicite, le
+// SDK déduit clerk.<domain> depuis la publishable key → domaine mort.
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL as
+  | string
+  | undefined;
+
 export default function Root() {
   if (!devMode && clerkKey) {
     return (
-      <ClerkProvider publishableKey={clerkKey}>
+      <ClerkProvider
+        publishableKey={clerkKey}
+        {...(clerkProxyUrl ? { proxyUrl: clerkProxyUrl } : {})}
+      >
         <ClerkTokenBridge>
           <App />
         </ClerkTokenBridge>
