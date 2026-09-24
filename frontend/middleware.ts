@@ -23,14 +23,20 @@ export default async function handler(req: Request): Promise<Response> {
     return new Response('VITE_CLERK_PUBLISHABLE_KEY missing', { status: 500 });
   }
 
-  // On relaye vers le FAPI Clerk ( hostname du domaine enregistré ).
+  // On relaye vers le FAPI Clerk via le CNAME target de l'infra Clerk.
+  // ( clerk.<domain> ne marche pas sur *.vercel.app : le sous-domaine
+  //   est pris en charge par Vercel qui n'a pas de certificat Clerk →
+  //   handshake TLS en échec. frontend-api.clerk.services est le CNAME
+  //   que Clerk a lui-même configuré pour servir le FAPI de tous les
+  //   domaines ; on garde le Host original pour le routage SNI. )
   const target = new URL(req.url);
-  target.hostname = fapiDomain;
+  target.hostname = 'frontend-api.clerk.services';
   target.pathname = url.pathname.replace(/^\/__clerk/, '');
   target.search = url.search;
 
   const headers = new Headers(req.headers);
-  headers.set('host', fapiDomain);
+  // Host doit rester le FAPI d'origine pour le routage côté infra Clerk.
+  headers.set('host', fapiDomain || 'frontend-api.clerk.services');
 
   try {
     const upstream = await fetch(target.toString(), {
