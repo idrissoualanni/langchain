@@ -78,11 +78,14 @@ export const authClient = {
       /* session déjà expirée */
     }),
 
-  /** JWT signé ( Ed25519 ) pour le backend — lu depuis la session. */
+  /** JWT signé ( Ed25519 ) pour le backend.
+   *
+   * NB : session.token est un token OPAQUE ( 32 chars, pas un JWT )
+   * — inutilisable pour verify_neon_token() côté backend. Better Auth
+   * expose le vrai JWT signé sur l'endpoint /token ( getJWTToken ).
+   */
   async getJWTToken(): Promise<string | null> {
-    const s = await this.getSession();
-    // Better Auth expose le token de session ; le backend le vérifie
-    // via le JWKS Neon ( voir backend/app/auth/resolver.py ).
-    return s?.token ?? s?.session?.token ?? null;
+    const t = await getJson<{ token: string | null }>('/token');
+    return t?.token ?? null;
   },
 };
