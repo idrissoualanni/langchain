@@ -4,6 +4,12 @@
 #
 # Base : slim pour réduire la taille. Les wheels de torch/onnxruntime
 # ( dépendances de livekit-plugins-silero ) existent pour linux/x86_64.
+#
+# MCP ( §39–§41 ) : l'image embarque la couche Model Context Protocol
+# ( mcp + langchain-mcp-adapters ) et le backend Google Calendar. Les
+# SECRETS OAuth ( client_secret.json / token.json ) ne sont jamais dans
+# l'image : ils viennent d'un volume persistant monté sur
+# /app/data/mcp/google ( cf. .gitignore + .env.example ).
 
 FROM python:3.11-slim AS builder
 
@@ -46,8 +52,21 @@ ENV PATH=/root/.local/bin:$PATH \
 COPY app ./app
 COPY langgraph.json .
 
+# Racine des données — créée à l'exécution ( pas de COPY : data/ est
+# local et absent d'un checkout propre ; les backends le recréent ).
+#  - data/mcp/calendar.json   : agenda mock ( fallback sans GCP )
+#  - data/mcp/google/         : SECRETS OAuth — monter un VOLUME
+#                               persistant Render dessus, sinon le
+#                               consentement est perdu à chaque restart
+#                               ( le token.json est éphémère sans volume )
+#  - data/workspace/files/    : sandbox filesystem MCP
+RUN mkdir -p /app/data/mcp/google /app/data/workspace/files
+
 # Render injecte PORT. uvicorn doit écouter sur 0.0.0.0:$PORT.
-ENV PORT=8000
+ENV PORT=8000 \
+    MCP_CALENDAR_STORE=/app/data/mcp/calendar.json \
+    GOOGLE_CALENDAR_CREDENTIALS=/app/data/mcp/google/client_secret.json \
+    GOOGLE_CALENDAR_TOKEN=/app/data/mcp/google/token.json
 EXPOSE 8000
 
 # Healthcheck : l'endpoint /api/health répond 200 quand l'API est prête.

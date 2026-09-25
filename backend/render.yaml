@@ -1,0 +1,107 @@
+# Configuration Render — agent-tutor.
+#
+# ⚠️ Ce fichier est une SOURCE DE VÉRITÉ en plus du dashboard Render.
+#    Les services EXISTENT déjà ( créés via le dashboard ). En cas de
+#    divergence, le dashboard gagne. Pour appliquer une évolution (
+#    changement de commande, de plan, de healthcheck ), saisissez-la
+#    DANS LE DASHBOARD — ce fichier documente l'état attendu.
+#
+# Une seule image Docker ( ./Dockerfile ), deux rôles selon RUN_AS_WORKER.
+# Plan free : 512 Mo de RAM par service, région frankfurt.
+
+services:
+  # --------------------------------------------------------------------------
+  # API FastAPI — sert le chat clavier + les endpoints /api/livekit/*.
+  # --------------------------------------------------------------------------
+  - type: web
+    name: agent-tutor-api
+    runtime: docker
+    rootDir: backend
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    # Pas de dockerCommand : le CMD de l'image lance uvicorn ( rôle API ).
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # Rôle : API ( pas le worker ).
+      - key: RUN_AS_WORKER
+        value: ""
+      # Backend.
+      - key: AUTH_MODE
+        value: neon
+      - key: DATABASE_URL
+        sync: false
+      # ⚠️ OBLIGATOIRE en prod : sans ça, CORS rejette le frontend Vercel
+      #    et apiFetch échoue silencieusement. Remplacer par le domaine
+      #    Vercel définitif ( + localhost pour le dev ).
+      - key: ALLOWED_ORIGINS
+        value: http://localhost:5173
+      # Modèles LiveKit Inference ( noms valides vérifiés en 1.8.2 ).
+      - key: LIVEKIT_AGENT_STT_MODEL
+        value: deepgram/nova-3
+      - key: LIVEKIT_AGENT_LLM_MODEL
+        value: google/gemini-2.5-flash
+      - key: LIVEKIT_AGENT_TTS_MODEL
+        value: rime/coda
+      - key: LIVEKIT_AGENT_TTS_VOICE
+        value: aurelie
+      - key: LIVEKIT_AGENT_LANGUAGE
+        value: fr
+      # Secrets : `sync: false` = saisis à la main dans le dashboard,
+      # JAMAIS commités ici.
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: NEON_AUTH_JWKS_URL
+        sync: false
+
+  # --------------------------------------------------------------------------
+  # Worker LiveKit — le tuteur vocal.
+  #
+  # Pas de type "worker" Docker sur le plan free : on reste un web_service,
+  # mais worker_main.py ouvre UN process qui lance l'AgentServer LiveKit ET
+  # un mini-serveur /healthz sur $PORT. Sans port écouté, Render suspend le
+  # service → aucun dispatch réclamé → le frontend boucle en reconnexion.
+  # --------------------------------------------------------------------------
+  - type: web
+    name: agent-tutor-worker
+    runtime: docker
+    rootDir: backend
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerCommand: python -m app.infrastructure.livekit.worker_main
+    # /healthz renvoie 200 seulement quand le worker est ENREGISTRÉ auprès
+    # de LiveKit : c'est un vrai healthcheck, pas un simple "process vivant".
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: RUN_AS_WORKER
+        value: "1"
+      # Les credentials LiveKit sont PARTAGÉS avec l'API : c'est l'API qui
+      # signe les tokens et crée les dispatchs, c'est le worker qui les
+      # réclame. Une clé différente = dispatch créé mais jamais réclamé.
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      # Modèles identiques à l'API ( source unique ).
+      - key: LIVEKIT_AGENT_STT_MODEL
+        value: deepgram/nova-3
+      - key: LIVEKIT_AGENT_LLM_MODEL
+        value: google/gemini-2.5-flash
+      - key: LIVEKIT_AGENT_TTS_MODEL
+        value: rime/coda
+      - key: LIVEKIT_AGENT_TTS_VOICE
+        value: aurelie
+      - key: LIVEKIT_AGENT_LANGUAGE
+        value: fr
+      # La mémoire du tuteur ( Faits/profil ) est lue par le worker.
+      - key: DATABASE_URL
+        sync: false

@@ -28,6 +28,7 @@ Lancement :
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -189,78 +190,82 @@ lorsque cela est nécessaire.
 # MÉMOIRE → PROMPT
 # ============================================================================
 
-def _build_instructions(user_id: str) -> str:
-    """
-    Construit les instructions de l'agent avec le contexte mémoire.
-
-    Les erreurs mémoire sont volontairement non fatales :
-    le tuteur doit pouvoir fonctionner même si la mémoire est momentanément
-    indisponible.
-    """
-
-    parts: list[str] = [BASE_INSTRUCTIONS]
-
-    # ------------------------------------------------------------------------
-    # Profil
-    # ------------------------------------------------------------------------
-
+def _read_profile_safe(user_id: str) -> dict:
+    """read_profile avec échec non-fatal ( le tuteur doit démarrer
+    même si la mémoire est momentanément indisponible )."""
     try:
-        profile = read_profile(user_id)
-
-        name = profile.get("name")
-        description = profile.get("description")
-
-        if name or description:
-            parts.append("\n# Profil connu de l'étudiant\n")
-
-            if name:
-                parts.append(f"Prénom / nom : {name}\n")
-
-            if description:
-                parts.append(f"Présentation : {description}\n")
-
+        return read_profile(user_id)
     except Exception as exc:
         logger.warning(
             "Impossible de lire le profil utilisateur : %s",
             exc,
         )
+        return {}
 
-    # ------------------------------------------------------------------------
-    # Faits mémorisés
-    # ------------------------------------------------------------------------
 
+def _memory_overview_safe(user_id: str) -> dict:
+    """memory_overview_for_api avec échec non-fatal."""
     try:
-        overview = memory_overview_for_api(user_id)
-
-        total = overview.get("total_facts", 0)
-
-        if total:
-            parts.append(
-                f"\n# Mémoire disponible — {total} faits\n"
-            )
-
-            facts_by_category = (
-                overview.get("facts_by_category") or {}
-            )
-
-            for category, facts in facts_by_category.items():
-
-                for fact in facts:
-
-                    content = fact.get("content")
-
-                    if content:
-                        parts.append(
-                            f"- [{category}] {content}\n"
-                        )
-
+        return memory_overview_for_api(user_id)
     except Exception as exc:
         logger.warning(
             "Impossible de lire les faits mémorisés : %s",
             exc,
         )
+        return {}
+
+
+def _build_instructions(profile: dict, overview: dict) -> str:
+    """Assemble les instructions de l'agent avec le contexte mémoire.
+
+    profile/overview sont lus de façon ASYNCHRONE par
+    _build_instructions_async ( run_in_executor ) : read_profile et
+    memory_overview_for_api font du SQL synchrone — exécutés
+    directement dans la coroutine entrypoint, ils bloquent la boucle
+    asyncio du worker ( audio gelé pendant les lectures ).
+
+    Les erreurs mémoire sont volontairement non fatales :
+    le tuteur doit pouvoir fonctionner même si la mémoire est
+    momentanément indisponible.
+    """
+    parts: list[str] = [BASE_INSTRUCTIONS]
+
+    # Profil
+    name = profile.get("name")
+    description = profile.get("description")
+    if name or description:
+        parts.append("\n# Profil connu de l'étudiant\n")
+        if name:
+            parts.append(f"Prénom / nom : {name}\n")
+        if description:
+            parts.append(f"Présentation : {description}\n")
+
+    # Faits mémorisés
+    total = overview.get("total_facts", 0)
+    if total:
+        parts.append(f"\n# Mémoire disponible — {total} faits\n")
+        facts_by_category = overview.get("facts_by_category") or {}
+        for category, facts in facts_by_category.items():
+            for fact in facts:
+                content = fact.get("content")
+                if content:
+                    parts.append(f"- [{category}] {content}\n")
 
     return "".join(parts)
+
+
+async def _build_instructions_async(user_id: str) -> str:
+    """Construit les instructions : lectures mémoire hors de la loop.
+
+    Les deux appels SQL synchrones sont dispatchés vers l'executor au
+    lieu de bloquer la boucle asyncio ( cold start + audio ).
+    """
+    loop = asyncio.get_running_loop()
+    profile, overview = await asyncio.gather(
+        loop.run_in_executor(None, _read_profile_safe, user_id),
+        loop.run_in_executor(None, _memory_overview_safe, user_id),
+    )
+    return _build_instructions(profile, overview)
 
 
 # ============================================================================
@@ -610,7 +615,7 @@ async def entrypoint(ctx: JobContext) -> None:
 
     session = _build_session()
 
-    instructions = _build_instructions(
+    instructions = await _build_instructions_async(
         user_id,
     )
 

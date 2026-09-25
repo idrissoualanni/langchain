@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections import OrderedDict
 from typing import Any
 
 from livekit import rtc
@@ -38,16 +39,34 @@ logger = logging.getLogger("agent-tutor.livekit")
 # ( un frame est-il disponible ? ). Le worker écrit, l'API lit
 # ( GET /screen-share/status ). browser n'importe rien de app.api — pas de
 # dépendance circulaire, le worker peut l'importer librement.
-_screen_share_registry: dict[str, dict[str, Any]] = {}
+#
+# Borner le registre : un worker peut servir plusieurs rooms au cours de
+# sa vie. Sans éviction, un worker qui ne débranche jamais ( crash avant
+# le shutdown callback ) accumule une entrée par room → fuite mémoire
+# lente + /screen-share/status renvoyant un état STALE.
+_screen_share_registry: OrderedDict[str, dict[str, Any]] = OrderedDict()
+
+# Plafond large : un worker tutor sert rarement plus de quelques rooms
+# simultanées, mais on reste robuste face à une fuite d'entrées.
+_MAX_SCREEN_SHARE_ROOMS = 50
 
 
 def set_screen_sharing(room_name: str, enabled: bool) -> None:
     """Met à jour l'état de capture pour une room — appelé par le worker."""
     if enabled:
+        # move_to_end : politique LRU — la room active reste prioritaire
+        # en cas d'éviction ( rooms enregistrées = rooms vivantes ).
         _screen_share_registry[room_name] = {
             "capturing": True,
             "started_at": int(time.time()),
         }
+        _screen_share_registry.move_to_end(room_name)
+        while len(_screen_share_registry) > _MAX_SCREEN_SHARE_ROOMS:
+            evicted, _ = _screen_share_registry.popitem(last=False)
+            logger.debug(
+                "capture écran : registre saturé, room %s évincée",
+                evicted,
+            )
     else:
         _screen_share_registry.pop(room_name, None)
 
@@ -55,8 +74,6 @@ def set_screen_sharing(room_name: str, enabled: bool) -> None:
 def screen_share_status(room_name: str) -> dict[str, Any] | None:
     """État de capture pour une room — lu par l'API."""
     return _screen_share_registry.get(room_name)
-
-logger = logging.getLogger("agent-tutor.livekit")
 
 
 class ScreenShareCapturer:

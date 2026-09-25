@@ -97,7 +97,11 @@ def persist_transcript(
                 messages.append(AIMessage(content=text))
 
         # as_node None : ajoute aux messages sans déclencher un node.
-        agent.update_state(config, {"messages": messages})
+        # aupdate_state ( async ) : la version synchrone update_state
+        # fait un checkpoint SQL BLOQUANT — exécuté dans un shutdown
+        # callback du worker, elle gèle la boucle asyncio ( et donc
+        # l'audio en cours ) pendant l'écriture.
+        await agent.aupdate_state(config, {"messages": messages})
 
         logger.info(
             "transcript vocal persisté | user=%s thread=%s messages=%d",

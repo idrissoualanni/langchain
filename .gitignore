@@ -30,8 +30,9 @@ dist-ssr/
 # Database (SQLite local)
 *.db
 *.sqlite3
-database/
-backend/database/
+/database/
+/backend/database/
+/backend/data/database/
 
 # Environment / secrets
 .env
@@ -83,3 +84,12 @@ PHASE12_COMPLETE.md
 .vercel/
 .neon
 .render
+
+# Secrets OAuth Google (client_secret + token d'acces) — JAMAIS committes
+# Voir backend/Dockerfile : doivent etre fournis via un VOLUME en prod.
+backend/data/mcp/google/client_secret*.json
+backend/data/mcp/google/token.json
+backend/data/mcp/google/*.json
+
+# Exports bruts de config d'infra (contiennent des IDs/params de services)
+svc_raw.json

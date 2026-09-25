@@ -18,6 +18,7 @@ from app.api import (
     logs,
     memory,
     models,
+    storage,
     subjects,
     threads,
     users,
@@ -29,6 +30,11 @@ from app.api.admin import (
     dashboard_router as admin_dashboard_router,
 )
 from app.infrastructure.database.connections import init_db
+from app.infrastructure.database.persistence import (
+    init_persistence,
+    is_postgres_persistence,
+)
+from app.infrastructure.database.schema import init_schema
 from app.logging.events import log_event, setup_logging
 from app.logging.sse import sse_events
 from app.ws.logs import router as ws_router
@@ -40,6 +46,13 @@ async def lifespan(app: FastAPI):
     """Startup : logging + DB + agent warm-up + loop registration."""
     setup_logging()
     init_db()
+    # Checkpointer + store LangGraph : tables créées sur Neon (PostgreSQL)
+    # si DATABASE_URL est définie, sinon SQLite locale. AVANT l'agent —
+    # le graphe demande son checkpointer à l'initialisation.
+    init_persistence()
+    # Tables applicatives Neon : binaires (BYTEA), vidéos, MCP, knowledge.
+    # Idempotent — ne touche jamais aux données existantes.
+    init_schema()
 
     # Enregistre la loop pour que log_event (appelé depuis des threads
     # executor pendant les runs agent) puisse publier sur le bus SSE
@@ -54,7 +67,11 @@ async def lifespan(app: FastAPI):
         get_agent()
         log_event(
             "AGENT_READY",
-            message="LangGraph agent initialized with SqliteSaver",
+            message=(
+                "LangGraph agent initialized — persistence="
+                + ("PostgreSQL (Neon)" if is_postgres_persistence()
+                   else "SQLite")
+            ),
         )
     except Exception as exc:
         log_event(
@@ -96,6 +113,7 @@ app.include_router(context.router)
 app.include_router(learning.router)
 app.include_router(activity.router)
 app.include_router(documents.router)
+app.include_router(storage.router)
 app.include_router(livekit.router)
 
 # Admin API — Model/Knowledge/Observability/Dashboard management (secured)

@@ -86,7 +86,10 @@ SCHEMA_STATEMENTS = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_video_segments_video ON video_segments(video_id)",
-    "CREATE INDEX IF NOT EXISTS idx_video_segments_user ON video_segments(user_id)",
+    # NB : idx_video_segments_user supprimé — video_segments n'a pas de
+    # colonne user_id ( cf. schema.py : l'isolation se fait via
+    # videos.user_id en jointure ). Tentative de création sur une
+    # colonne absente → ProgrammingError au startup.
 ]
 
 # Mission Identité — migrations ADDITIVES idempotentes (§6/§7) :

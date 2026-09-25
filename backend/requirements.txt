@@ -37,5 +37,22 @@ pymupdf          # extraction PDF ( app/rag/documents.py — import fitz )
 
 # PostgreSQL ( Neon ) — obligatoire des que DATABASE_URL est definie.
 # psycopg 3 en mode binaire : pas de compilation ( contrairement a psycopg2 ).
-# Sert aussi au checkpointer LangGraph ( langgraph-checkpoint-postgres ).
+# Sert aussi au checkpointer/store LangGraph ( langgraph-checkpoint-postgres ).
 psycopg[binary]>=3.2
+# Checkpointer + store LangGraph en PostgreSQL ( Neon ) : PostgresSaver et
+# PostgresStore. Sans ce paquet, DATABASE_URL est ignoree et la persistance
+# retombe silencieusement sur SQLite ( donnees perdues a chaque redéploiement ).
+langgraph-checkpoint-postgres>=2.0
+# pgvector : colonnes vectorielles dans Neon ( RAG documents, segments video,
+# corpus knowledge ). L'extension doit aussi etre activee en base ( voir
+# app.infrastructure.database.persistence / schema ).
+pgvector>=0.3
+# numpy : vecteurs d'embedding manipules en Python ( conversion cosine ).
+numpy
+# Uploads multipart ( UploadFile FastAPI — endpoints de stockage binaire ).
+python-multipart
+# Neon Storage ( S3-compatible ) : octets des binaires uploades
+# ( images, videos, documents ). Les metadonnees restent en PostgreSQL
+# ( colonne s3_key ) ; boto3 pointe vers l'endpoint Neon via
+# AWS_ENDPOINT_URL_S3. Sans cette config, fallback BYTEA en base.
+boto3
