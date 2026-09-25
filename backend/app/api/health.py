@@ -8,6 +8,7 @@ from app.config import (
     check_sqlite_health,
     langsmith_settings,
 )
+from app.auth.resolver import auth_mode, jwks_reachable
 from app.infrastructure.observability.langsmith_client import get_langsmith_client
 
 
@@ -96,4 +97,18 @@ def health_langsmith() -> dict:
         "environment": settings.environment,
         "endpoint": settings.endpoint,
         "project": settings.project,
+    }
+
+
+@router.get("/auth")
+def health_auth() -> dict:
+    """État de l'authentification : mode et joignabilité du JWKS.
+
+    Mode-aware : en AUTH_MODE=neon c'est le well-known Neon Auth qui
+    est testé ( voir jwks_reachable ), sinon celui de Clerk. Le JWKS
+    étant publique, aucune donnée sensible n'est renvoyée.
+    """
+    return {
+        "mode": auth_mode(),
+        "jwks_reachable": jwks_reachable(),
     }

@@ -203,10 +203,13 @@ export const useAssistantStore = create<AssistantStore>((set, get) => ({
   },
 
   sendMessage: async (userId, text) => {
-    const threadId = get().currentThreadId;
+    let threadId = get().currentThreadId;
     if (!threadId) {
-      set({ error: 'Aucun thread actif — créez une conversation.' });
-      return;
+      // Aucun thread actif : on en crée un avant l'envoi pour que le
+      // message déclenche l'apparition d'une entrée dans la thread list.
+      const created = await get().switchToNewThread(userId);
+      threadId = created?.thread_id ?? null;
+      if (!threadId) return; // switchToNewThread a déjà posé l'erreur
     }
 
     // Message utilisateur optimiste (pattern officiel quickstart)

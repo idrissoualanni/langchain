@@ -41,14 +41,43 @@ export function subscribeNeonUser(
   };
 }
 
+// JWT signé ( Ed25519 ) mis en cache : la session Better Auth pose un
+// token OPAQUE ( session.token, 32 chars, non-JWT ) inutilisable par
+// verify_neon_token(). Le vrai JWT n'est servi que par GET /token.
+// On le renouvelle avant expiration pour suivre la rotation Neon.
+let cachedJWT: string | null = null;
+let cachedExp = 0;
+
+function decodeExp(jwt: string): number | null {
+  try {
+    const payload = JSON.parse(
+      atob(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))
+    );
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveJWT(): Promise<string | null> {
+  const now = Date.now();
+  if (cachedJWT && cachedExp > now + 60_000) return cachedJWT;
+  const token = await authClient.getJWTToken();
+  cachedJWT = token;
+  cachedExp = token ? decodeExp(token) ?? 0 : 0;
+  return token;
+}
+
 /** Rafraîchit le token + l'user ( login / focus / retour d'onglet ). */
 export async function refreshNeonSession() {
   try {
     const session = await authClient.getSession();
-    const token = session?.token ?? session?.session?.token ?? null;
 
-    (window as any).__neonGetToken =
-      token != null ? () => Promise.resolve(token) : undefined;
+    (window as any).__neonGetToken = session?.user
+      ? () => resolveJWT()
+      : undefined;
+    // Invalide le cache JWT au changement de session.
+    cachedJWT = null;
 
     notifyNeonUser({
       isSignedIn: !!session?.user,
