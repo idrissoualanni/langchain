@@ -77,6 +77,24 @@ from app.infrastructure.livekit.transcript import (
 logger = logging.getLogger("agent-tutor.livekit")
 
 
+def _configure_worker_logging() -> None:
+    """Logging worker : on étouffe le bruit qui bloque l'event loop.
+
+    Les logs LiveKit ( json ) sont formatés de façon SYNCHRONE ; sur un
+    CPU shared du plan free Render, un pic de logs ( loop_monitor,
+    preloading ) peut bloquer la loop audio 17 secondes d'affilée —
+    entendu en prod, cassant la voix. On monte les loggers bruyants à
+    ERROR et on garde WARNING+ seulement pour notre code.
+    """
+    for noisy in (
+        "livekit.agents",
+        "livekit.agents.telemetry",
+        "livekit.agents.ipc",
+        "livekit",
+    ):
+        logging.getLogger(noisy).setLevel(logging.ERROR)
+
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -688,4 +706,5 @@ async def entrypoint(ctx: JobContext) -> None:
 # ============================================================================
 
 if __name__ == "__main__":
+    _configure_worker_logging()
     cli.run_app(server)
