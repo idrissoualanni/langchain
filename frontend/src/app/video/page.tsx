@@ -5,45 +5,11 @@ import { SessionProvider, useSession } from "@livekit/components-react";
 import { Room, TokenSource } from "livekit-client";
 import { Loader2 } from "lucide-react";
 
-import { apiFetch } from "@/api/base";
 import { VideoSession } from "@/components/livekit/VideoSession";
-
-interface LiveKitTokenResponse {
-  token: string;
-  url: string;
-  room_name: string;
-}
+import { useLiveKitToken } from "@/hooks/useLiveKitToken";
 
 export default function VideoPage() {
-  const [token, setToken] = useState<string>("");
-  const [url, setUrl] = useState<string>("");
-  const [roomName, setRoomName] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function fetchToken() {
-      try {
-        // apiFetch injecte le Bearer token (Clerk ou dev) — §19 : aucune
-        // requête ne devrait utiliser fetch() directement.
-        // La salle est calculée côté serveur ( session_{user_id} ) : on
-        // n'en envoie plus — c'est l'unique source de vérité, partagée
-        // avec /agent/start, sinon l'agent rejoindrait une autre salle.
-        const data = await apiFetch<LiveKitTokenResponse>("/api/livekit/token", {
-          method: "POST",
-          body: JSON.stringify({}),
-        });
-        setToken(data.token);
-        setUrl(data.url);
-        setRoomName(data.room_name);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Erreur inconnue");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchToken();
-  }, []);
+  const { data, loading, error } = useLiveKitToken("video");
 
   if (loading) {
     return (
@@ -56,7 +22,7 @@ export default function VideoPage() {
     );
   }
 
-  if (error || !token || !url) {
+  if (error || !data?.token || !data?.url) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="text-center space-y-4 max-w-md">
@@ -70,7 +36,11 @@ export default function VideoPage() {
   }
 
   return (
-    <VideoRoomSession token={token} url={url} roomName={roomName} />
+    <VideoRoomSession
+      token={data.token}
+      url={data.url}
+      roomName={data.roomName}
+    />
   );
 }
 

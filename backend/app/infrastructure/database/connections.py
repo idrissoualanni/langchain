@@ -214,17 +214,39 @@ class AppConn:
         return self._sa.closed
 
     def execute(self, sql: str, params: dict | None = None) -> AppResult:
-        if params is None:
-            res = self._sa.execute(text(sql))
-        elif isinstance(params, dict):
-            res = self._sa.execute(text(sql), params)
-        else:
-            raise TypeError(
-                "get_conn().execute() exige des paramètres NOMÉS en dict "
-                f"(:name), reçu {type(params).__name__}. "
-                "Réécrivez la requête en style portable SQLite/PostgreSQL."
-            )
+        # Une erreur SQL ( ex : coupure réseau vers Neon ) laisse la
+        # transaction dans un état "invalid" : TOUTE requête suivante
+        # sur cette même connexion lève PendingRollbackError. On rollback
+        # donc avant de remonter l'erreur, pour que les requêtes
+        # ultérieures puissent reprendre sur une transaction saine.
+        try:
+            if params is None:
+                res = self._sa.execute(text(sql))
+            elif isinstance(params, dict):
+                res = self._sa.execute(text(sql), params)
+            else:
+                raise TypeError(
+                    "get_conn().execute() exige des paramètres NOMÉS en dict "
+                    f"(:name), reçu {type(params).__name__}. "
+                    "Réécrivez la requête en style portable SQLite/PostgreSQL."
+                )
+        except Exception:
+            try:
+                self._sa.rollback()
+            except Exception:
+                # rollback lui-même en échec → la connexion est morte,
+                # on la déconnecte pour forcer une reconnexion propre au
+                # prochain get_conn().
+                self._dispose()
+            raise
         return AppResult(res)
+
+    def _dispose(self) -> None:
+        """Déconnecte en silence — get_conn() recréera la connexion."""
+        try:
+            self._sa.close()
+        except Exception:
+            pass
 
     def executemany(self, sql: str, seq_params: list[dict]) -> None:
         """exécution en lot (INSERT/UPDATE multiples) — parametres nommés."""

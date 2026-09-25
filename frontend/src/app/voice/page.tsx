@@ -18,12 +18,7 @@ import { useAui } from "@assistant-ui/react";
 import { apiFetch, ApiError } from "@/api/base";
 import { AgentAudioVisualizerAura } from "@/components/agents-ui/agent-audio-visualizer-aura";
 import { useToast } from "@/hooks/use-toast";
-
-interface LiveKitTokenResponse {
-  token: string;
-  url: string;
-  room_name: string;
-}
+import { useLiveKitToken } from "@/hooks/useLiveKitToken";
 
 interface UserOut {
   user_id: string;
@@ -256,34 +251,19 @@ export default function VoicePage() {
   const mode = searchParams.get("mode") === "dictate" ? "dictate" : "voice";
   const returnTo = searchParams.get("return") || "/assistant";
 
-  const [token, setToken] = useState("");
-  const [url, setUrl] = useState("");
-  const [roomName, setRoomName] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [memory, setMemory] = useState<MemoryOverview | null>(null);
   const [duration, setDuration] = useState(0);
 
+  // Token LiveKit avec renouvellement automatique avant expiration
+  // ( sinon le client boucle en 401 /rtc/v1/validate au-delà d'1 heure ).
+  const { data: tokenData, loading, error } = useLiveKitToken("voice");
+  const token = tokenData?.token ?? "";
+  const url = tokenData?.url ?? "";
+  const roomName = tokenData?.roomName ?? "";
+
   // Token : la salle est calculée côté serveur ( session_{user_id} ),
   // identique à celle du dispatch — sinon l'agent rejoindrait le vide.
-  useEffect(() => {
-    async function fetchToken() {
-      try {
-        const data = await apiFetch<LiveKitTokenResponse>(
-          "/api/livekit/token",
-          { method: "POST", body: JSON.stringify({}) },
-        );
-        setToken(data.token);
-        setUrl(data.url);
-        setRoomName(data.room_name);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Erreur inconnue");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchToken();
-  }, []);
+  // ( renouvellement géré par useLiveKitToken )
 
   // Démarre l'agent ( dispatch ) dès que la room est connue.
   useEffect(() => {
