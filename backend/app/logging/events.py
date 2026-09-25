@@ -74,14 +74,30 @@ class EventBus:
 
     async def publish(self, event: dict) -> None:
         self._history.append(event)
-        for cb in list(self._subs.values()):
+        for sub_id, cb in list(self._subs.items()):
             try:
                 result = cb(event)
                 if asyncio.iscoroutine(result):
                     await result
             except Exception:
-                # Un subscriber défaillant ne doit jamais casser un run agent
-                pass
+                # Un subscriber défaillant ne doit jamais casser un run
+                # agent. On ne l'avale cependant pas silencieusement :
+                # sans ce log, une connexion SSE/WS morte est invisible
+                # ( le flux semble vivant, plus rien n'arrive ).
+                logger.warning(
+                    "event_bus subscriber %s a échoué",
+                    sub_id,
+                    exc_info=True,
+                )
+
+    def recent(self, limit: int = 200) -> list[dict]:
+        """Historique récent pour le backfill SSE/WS.
+
+        API publique stable — les callers ne doivent PAS lire
+        ``event_bus._history`` directement ( attribut privé : un
+        refactor du deque casserait le backfill SSE ET WS ).
+        """
+        return list(self._history)[-limit:]
 
 
 event_bus = EventBus()
@@ -137,10 +153,16 @@ def log_event(
         except RuntimeError:
             loop = None
 
-    if loop is not None and loop.is_running():
-        loop.call_soon_threadsafe(
-            _schedule_publish, dict(record)
-        )
+    # Au shutdown, la loop référencée peut être fermée mais encore
+    # présente : call_soon_threadsafe lève alors RuntimeError ( "Event
+    # loop is closed" ). On perd les derniers events — sans crasher.
+    if loop is not None and not loop.is_closed() and loop.is_running():
+        try:
+            loop.call_soon_threadsafe(
+                _schedule_publish, dict(record)
+            )
+        except RuntimeError:
+            pass
 
     return record
 
@@ -156,8 +178,12 @@ _pending_tasks: set[asyncio.Task] = set()
 
 
 def get_recent_events(limit: int = 200) -> list[dict]:
-    """Historique récent des événements (backfill SSE)."""
-    return list(event_bus._history)[-limit:]
+    """Historique récent des événements (backfill SSE/WS).
+
+    Délégué à l'API publique EventBus.recent() — conservée pour
+    rétrocompatibilité ( tests, autres modules ).
+    """
+    return event_bus.recent(limit)
 
 
 def read_log_file(limit: int = 200) -> list[dict]:

@@ -47,6 +47,46 @@ SCHEMA_STATEMENTS = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_threads_user ON threads(user_id)",
+    # --------------------------------------------------------------
+    # VideoSubgraph v2 — ingestion + persistance vidéo (Neon).
+    # videos : une ligne par vidéo ingérée ( transcript whisper, et
+    # optionnellement la description visuelle de l'agent ReAct ).
+    # video_segments : segments pédagogiques issus de la segmentation
+    # du transcript ( title/summary/start/end/topics ).
+    # --------------------------------------------------------------
+    """
+    CREATE TABLE IF NOT EXISTS videos (
+        video_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(user_id),
+        filename TEXT NOT NULL,
+        source_url TEXT NOT NULL DEFAULT '',
+        duration REAL NOT NULL DEFAULT 0.0,
+        origin TEXT NOT NULL DEFAULT '',
+        format TEXT NOT NULL DEFAULT '',
+        language TEXT NOT NULL DEFAULT '',
+        transcript TEXT NOT NULL DEFAULT '',
+        visual_description TEXT NOT NULL DEFAULT '',
+        knowledge_key TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_videos_user ON videos(user_id)",
+    """
+    CREATE TABLE IF NOT EXISTS video_segments (
+        id TEXT PRIMARY KEY,
+        video_id TEXT NOT NULL REFERENCES videos(video_id),
+        user_id TEXT NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        summary TEXT NOT NULL DEFAULT '',
+        start REAL NOT NULL DEFAULT 0.0,
+        "end" REAL NOT NULL DEFAULT 0.0,
+        topics TEXT NOT NULL DEFAULT '',
+        segment_text TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT ''
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_video_segments_video ON video_segments(video_id)",
+    "CREATE INDEX IF NOT EXISTS idx_video_segments_user ON video_segments(user_id)",
 ]
 
 # Mission Identité — migrations ADDITIVES idempotentes (§6/§7) :

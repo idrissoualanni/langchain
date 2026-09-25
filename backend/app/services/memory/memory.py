@@ -8,6 +8,7 @@ from difflib import SequenceMatcher
 from langgraph.store.sqlite import SqliteStore
 
 from app.config import DATABASE_DIR, log_safe
+from app.infrastructure.cache.ttl import TTLCache
 from app.logging.events import log_event
 
 # Fichier store séparé du checkpointer — jamais partagé
@@ -36,6 +37,36 @@ DEDUP_THRESHOLD = 0.72
 
 _store: SqliteStore | None = None
 _store_lock = threading.RLock()
+
+# Cache de la mémoire longue durée : le profil et les faits d'un
+# utilisateur sont relus à chaque entrée de session vocale
+# ( _build_instructions_async ) et à chaque message du chat. Ces
+# données ne changent qu'en ÉCRITURE ( save_fact / update_fact /
+# delete_fact / écriture profil ) — les fonctions qui écrivent
+# invalident explicitement ( invalidate_memory_cache ), et la TTL de
+# 5 min cicatrise toute invalidation oubliée.
+#
+# ⚠ Ne JAMAIS cacher des résultats LLM ( pédagogie adaptative ) ni les
+# states de thread ( le checkpointer est la source de vérité ).
+_memory_cache = TTLCache(ttl_seconds=300)
+
+
+def _cache_key_profile(user_id: str) -> str:
+    return f"mem:{user_id}:profile"
+
+
+def _cache_key_facts(user_id: str) -> str:
+    return f"mem:{user_id}:facts"
+
+
+def invalidate_memory_cache(user_id: str) -> None:
+    """Invalide profil + faits d'un utilisateur.
+
+    À appeler à chaque écriture mémoire — déjà câblée sur les
+    fonctions d'écriture publiques via _save_facts / l'écriture profil.
+    """
+    _memory_cache.invalidate(_cache_key_profile(user_id))
+    _memory_cache.invalidate(_cache_key_facts(user_id))
 
 # Stop-words français/anglais retirés avant comparaison de similarité
 _STOP_WORDS = {
@@ -233,6 +264,9 @@ def _load_facts(user_id: str) -> list[dict]:
 def _save_facts(user_id: str, facts: list[dict]) -> None:
     store = get_store()
     store.put(_profile_namespace(user_id), "facts", facts)
+    # Invalide le cache : list_facts/memory_overview serviraient des
+    # données périmées sinon ( une écriture sans invalidation = bug sourd ).
+    invalidate_memory_cache(user_id)
 
 
 # ------------------------------------------------------------------
@@ -282,10 +316,11 @@ def read_profile(user_id: str) -> dict:
                 thread_id=thread_id,
                 extra={
                     "namespace": NAMESPACE_LABEL,
-                    "operation": "read",
-                    "result": "found",
-                },
-            )
+                "operation": "read",
+                "result": "found",
+            },
+        )
+        _memory_cache.set(_cache_key_profile(user_id), profile)
         return profile
 
     except Exception as exc:
@@ -360,6 +395,9 @@ def write_profile(
                     "description": profile["description"],
                 },
             )
+            # Invalide le cache : read_profile/memory_overview liraient
+            # un profil périmé sinon.
+            invalidate_memory_cache(user_id)
 
         log_event(
             "MEMORY_WRITE",
@@ -409,6 +447,33 @@ def list_facts(
     """
     if thread_id == "":
         thread_id = _current_thread_id()
+
+    # Cache : hit → on évite le store ( les écritures invalident via
+    # _save_facts → invalidate_memory_cache ). On ne met en cache QUE
+    # la liste complète ; un appel avec category filtre ensuite sans
+    # réécrire dans le cache ( sinon la catégorie deviendrait la
+    # "vérité" cachée pour les autres appels ).
+    if category is None:
+        cached_facts = _memory_cache.get(_cache_key_facts(user_id))
+        if cached_facts is not None:
+            log_event(
+                "MEMORY_READ",
+                message=(
+                    f"Facts read (cached) | user={user_id} | "
+                    f"count={len(cached_facts)}"
+                ),
+                user_id=user_id,
+                thread_id=thread_id,
+                extra={
+                    "namespace": NAMESPACE_LABEL,
+                    "operation": "read_facts",
+                    "category": "all",
+                    "count": len(cached_facts),
+                    "cached": True,
+                },
+            )
+            return cached_facts
+
     try:
         with _store_lock:
             facts = _load_facts(user_id)
@@ -437,6 +502,10 @@ def list_facts(
                 "count": len(facts),
             },
         )
+        # Ne cacher QUE la liste complète ( category=None ) : un filtre
+        # par catégorie ne doit pas devenir la "vérité" des autres appels.
+        if category is None:
+            _memory_cache.set(_cache_key_facts(user_id), facts)
         return facts
 
     except Exception as exc:

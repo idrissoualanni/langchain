@@ -394,10 +394,21 @@ class TestBoundedRetries:
 
 
 class TestIndexFailure:
-    def test_index_failure_produces_partial(self, tmp_path, media_file):
+    def test_index_failure_produces_partial(self, tmp_path, media_file, monkeypatch):
+        # Forcer le mode JSON local : store_dir occupe par un FICHIER
+        # fait echouer l'ecriture du store ( mkdir impossible ), ce qui
+        # declenche le chemin index_failed -> status "partial".
+        # En mode PostgreSQL ( Neon ), le store_dir fichier n'empeche
+        # plus l'indexation en base — on force donc le mode JSON local.
         occupied = tmp_path / "occupied"
         occupied.write_text("bloque le dossier")
         use_services(transcriber=CountingTranscriber(LESSON))
+
+        import app.graph.subgraphs.video.persist as persist_mod
+
+        monkeypatch.setattr(persist_mod, "USE_POSTGRES", False)
+        monkeypatch.setattr(persist_mod, "DATABASE_URL", "")
+
         graph = compile_video_subgraph()
         out = graph.invoke(
             {
@@ -413,6 +424,38 @@ class TestIndexFailure:
         assert out["result"]["segments"]  # la segmentation survit
         assert any("index" in e for e in out["errors"])
         assert out["result"]["knowledge_keys"] == []
+
+    def test_index_failure_produces_partial_in_postgres(
+        self, tmp_path, media_file, monkeypatch
+    ):
+        # En mode PostgreSQL ( Neon ), l'echec d'indexation vient de la
+        # base — on l'injecte via monkeypatch ( aucun ecriture reelle ).
+        use_services(transcriber=CountingTranscriber(LESSON))
+
+        import app.graph.subgraphs.video.persist as persist_mod
+
+        def _boom(self, **kwargs):
+            raise RuntimeError("neon injoignable (simule)")
+
+        monkeypatch.setattr(
+            persist_mod.VideoKnowledgeStore, "_persist_video_pg", _boom
+        )
+        monkeypatch.setattr(persist_mod, "USE_POSTGRES", True)
+        monkeypatch.setattr(persist_mod, "DATABASE_URL", "postgresql://fake")
+
+        graph = compile_video_subgraph()
+        out = graph.invoke(
+            {
+                "user_id": "u1",
+                "filename": "lesson.mp4",
+                "source_url": str(media_file),
+                "metadata": {"options": {"working_dir": str(tmp_path / "wd")}},
+            }
+        )
+        assert out["status"] == "done"
+        assert out["result"]["status"] == "partial"
+        assert out["result"]["segments"]
+        assert any("index" in e for e in out["errors"])
 
 
 # ============================================================

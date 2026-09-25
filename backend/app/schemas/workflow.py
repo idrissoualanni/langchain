@@ -193,6 +193,12 @@ class VideoResult(SubgraphResult):
         default="",
         description="Transcription en texte intégral",
     )
+    visual_description: str = Field(
+        default="",
+        description="Description visuelle produite par l'agent ReAct "
+        "(slides, diagrammes, écran de code…). Vide si l'agent vision "
+        "est désactivé ou n'a rien trouvé d'exploitable.",
+    )
     segments: list[dict] = Field(
         default_factory=list,
         description="Segments pédagogiques [{title, summary, "

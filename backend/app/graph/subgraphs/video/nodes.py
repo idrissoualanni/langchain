@@ -380,6 +380,97 @@ def enrich_node(state) -> dict:
 
 
 # ------------------------------------------------------------
+# ANALYZE node — analyse visuelle optionnelle (agent ReAct vision)
+# ------------------------------------------------------------
+def analyze_node(state) -> dict:
+    """ANALYZE — description visuelle par l'agent ReAct (LLM vision).
+
+    Le transcript ( whisper ) capte ce qui est DIT ; cet agent decrit
+    ce qui est MONTRE ( slides, diagrammes, ecran de code ).
+
+    OPTIONNEL par design ( jamais un échec du pipeline ) :
+      - VIDEO_AGENT_ENABLED=0 ( defaut ) → skipped ;
+      - modele "vision" non resolu → skipped ( log WARNING ) ;
+      - frames non extractibles → skipped ;
+    La description produite est rangee dans metadata.visual_description
+    et persistee par le node index.
+    """
+    from app.config import (
+        VIDEO_AGENT_ENABLED,
+        VIDEO_FRAME_COUNT,
+        VIDEO_FRAME_STRATEGY,
+    )
+    from app.graph.subgraphs.video.agent import (
+        agent_available,
+        run_video_agent,
+    )
+    from app.graph.subgraphs.video.frames import (
+        FrameExtractionError,
+        extract_frames,
+    )
+
+    s = dict(state or {})
+    meta = _meta(s)
+
+    if not VIDEO_AGENT_ENABLED:
+        return {"metadata": meta, "status": "enriched"}
+
+    if not agent_available():
+        _log(
+            "VIDEO_ANALYZE_SKIP",
+            "Agent vision indisponible — analyse skipped",
+            s,
+            level="WARNING",
+            extra={"reason": "no vision model resolved"},
+        )
+        return {"metadata": meta, "status": "enriched"}
+
+    local_path = str(s.get("local_path") or "")
+    transcript = str(meta.get("transcript") or "")
+    description = ""
+    try:
+        frames = extract_frames(
+            local_path,
+            count=int(VIDEO_FRAME_COUNT or 4),
+            strategy=VIDEO_FRAME_STRATEGY,
+        )
+        description = run_video_agent(
+            frames,
+            transcript,
+            user_id=str(s.get("user_id") or ""),
+            thread_id=str(s.get("thread_id") or ""),
+        )
+    except FrameExtractionError as exc:
+        _log(
+            "VIDEO_ANALYZE_SKIP",
+            f"Extraction de frames impossible — analyse skipped ({exc})",
+            s,
+            level="WARNING",
+        )
+        return {"metadata": meta, "status": "enriched"}
+    except Exception as exc:  # noqa: BLE001 — l'analyse n'est jamais fatale
+        _log(
+            "VIDEO_ANALYZE_ERROR",
+            f"Analyse visuelle en échec (non fatale): {type(exc).__name__}",
+            s,
+            level="ERROR",
+        )
+        return {"metadata": meta, "status": "enriched"}
+
+    if description:
+        new_meta = {**meta, "visual_description": description}
+        _log(
+            "VIDEO_ANALYZE",
+            f"Analyse visuelle | chars={len(description)}",
+            s,
+            extra={"chars": len(description)},
+        )
+        return {"metadata": new_meta, "status": "enriched"}
+
+    return {"metadata": meta, "status": "enriched"}
+
+
+# ------------------------------------------------------------
 # INDEX node — la vidéo devient une SOURCE DE CONNAISSANCE
 # ------------------------------------------------------------
 def index_node(state) -> dict:
@@ -468,6 +559,7 @@ def finalize_node(state) -> dict:
         message=message,
         video_id=str(s.get("video_id") or ""),
         transcript=transcript,
+        visual_description=str(meta.get("visual_description") or ""),
         segments=list(s.get("segments") or []),
         knowledge_keys=list(meta.get("knowledge_keys") or []),
     )
@@ -545,6 +637,7 @@ def compile_video_subgraph():
     graph.add_node("ingest", ingest_node)
     graph.add_node("segment", segment_node)
     graph.add_node("enrich", enrich_node)
+    graph.add_node("analyze", analyze_node)
     graph.add_node("index", index_node)
     graph.add_node("finalize", finalize_node)
 
@@ -564,7 +657,8 @@ def compile_video_subgraph():
         route_after_segment,
         {"segment": "segment", "enrich": "enrich", "finalize": "finalize"},
     )
-    graph.add_edge("enrich", "index")
+    graph.add_edge("enrich", "analyze")
+    graph.add_edge("analyze", "index")
     graph.add_conditional_edges(
         "index",
         route_after_index,
@@ -624,6 +718,7 @@ __all__ = [
     "PROGRESS_VALIDATED",
     "compile_video_subgraph",
     "enrich_node",
+    "analyze_node",
     "finalize_node",
     "index_node",
     "ingest_node",
