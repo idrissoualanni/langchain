@@ -513,9 +513,15 @@ async def run_agent_stream(
     # normalize_response, sérialisation checkpointer…), le flux SSE ne
     # doit JAMAIS se couper sans événement ERROR — on sanitize pareil
     # que pour l'invoke (cause technique dans les logs uniquement).
+    #
+    # _yield_post_invoke_events est un ASYNC GENERATOR : il DOIT être
+    # consommé avec `async for`. Un appel direct ne fait que construire
+    # l'objet générateur — AUCUNE de ses lignes ne s'exécute, et les
+    # événements ASSISTANT_MESSAGE / WORKFLOW_RESULT / CHECKPOINT_SAVED
+    # / RUN_END ne sont JAMAIS émis sur le flux SSE.
     # ------------------------------------------------------------------
     try:
-        _yield_post_invoke_events(
+        async for event in _yield_post_invoke_events(
             result=result,
             duration_ms=duration_ms,
             user_id=user_id,
@@ -523,7 +529,8 @@ async def run_agent_stream(
             config=config,
             agent=agent,
             interaction_count=interaction_count,
-        )
+        ):
+            yield event
     except Exception as exc:
         log_event(
             "ERROR",

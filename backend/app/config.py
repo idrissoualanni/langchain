@@ -26,6 +26,11 @@ LOG_DIR.mkdir(exist_ok=True)
 
 APP_DB_PATH = DATABASE_DIR / "app.db"
 CHECKPOINTS_DB_PATH = DATABASE_DIR / "checkpoints.db"
+# Mémoire longue durée LangGraph ( SqliteStore en mode local ; la MÊME
+# base que le reste en PostgreSQL — voir persistence.py ).
+LONG_TERM_DB_PATH = DATABASE_DIR / "long_term_memory.db"
+# RAG documents + vecteurs ( SQLite local ; pgvector côté Neon ).
+RAG_DB_PATH = DATABASE_DIR / "user_documents.db"
 LOG_PATH = LOG_DIR / "agent.log"
 
 
@@ -301,6 +306,38 @@ VIDEO_WHISPER_COMPUTE = os.getenv(
 VIDEO_WHISPER_LANGUAGE = os.getenv(
     "VIDEO_WHISPER_LANGUAGE", ""
 ).strip().lower()
+
+# ---------------------------------------------------------------
+# VideoSubgraph v2 — analyse de frames (LLM vision).
+#
+# Le transcript ( whisper ) capte ce qui est DIT ; l'agent vision
+# decrit ce qui est MONTRE ( slides, diagrammes, ecran de code ).
+# VISION_MODEL_ID : assignment du purpose "vision" — le resolver lit
+# l'env du meme nom ( app/services/models/resolver.py ). Defaut
+# "vision-default" ( gpt-oss:20b — seul modele FREE de l'host Ollama
+# acceptant les images ; les autres renvoient 402 Payment Required ).
+# ---------------------------------------------------------------
+VISION_MODEL_ID = os.getenv("VISION_MODEL_ID", "vision-default").strip()
+
+# Frames : nombre extraites pour l'analyse (opencv), strategie
+# d'echantillonnage ( uniform = equirarti ; scene = detection de
+# coupures ) et plafond envoye au LLM vision ( cout tokens ; le compte
+# free Ollama est rate-limite, d'ou un plafond bas ).
+VIDEO_FRAME_COUNT = _as_int("VIDEO_FRAME_COUNT", 8)
+VIDEO_FRAME_STRATEGY = (
+    os.getenv("VIDEO_FRAME_STRATEGY", "uniform").strip().lower() or "uniform"
+)
+VIDEO_AGENT_MAX_FRAMES = _as_int("VIDEO_AGENT_MAX_FRAMES", 6)
+
+# Agent ReAct d'analyse visuelle (opt-in). Exige EN PLUS que le modele
+# "vision" se resolve — sinon repli silencieux sur le pipeline
+# deterministe ( meme philosophie que resolve_transcriber() : jamais de
+# contenu fabrique presente comme analyse ).
+VIDEO_AGENT_ENABLED = os.getenv("VIDEO_AGENT_ENABLED", "0").strip() == "1"
+
+# Profondeur max de la boucle ReAct — bornee, jamais infinie
+# (anti-boucle, comme MAX_ATTEMPTS_DEFAULT).
+VIDEO_AGENT_MAX_STEPS = _as_int("VIDEO_AGENT_MAX_STEPS", 6)
 
 
 # ------------------------------------------------------------------

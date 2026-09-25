@@ -27,3 +27,20 @@ models:
     supports_structured_output: false
     supports_tools: false
     supports_vision: false
+  vision-default:
+    # Modele vision FREE de l'host Ollama ( gpt-oss:20b ). SEUL modele
+    # du host a accepter une requete image ( les autres renvoient 402
+    # Payment Required ). Rate-limite en compte free : le plafond
+    # VIDEO_AGENT_MAX_FRAMES borne les frames envoyees.
+    # Sert au purpose "vision" ( VideoSubgraph — analyse de frames ).
+    context_window: null
+    display_name: GPT-OSS 20B ( vision )
+    enabled: true
+    max_output_tokens: null
+    model: gpt-oss:20b
+    provider: ollama
+    reserved_output_tokens: 1024
+    supports_audio: false
+    supports_structured_output: false
+    supports_tools: true
+    supports_vision: true
