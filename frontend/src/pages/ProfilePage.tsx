@@ -63,7 +63,7 @@ function Avatar({
 }
 
 export function ProfilePage() {
-  const { internal, clerkUser, devMode } = useCurrentUser();
+  const { internal, neonUser, devMode } = useCurrentUser();
   const userId = internal?.user_id ?? null;
   const { data } = useLearning(userId);
 
@@ -84,13 +84,9 @@ export function ProfilePage() {
     };
   }, [userId]);
 
-  const displayName =
-    clerkUser?.fullName ||
-    [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(' ') ||
-    internal?.name ||
-    'Utilisateur';
-  const email = clerkUser?.primaryEmailAddress?.emailAddress ?? null;
-  const imageUrl = clerkUser?.imageUrl ?? null;
+  const displayName = internal?.name || neonUser?.name || 'Utilisateur';
+  const email = neonUser?.email ?? null;
+  const imageUrl = null;
 
   return (
     <>
@@ -141,9 +137,12 @@ export function ProfilePage() {
             <SurfaceBody className="divide-border divide-y">
               <KeyValue
                 label="Prénom"
-                value={clerkUser?.firstName ?? '—'}
+                value={internal?.name?.split(/\s+/)[0] ?? '—'}
               />
-              <KeyValue label="Nom" value={clerkUser?.lastName ?? '—'} />
+              <KeyValue
+                label="Nom"
+                value={internal?.name?.split(/\s+/).slice(1).join(' ') ?? '—'}
+              />
               <KeyValue label="Email" value={email ?? '—'} />
               <KeyValue
                 label="Bio"

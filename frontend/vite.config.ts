@@ -15,6 +15,16 @@ export default defineConfig({
     },
     preserveSymlinks: true, // évite optimizeSafeRealPathSync → spawn EPERM
   },
+  build: {
+    rollupOptions: {
+      // better-auth ( dépendance de @neondatabase/auth ) contient des
+      // imports circulaires internes ( client/index.mjs → lui-même )
+      // que rolldown refuse de bundler. On l'exclut : l'éditeur Vercel
+      // le résoudra depuis node_modules, et le navigateur le charge via
+      // les imports dynamiques ESM natifs.
+      external: ['better-auth'],
+    },
+  },
   server: {
     port: 5173,
     proxy: {

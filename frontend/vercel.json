@@ -4,7 +4,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/__clerk/:path*", "destination": "/__clerk/:path*" },
-    { "source": "/((?!assets/|__clerk/|.*\\.).*)", "destination": "/index.html" }
+    { "source": "/((?!assets/|.*\\.).*)", "destination": "/index.html" }
   ]
 }

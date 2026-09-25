@@ -19,7 +19,7 @@ import {
   Video,
   Mic,
 } from 'lucide-react';
-import { UserButton } from '@clerk/clerk-react';
+import { NeonUserMenu } from '../auth/NeonUserMenu';
 import { useHealth } from '@/hooks/useHealth';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useTheme } from '@/hooks/useTheme';
@@ -204,7 +204,7 @@ export function AppSidebar() {
               ⏻ {internal?.name ?? 'dev'}
             </button>
           ) : (
-            <UserButton afterSignOutUrl="/sign-in" />
+            <NeonUserMenu />
           )}
           <span
             className={cn(

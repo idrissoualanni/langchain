@@ -67,6 +67,8 @@ MODEL_NAME = os.getenv("MODEL_OLLAMA", "qwen2.5")
 # Clerk — authentification (mission Identité)
 # ------------------------------------------------------------------
 # AUTH_MODE :
+#   neon   → vérification RÉELLE des JWT Neon Managed Better Auth via
+#            JWKS (production, voir NEON_AUTH_JWKS_URL ci-dessous)
 #   clerk  → vérification RÉELLE des JWT Clerk via JWKS (production)
 #   dev    → Bearer "dev:<name>" résolu en user interne (développement
 #            local sans clés Clerk ; AUCUN secret)
@@ -113,6 +115,19 @@ ADMIN_CLERK_IDS = [
     for a in os.getenv("ADMIN_CLERK_IDS", "").split(",")
     if a.strip()
 ]
+
+
+# ------------------------------------------------------------------
+# Neon Managed Better Auth — authentification ( mode AUTH_MODE=neon )
+# ------------------------------------------------------------------
+# Neon Auth émet ses propres JWT ( Better Auth ) signés avec les clés
+# publiques exposées au well-known endpoint du projet. Le backend les
+# vérifie via PyJWKClient — même mécanisme que Clerk, JWKS différent.
+# L'URL JWKS est PUBLIQUE ( well-known ) : aucun secret ici.
+NEON_AUTH_JWKS_URL = os.getenv("NEON_AUTH_JWKS_URL", "").strip()
+
+# Base d'auth Neon ( optionnelle — pour l'affichage/observabilité ).
+NEON_AUTH_BASE_URL = os.getenv("NEON_AUTH_BASE_URL", "").strip()
 
 
 def ollama_headers() -> dict | None:

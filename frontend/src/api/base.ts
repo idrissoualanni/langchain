@@ -15,12 +15,14 @@ export class ApiError extends Error {
   }
 }
 
-/** Retourne le token d'authentification courant (Clerk ou dev). */
+/** Retourne le token d'authentification courant (Neon ou dev). */
 async function authHeader(): Promise<Record<string, string>> {
-  const clerk = window.__clerkGetToken;
-  if (clerk) {
+  // Neon Auth ( production ) : token signé Ed25519 posé par
+  // NeonTokenBridge, vérifié côté backend via le JWKS Neon.
+  const neon = window.__neonGetToken;
+  if (neon) {
     try {
-      const token = await clerk();
+      const token = await neon();
       if (token) return { Authorization: `Bearer ${token}` };
     } catch {
       /* pas de session → pas de header */

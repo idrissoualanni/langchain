@@ -1,12 +1,11 @@
-// Mission Identité — garde ADMIN (§9/§20).
+// Mission Identité — garde ADMIN ( §9/§20 ).
 // user → 403 UI ; admin → contenu. Le rôle vient de la SESSION
-// résolue backend ( /api/users/me ) — jamais déclaré par le
-// frontend.
+// résolue backend ( /api/users/me ) — jamais déclaré par le frontend.
 'use client';
 
 import type { ReactNode } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useCurrentUser } from '../hooks/useCurrentUser';
-import { SignedIn, SignedOut, SignIn } from '@clerk/clerk-react';
 
 export function AdminGate({ children }: { children: ReactNode }) {
   const { signedIn, loading, isAdmin, devMode } = useCurrentUser();
@@ -19,22 +18,9 @@ export function AdminGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!devMode && !signedIn) {
-    return (
-      <>
-        <SignedOut>
-          <SignIn routing="hash" />
-        </SignedOut>
-        <SignedIn>{null}</SignedIn>
-      </>
-    );
-  }
-  if (devMode && !signedIn) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-slate-400">
-        Non authentifié ( mode dev )
-      </div>
-    );
+  // Pas de session → page de connexion ( Neon en prod, dev-login en dev ).
+  if (!signedIn) {
+    return <Navigate to={devMode ? '/dev-login' : '/sign-in'} replace />;
   }
 
   if (!isAdmin) {

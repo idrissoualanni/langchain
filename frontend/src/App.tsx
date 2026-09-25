@@ -14,7 +14,6 @@ import {
   BrowserRouter as Router,
   Routes,
 } from 'react-router-dom';
-import { SignedIn, SignedOut, SignIn, SignUp } from '@clerk/clerk-react';
 import { AppSidebar } from './components/app-sidebar';
 import { lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -27,6 +26,8 @@ import { LoadingState } from './components/ui/loading-state';
 import { CommandPalette } from './components/layout/command-palette';
 import { AssistantPage } from './pages/AssistantPage';
 import { DevLoginPage } from './auth/DevLoginPage';
+import { NeonLoginPage } from './auth/NeonLoginPage';
+import { NeonTokenBridge } from './auth/NeonTokenBridge';
 import { AdminGate } from './auth/AdminGate';
 import { useCurrentUser } from './hooks/useCurrentUser';
 import { SelectionProvider } from './hooks/useSelection';
@@ -64,24 +65,17 @@ const SettingsNotificationsPage = lazy(() => import('./pages/settings/SettingsNo
 const SettingsSessionsPage = lazy(() => import('./pages/settings/SettingsSessionsPage').then((m) => ({ default: m.SettingsSessionsPage })));
 const SettingsDataPage = lazy(() => import('./pages/settings/SettingsDataPage').then((m) => ({ default: m.SettingsDataPage })));
 
-/** Route protégée : session requise ( mode dev → page dev login ). */
+/** Route protégée : session requise ( mode dev → page dev login ).
+ *
+ * En production l'auth vient de Neon ( Better Auth managé ) ; en mode
+ * dev on garde la session simulée backend. */
 function Protected({ children }: { children: React.ReactNode }) {
   const { signedIn, devMode } = useCurrentUser();
-  if (devMode && !signedIn) return <Navigate to="/dev-login" replace />;
-  return (
-    <>
-      {/* mode clerk : garde officielle Clerk */}
-      {!devMode && (
-        <>
-          <SignedOut>
-            <Navigate to="/sign-in" replace />
-          </SignedOut>
-          <SignedIn>{children}</SignedIn>
-        </>
-      )}
-      {devMode && signedIn && <>{children}</>}
-    </>
-  );
+  if (devMode) {
+    return signedIn ? <>{children}</> : <Navigate to="/dev-login" replace />;
+  }
+  // Neon : pas de session → page de connexion Neon.
+  return signedIn ? <>{children}</> : <Navigate to="/sign-in" replace />;
 }
 
 function PageTitle() {
@@ -132,8 +126,8 @@ function AppShell() {
             <Routes>
           <Route index element={<Navigate to="/assistant" replace />} />
           <Route path="/dev-login" element={<DevLoginPage />} />
-          <Route path="/sign-in" element={<SignIn routing="hash" />} />
-          <Route path="/sign-up" element={<SignUp routing="hash" />} />
+          <Route path="/sign-in" element={<NeonLoginPage />} />
+          <Route path="/sign-up" element={<NeonLoginPage />} />
 
           <Route
             path="/assistant"
@@ -316,9 +310,11 @@ function AppRuntime() {
 export default function App() {
   return (
     <Router>
-      <SelectionProvider>
-        <AppRuntime />
-      </SelectionProvider>
+      <NeonTokenBridge>
+        <SelectionProvider>
+          <AppRuntime />
+        </SelectionProvider>
+      </NeonTokenBridge>
     </Router>
   );
 }

@@ -18,7 +18,7 @@ import {
 } from '../../components/user/kit';
 
 export function SettingsProfilePage() {
-  const { internal, clerkUser, devMode } = useCurrentUser();
+  const { internal, neonUser, devMode } = useCurrentUser();
   const userId = internal?.user_id ?? null;
 
   const [name, setName] = useState('');
@@ -69,9 +69,7 @@ export function SettingsProfilePage() {
     }
   };
 
-  const clerkName =
-    clerkUser?.fullName ||
-    [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(' ');
+  const neonName = neonUser?.name;
 
   return (
     <>
@@ -84,14 +82,14 @@ export function SettingsProfilePage() {
       <div className="max-w-2xl space-y-5 p-6">
         <Surface>
           <SurfaceHeader>
-            <SurfaceTitle>Identité (gérée par Clerk)</SurfaceTitle>
+            <SurfaceTitle>Identité (gérée par Neon Auth)</SurfaceTitle>
           </SurfaceHeader>
           <SurfaceBody className="space-y-1">
             <p className="text-foreground text-sm">
-              {clerkName || internal?.name || '—'}
+              {neonName || internal?.name || '—'}
             </p>
             <p className="text-muted-foreground text-[12px]">
-              {clerkUser?.primaryEmailAddress?.emailAddress ??
+              {neonUser?.email ??
                 (devMode
                   ? 'Email non disponible en mode dev.'
                   : 'Email non disponible.')}
