@@ -128,7 +128,8 @@ _TABLES = [
         sha256      TEXT NOT NULL,
         bytes_size  BIGINT NOT NULL DEFAULT 0,
         created_at  TEXT NOT NULL,
-        updated_at  TEXT NOT NULL
+        updated_at  TEXT NOT NULL,
+        deleted_at  TEXT
     )
     """,
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_mcp_files_user_path "
@@ -243,6 +244,18 @@ def init_schema() -> None:
                 if "content" in cols:
                     conn.execute(
                         text("ALTER TABLE object_storage ALTER COLUMN content DROP NOT NULL")
+                    )
+            # mcp_files.deleted_at : la suppression est LOGIQUE ( le
+            # contenu écrasé reste versionné en mcp_file_versions, et un
+            # fichier supprimé ne doit PAS réapparaître au listing ).
+            # Colne absente des premières bases ( table créée avant la
+            # suppression logique ) — ajout idempotent, sans toucher aux
+            # données existantes.
+            if insp.has_table("mcp_files"):
+                cols = {c["name"] for c in insp.get_columns("mcp_files")}
+                if "deleted_at" not in cols:
+                    conn.execute(
+                        text("ALTER TABLE mcp_files ADD COLUMN deleted_at TEXT")
                     )
         log_event(
             "NEON_SCHEMA_INIT",

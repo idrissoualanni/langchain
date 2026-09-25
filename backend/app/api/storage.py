@@ -215,7 +215,8 @@ def _index_document(user_id: str, filename: str, mime: str, data: bytes) -> bool
 
         if len(data) > MAX_FILE_BYTES:
             return False
-        text = extract_text(data, filename)
+        # signature : extract_text(filename, raw, content_type)
+        text = extract_text(filename, data, mime)
         chunks = chunk_text(text)
         get_rag_store().add_document(
             user_id=user_id,

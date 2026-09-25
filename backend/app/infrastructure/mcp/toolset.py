@@ -16,12 +16,18 @@ from typing import Any
 from app.logging.events import log_event
 
 
-async def get_mcp_tools(workflow: str) -> list[Any]:
+async def get_mcp_tools(workflow: str, user_id: str = "") -> list[Any]:
     """Tools LangCHAIN chargés depuis les serveurs MCP d'un workflow.
 
     Retourne une liste (vide si aucun serveur ou tout échec). La
     fonction est ASYNC : les sessions MCP ne vivent que le temps de
     l'appel — le caller (node) les utilise puis les relâche.
+
+    `user_id` : propagé JUSQU'AUX SUBPROCESS stdio via l'env des
+    connections (MCP_FS_USER_ID). Un serveur qui isole ses données par
+    utilisateur ( filesystem ) doit recevoir un user_id EXPLICITE —
+    JAMAIS None ( pas d'espace partagé, §41 ). Conservé optionnel pour
+    ne pas casser les callers qui n'ont pas encore d'identité résolue.
     """
     from app.infrastructure.mcp.registry import get_registry
 
@@ -36,10 +42,18 @@ async def get_mcp_tools(workflow: str) -> list[Any]:
 
     connections: dict[str, dict] = {}
     for cfg in servers:
+        # env runtime = env déclaré au registry (§39) + user_id du run
+        # courant. Les clés du run passent APRÈS : elles gagnent en cas
+        # de conflit ( runtime > configuration statique ), sans risque
+        # pour les secrets (jamais d'identifiant en dur au registry).
+        run_env: dict[str, str] = {}
+        if user_id:
+            run_env["MCP_FS_USER_ID"] = str(user_id)
         connections[cfg.name] = {
             "command": cfg.command,
             "args": list(cfg.args),
             "transport": cfg.transport,
+            "env": {k: str(v) for k, v in {**cfg.env, **run_env}.items()},
         }
 
     tools: list[Any] = []

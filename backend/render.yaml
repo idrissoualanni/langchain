@@ -58,6 +58,21 @@ services:
         sync: false
       - key: NEON_AUTH_JWKS_URL
         sync: false
+      # Neon Storage ( S3 ) — bucket "assets" pour les uploads
+      # document/image/vidéo. SANS CES VARS, object_store bascule en
+      # BYTEA ( trace via OBJECT_STORAGE_S3_FALLBACK ) : ça marche, mais
+      # les octets s'entassent en base au lieu d'aller dans le bucket.
+      # Credentials saisis à la main ( sync: false = JAMAIS commités ).
+      - key: AWS_ENDPOINT_URL_S3
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        value: eu-central-1
+      - key: NEON_S3_BUCKET
+        value: assets
 
   # --------------------------------------------------------------------------
   # Worker LiveKit — le tuteur vocal.

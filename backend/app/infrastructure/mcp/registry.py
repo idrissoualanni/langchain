@@ -57,6 +57,13 @@ class McpServerConfig(BaseModel):
         default=None,
         description="Appels max par run (§41) ; None = illimité",
     )
+    env: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Variables d'environnement du subprocess stdio (§41 : "
+            "isolation — sert à propager MCP_FS_USER_ID, JAMAIS de secret)"
+        ),
+    )
 
 
 def _server_scripts_dir() -> Path:

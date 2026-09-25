@@ -81,8 +81,10 @@ async def agenda_node(state, config=None) -> dict[str, Any]:
 
     try:
         # 1. Tools MCP — résolution + scoping §40. Échec isolé : liste
-        # vide ( jamais de crash du node ).
-        tools = await get_mcp_tools("agenda")
+        # vide ( jamais de crash du node ). user_id propagé aux
+        # subprocess stdio ( MCP_FS_USER_ID ) : un serveur qui isole par
+        # utilisateur ne doit JAMAIS tomber sur un espace partagé.
+        tools = await get_mcp_tools("agenda", user_id=user_id)
 
         if not tools:
             # Soit aucun serveur agenda activé ( MCP_ENABLED_SERVERS ),

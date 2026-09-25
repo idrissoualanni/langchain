@@ -59,13 +59,17 @@ def _extract_turns(history_messages: list[Any]) -> list[tuple[str, str]]:
     return turns
 
 
-def persist_transcript(
+async def persist_transcript(
     user_id: str,
     thread_id: str,
     history_messages: list[Any],
 ) -> int:
     """Réinjecte le transcript vocal dans le thread. Retourne le nombre
     de messages persistés ( 0 si rien à écrire ou thread inexistant ).
+
+    ASYNC : aupdate_state n'a pas de variante synchrone non bloquante ;
+    l'unique appelant ( _on_shutdown du worker ) est async — on await
+    donc directement, sans asyncio.run.
 
     Non-fatal : un échec de persistance ne doit JAMAIS casser la
     session vocale — l'utilisateur a déjà eu sa réponse à l'oral.

@@ -679,7 +679,7 @@ async def entrypoint(ctx: JobContext) -> None:
 
             history = session.history
 
-            persist_transcript(
+            await persist_transcript(
                 user_id,
                 thread_id,
                 list(history.messages),
