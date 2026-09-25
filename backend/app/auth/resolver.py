@@ -30,6 +30,7 @@ from app.config import (
     CLERK_JWKS_URL,
     CLERK_JWT_LEEWAY,
     NEON_AUTH_JWKS_URL,
+    NEON_AUTH_BASE_URL,
     log_safe,
 )
 from app.infrastructure.database import users as users_db
@@ -149,15 +150,23 @@ def verify_neon_token(token: str) -> dict:
     signing_key = client.get_signing_key_from_jwt(token)
 
     options: dict = {"require": ["exp", "iat", "sub"]}
-    return jwt.decode(
-        token,
-        key=signing_key.key,
+    decode_kwargs: dict = {
+        "key": signing_key.key,
         # Ed25519 ( OKP ) — signature EdDSA, pas RS256 comme Clerk.
-        algorithms=["EdDSA"],
-        options=options,
+        "algorithms": ["EdDSA"],
+        "options": options,
         # Tolérance d'horloge ( secondes ) — voir verify_clerk_token.
-        leeway=CLERK_JWT_LEEWAY,
-    )
+        "leeway": CLERK_JWT_LEEWAY,
+    }
+    # Better Auth pose un claim aud ( = URL du service Neon Auth ).
+    # PyJWT rejette par défaut tout token portant un aud non vérifié
+    # ( InvalidAudienceError ) → on déclare l'audience attendue dès que
+    # la base URL est configurée, sinon on déspose juste la vérif aud.
+    if NEON_AUTH_BASE_URL:
+        decode_kwargs["audience"] = NEON_AUTH_BASE_URL
+    else:
+        options["verify_aud"] = False
+    return jwt.decode(token, **decode_kwargs)
 
 
 # ------------------------------------------------------------------
