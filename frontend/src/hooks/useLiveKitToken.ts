@@ -7,7 +7,7 @@
 // avant le terme — l'agent et la room restent joints.
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/api/base";
 
 export interface LiveKitTokenResponse {
@@ -34,6 +34,13 @@ function expOf(jwt: string): number | null {
 }
 
 /**
+ * Seuil de renouvellement au retour au premier plan ( ms ).
+ * Un onglet en veille THROTTLE les timers : au retour, s'il reste moins
+ * que cette durée avant l'expiration, on renouvelle tout de suite.
+ */
+const FOREGROUND_REFRESH_WITHIN_MS = 2 * 60_000;
+
+/**
  * Récupère un token LiveKit et le renouvelle avant expiration.
  * Retourne { data, loading, error } — prêt pour LiveKitRoom.
  */
@@ -41,6 +48,12 @@ export function useLiveKitToken(purpose: "voice" | "video" = "video") {
   const [data, setData] = useState<TokenState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Référence stable sur le token courant : le listener visibilitychange
+  // ne peut pas dépendre de l'état ( sinon re-souscription à chaque
+  // renouvellement ) — il lit la valeur via cette ref.
+  const dataRef = useRef<TokenState | null>(null);
+  dataRef.current = data;
 
   useEffect(() => {
     let alive = true;
@@ -72,12 +85,34 @@ export function useLiveKitToken(purpose: "voice" | "video" = "video") {
       }
     }
 
+    // Onglet en veille : les timers sont throttlés en arrière-plan — le
+    // setTimeout de renouvellement peut ne pas se déclencher à temps.
+    // Au retour au premier plan, on vérifie l'expiration : < 2 min
+    // restantes → renouvellement immédiat ( sinon boucle 401
+    // /rtc/v1/validate dès la prochaine action temps réel ).
+    function onVisibility() {
+      if (!alive) return;
+      if (document.visibilityState !== "visible") return;
+      const token = dataRef.current?.token;
+      if (!token) return;
+      const exp = expOf(token);
+      if (exp !== null && exp - Date.now() < FOREGROUND_REFRESH_WITHIN_MS) {
+        if (timer) clearTimeout(timer);
+        refresh();
+      }
+    }
+
     refresh();
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       alive = false;
       if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [purpose]);
 
-  return { data, loading, error };
+  // Identité stable : sans ça chaque re-render ( ex: le chrono de
+  // session qui tick toutes les secondes ) passe un nouvel objet `data`
+  // au consommateur et fait remonter la room.
+  return useMemo(() => ({ data, loading, error }), [data, loading, error]);
 }

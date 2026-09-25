@@ -29,6 +29,9 @@ export interface NeonUserData {
   userId: string | null;
   name: string | null;
   email: string | null;
+  /** true dès que l'email a été vérifié côté Better Auth.
+   *  Pilotage de la bannière "vérifie ta boîte mail". */
+  emailVerified: boolean;
 }
 
 // Contexte alimenté par NeonTokenBridge pour les composants qui lisent
@@ -39,6 +42,7 @@ export const NeonUserContext = createContext<NeonUserData>({
   userId: null,
   name: null,
   email: null,
+  emailVerified: false,
 });
 
 export function useCurrentUser() {

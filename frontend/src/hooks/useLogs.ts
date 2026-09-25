@@ -38,6 +38,10 @@ export function useLogs() {
 
   // Flux SSE temps réel
   useEffect(() => {
+    // connected ne passe à true qu'au PREMIER événement reçu — pas à
+    // l'abonnement. Sinon l'UI affiche "connecté" avant la première
+    // frame SSE ( une connexion qui aurait pu échouer silencieusement ).
+    let firstFrame = true;
     const disconnect = connectAgentEvents((event: AgentEvent) => {
       const entry: LogEntry = {
         timestamp: event.timestamp,
@@ -48,13 +52,16 @@ export function useLogs() {
         tool_name: event.tool_name,
         message: event.message,
       };
+      if (firstFrame) {
+        firstFrame = false;
+        setConnected(true);
+      }
       if (pausedRef.current) {
         bufferRef.current.push(entry);
       } else {
         setLogs((prev) => [...prev.slice(-499), entry]);
       }
     });
-    setConnected(true);
     return () => {
       disconnect();
       setConnected(false);

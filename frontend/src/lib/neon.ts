@@ -22,6 +22,10 @@ export interface NeonSession {
     name?: string | null;
     email?: string | null;
     image?: string | null;
+    /** Better Auth : true dès que l'email a été vérifié. */
+    emailVerified?: boolean | null;
+    /** Better Auth : timestamp ( s ) de la dernière vérification. */
+    emailVerifiedAt?: number | null;
   };
   token?: string | null;
 }
@@ -29,7 +33,12 @@ export interface NeonSession {
 async function postJson(path: string, body: Record<string, unknown>) {
   const res = await fetch(`${AUTH_URL}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      // Neon exige un header Origin quand callbackURL est relative
+      // ( sinon 400 MISSING_ORIGIN ). On envoie l'origine du frontend.
+      Origin: window.location.origin,
+    },
     credentials: 'include',
     body: JSON.stringify(body),
   });
@@ -87,5 +96,60 @@ export const authClient = {
   async getJWTToken(): Promise<string | null> {
     const t = await getJson<{ token: string | null }>('/token');
     return t?.token ?? null;
+  },
+
+  // ----------------------------------------------------------------
+  // Vérification d'email ( Neon = plugin Better Auth "email-otp" )
+  // ----------------------------------------------------------------
+  // ATTENTION : malgré le choix "Verification link" dans la console,
+  // Neon route par les endpoints /email-otp/* du plugin email-otp, et
+  // NON par /verify-email ( qui répond 404 ). Le "link" mail contient
+  // un code OTP ; on le valide via /email-otp/verify-email avec le
+  // champ "otp" ( pas "token" ).
+
+  /** Envoie ( ou renvoie ) l'email de vérification à l'utilisateur
+   *  connecté. Répond { status: true } — 200 même si l'envoi SMTP
+   *  échoue ( transport non configuré ). */
+  sendVerificationEmail: (email: string) =>
+    postJson('/send-verification-email', { email }),
+
+  /** Valide le code reçu par email ( plugin email-otp ).
+   *  Exige l'email + le code ( validation serveur : les deux champs
+   *  sont obligatoires ). Champ "otp" — JAMAIS "token". */
+  verifyEmail: (email: string, otp: string) =>
+    postJson('/email-otp/verify-email', { email, otp }),
+
+  // ----------------------------------------------------------------
+  // Mot de passe oublié — INDISPONIBLE sur ce projet Neon
+  // ----------------------------------------------------------------
+  // Tests e2e ( 2026-09-25 ) : Neon Managed Auth n'envoie QUE des
+  // emails de vérification. /send-verification-email répond 200 à tous
+  // les "type" tentés ( forgetPassword / resetPassword / password ),
+  // mais AUCUN email de réinitialisation n'arrive ( vérifié en boîte
+  // jetable ). /reset-password standard exige un token qui n'est jamais
+  // envoyé, et /email-otp/reset-password rejette les OTP de vérification
+  // ( INVALID_OTP ).
+  //
+  // Tant que Neon n'expose pas de flux de réinitialisation, on désactive
+  // ces méthodes côté client : elles renvoient une erreur explicite
+  // plutôt que de laisser l'utilisateur attendre un email qui ne vient
+  // jamais.
+
+  /** Demande de réinitialisation — NON SUPPORTÉE par Neon.
+   *  Lève systématiquement pour que l'UI propose la marche à suivre. */
+  forgetPassword: async (_email: string): Promise<never> => {
+    throw new Error(
+      'RESET_UNAVAILABLE: la réinitialisation de mot de passe n\'est pas activée sur ce projet Neon. Contactez un administrateur.'
+    );
+  },
+
+  /** Réinitialisation — NON SUPPORTÉE par Neon. */
+  resetPassword: async (
+    _token: string,
+    _password: string
+  ): Promise<never> => {
+    throw new Error(
+      'RESET_UNAVAILABLE: la réinitialisation de mot de passe n\'est pas activée sur ce projet Neon.'
+    );
   },
 };

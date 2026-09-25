@@ -16,6 +16,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAui } from "@assistant-ui/react";
 
 import { apiFetch, ApiError } from "@/api/base";
+import { useAssistantStore } from "@/assistant-ui/store";
 import { AgentAudioVisualizerAura } from "@/components/agents-ui/agent-audio-visualizer-aura";
 import { useToast } from "@/hooks/use-toast";
 import { useLiveKitToken } from "@/hooks/useLiveKitToken";
@@ -266,14 +267,19 @@ export default function VoicePage() {
   // ( renouvellement géré par useLiveKitToken )
 
   // Démarre l'agent ( dispatch ) dès que la room est connue.
+  // thread_id : transmis au worker via le metadata du dispatch — sans
+  // lui, le transcript de la session n'est JAMAIS persisté dans le
+  // thread ( thread_id_from_metadata ne le trouve pas ). Lu dans le
+  // store assistant-ui ( source centrale du thread actif ).
   useEffect(() => {
     if (!roomName) return;
     const controller = new AbortController();
     async function startAgent() {
+      const threadId = useAssistantStore.getState().currentThreadId;
       try {
         await apiFetch("/api/livekit/agent/start", {
           method: "POST",
-          body: JSON.stringify({}),
+          body: JSON.stringify(threadId ? { thread_id: threadId } : {}),
           signal: controller.signal,
         });
       } catch (error) {

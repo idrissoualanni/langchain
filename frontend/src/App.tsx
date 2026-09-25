@@ -1,8 +1,11 @@
 // App — layout + router + runtime Assistant UI
 //
-// Mission Identité : l'identité vient de Clerk ( ou dev ) — PLUS de
-// UserSelector ; routes protégées derrière SignedIn / session dev.
+// Mission Identité : l'identité vient de Neon Auth ( ou dev ) — PLUS de
+// UserSelector ; routes protégées derrière Protected / session dev.
 // Mission Cleanup : /chat supprimé → redirect vers /assistant.
+// Mission Pages d'Auth : /sign-in, /sign-up, /verify-email,
+// /forgot-password, /reset-password sont des pages DÉDIÉES ( finie
+// l'hybride sign-in/sign-up ). Catch-all → page 404.
 // Refonte visuelle : le runtime Assistant UI est monté au niveau du
 // shell pour que le ThreadList officiel vive dans le rail unique
 // (Sidebar) — cf. brief §15/§16.
@@ -25,8 +28,15 @@ import {
 import { LoadingState } from './components/ui/loading-state';
 import { CommandPalette } from './components/layout/command-palette';
 import { AssistantPage } from './pages/AssistantPage';
-import { DevLoginPage } from './auth/DevLoginPage';
-import { NeonLoginPage } from './auth/NeonLoginPage';
+import { NotFoundPage } from './pages/NotFoundPage';
+import {
+  DevLoginPage,
+  SignInPage,
+  SignUpPage,
+  VerifyEmailPage,
+  ForgotPasswordPage,
+  ResetPasswordPage,
+} from './pages/auth';
 import { NeonTokenBridge } from './auth/NeonTokenBridge';
 import { AdminGate } from './auth/AdminGate';
 import { useCurrentUser } from './hooks/useCurrentUser';
@@ -68,14 +78,30 @@ const SettingsDataPage = lazy(() => import('./pages/settings/SettingsDataPage').
 /** Route protégée : session requise ( mode dev → page dev login ).
  *
  * En production l'auth vient de Neon ( Better Auth managé ) ; en mode
- * dev on garde la session simulée backend. */
+ * dev on garde la session simulée backend.
+ *
+ * Tant que le user INTERNE n'est pas résolu ( GET /api/users/me en
+ * cours ), on garde un état de chargement : sinon la page affiche une
+ * frame sans personnalisation ( pas de userId pour le runtime, pas de
+ * données ) avant de se repeupler — un flash de contenu vide. */
 function Protected({ children }: { children: React.ReactNode }) {
-  const { signedIn, devMode } = useCurrentUser();
-  if (devMode) {
-    return signedIn ? <>{children}</> : <Navigate to="/dev-login" replace />;
+  const { signedIn, devMode, loading } = useCurrentUser();
+
+  // Pas de session → page de connexion ( Neon en prod, dev-login en dev ).
+  if (!signedIn) {
+    return <Navigate to={devMode ? '/dev-login' : '/sign-in'} replace />;
   }
-  // Neon : pas de session → page de connexion Neon.
-  return signedIn ? <>{children}</> : <Navigate to="/sign-in" replace />;
+
+  // Session OK mais user interne en cours de résolution : on attend.
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <LoadingState label="Résolution de la session…" />
+      </div>
+    );
+  }
+
+  return <>{children}</>;
 }
 
 function PageTitle() {
@@ -125,9 +151,16 @@ function AppShell() {
           <Suspense fallback={<div className="p-6"><LoadingState label="Chargement de la page…" /></div>}>
             <Routes>
           <Route index element={<Navigate to="/assistant" replace />} />
+
+          {/* Auth — pages DÉDIÉES ( fin de l'hybride sign-in/sign-up ).
+              Routes PUBLIQUES : pas de Protected ( sinon un utilisateur
+              connecté ne pourrait plus se déconnecter ). */}
           <Route path="/dev-login" element={<DevLoginPage />} />
-          <Route path="/sign-in" element={<NeonLoginPage />} />
-          <Route path="/sign-up" element={<NeonLoginPage />} />
+          <Route path="/sign-in" element={<SignInPage />} />
+          <Route path="/sign-up" element={<SignUpPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           <Route
             path="/assistant"
@@ -286,6 +319,10 @@ function AppShell() {
               </AdminGate>
             }
           />
+
+          {/* Catch-all : toute URL inconnue → 404 explicite.
+              Avant : route sans correspondance → écran vide. */}
+          <Route path="*" element={<NotFoundPage />} />
 
         </Routes>
           </Suspense>

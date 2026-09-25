@@ -18,6 +18,7 @@ const EMPTY: NeonUserData = {
   userId: null,
   name: null,
   email: null,
+  emailVerified: false,
 };
 
 let currentUser: NeonUserData = EMPTY;
@@ -84,6 +85,7 @@ export async function refreshNeonSession() {
       userId: session?.user?.id ?? null,
       name: session?.user?.name ?? null,
       email: session?.user?.email ?? null,
+      emailVerified: !!session?.user?.emailVerified,
     });
   } catch {
     (window as any).__neonGetToken = undefined;
