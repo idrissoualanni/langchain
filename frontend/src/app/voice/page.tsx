@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   SessionProvider,
   useAgent,
+  useConnectionState,
   useLocalParticipant,
   useSession,
   useTrackTranscription,
@@ -140,6 +141,10 @@ function VoiceSessionContent({
   onDisconnect: () => void;
 }) {
   const { state } = useAgent();
+  // Clic "Terminer" pendant connecting → le SDK annule la connexion en
+  // cours ( ConnectionError "Client initiated disconnect" ). On désactive
+  // le bouton jusqu'à connected.
+  const connectionState = useConnectionState();
   const { localParticipant } = useLocalParticipant();
   const navigate = useNavigate();
   const aui = useAui();
@@ -232,7 +237,8 @@ function VoiceSessionContent({
         <button
           type="button"
           onClick={onDisconnect}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500 text-white transition-colors hover:bg-red-600"
+          disabled={connectionState !== "connected"}
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-red-500 text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Terminer la session"
         >
           <PhoneOff className="h-5 w-5" />

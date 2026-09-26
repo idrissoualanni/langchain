@@ -147,6 +147,19 @@ def _build_engine(db_url: str | None, sqlite_path) -> Engine:
         return create_engine(
             _postgres_url(db_url),
             pool_pre_ping=True,
+            # Neon coupe une session restée inactive en transaction
+            # ( idle_in_transaction_session_timeout ). get_conn() garde la
+            # connexion thread-local OUVERTE entre deux requêtes : la 1re
+            # SELECT démarre implicitement une transaction qui reste
+            # "idle in transaction" jusqu'au commit suivant — sous un
+            # service Render peu sollicité, Neon la tue et la requête
+            # d'après arrive sur une connexion morte → 500.
+            # idle_in_transaction_session_timeout=0 : pas de limite de
+            # côté serveur ( on s'appuie sur pool_pre_ping + le bail
+            # ci-dessous pour la robustesse ).
+            connect_args={
+                "options": "-c idle_in_transaction_session_timeout=0",
+            },
         )
     engine = create_engine(
         _sqlite_url(sqlite_path),
@@ -241,6 +254,29 @@ class AppResult:
         return self._rowcount
 
 
+def _is_connection_dead(exc: BaseException) -> bool:
+    """True si le serveur a tué / perdu la session sous-jacente.
+
+    Neon ferme les sessions restées inactives en transaction
+    ( IdleInTransactionSessionTimeout ) ou inactives tout court. La
+    connexion SQLAlchemy a l'air encore ouverte — la garder fait planter
+    toutes les requêtes suivantes ( PendingRollbackError en cascade ).
+    """
+    text = str(exc).lower()
+    return any(
+        marker in text
+        for marker in (
+            "terminating connection",
+            "idle in transaction",
+            "connection reset by peer",
+            "server closed the connection",
+            "connection already closed",
+            "could not receive data",
+            "ssl connection has been closed unexpectedly",
+        )
+    )
+
+
 class AppConn:
     """Connexion compatible avec l'ancien get_conn() sqlite3.
 
@@ -273,13 +309,19 @@ class AppConn:
                     f"(:name), reçu {type(params).__name__}. "
                     "Réécrivez la requête en style portable SQLite/PostgreSQL."
                 )
-        except Exception:
+        except Exception as exc:
             try:
                 self._sa.rollback()
             except Exception:
                 # rollback lui-même en échec → la connexion est morte,
                 # on la déconnecte pour forcer une reconnexion propre au
                 # prochain get_conn().
+                self._dispose()
+            # Neon ( ou le pool ) peut avoir TUÉ la session sous-jacente.
+            # pool_pre_ping ne voit pas une connexion apparemment ouverte
+            # mais serveur-mort : on la jette pour que le prochain appel
+            # reparte sur une connexion fraîche.
+            if _is_connection_dead(exc):
                 self._dispose()
             raise
         return AppResult(res)

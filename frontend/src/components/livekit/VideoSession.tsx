@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   LiveKitRoom,
   useAgent,
+  useConnectionState,
   useLocalParticipant,
   useMaybeRoomContext,
   useMaybeSessionContext,
@@ -190,6 +191,9 @@ function VideoSessionContent() {
   // Room courante (pour la déconnexion et l'invitation du tuteur).
   // `useMaybeRoomContext()` ne crash jamais si le contexte n'est pas prêt.
   const room = useMaybeRoomContext();
+  // Clic raccrocher pendant connecting → "Client initiated disconnect".
+  // On désactive le bouton tant que la room n'est pas pleinement jointe.
+  const connectionState = useConnectionState(room ?? undefined);
 
   // Inviter le tuteur dans cette salle : la room est calculée côté serveur
   // ( session_{user_id} ), identique à celle du token — l'agent rejoint
@@ -425,6 +429,9 @@ function VideoSessionContent() {
           onDisconnect={() => {
             room.disconnect();
           }}
+          // Raccrocher pendant connecting annule la connexion en cours
+          // ( ConnectionError "Client initiated disconnect" ).
+          disconnectDisabled={connectionState !== "connected"}
           className="backdrop-blur-md bg-background/50 rounded-full p-2"
           showScreenShareButton={true}
         />

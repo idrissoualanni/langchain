@@ -21,6 +21,12 @@ interface AgentControlBarProps {
   onToggleScreenShare?: (enabled: boolean) => void | Promise<void>;
   /** Called when the user wants to leave/disconnect the session. */
   onDisconnect?: () => void;
+  /**
+   * Désactive le bouton raccrocher. À passer pendant la phase
+   * `connecting` : un disconnect ici annule la connexion en cours et
+   * LiveKit log "Client initiated disconnect".
+   */
+  disconnectDisabled?: boolean;
   className?: string;
   /** Whether to render the screen-share button. */
   showScreenShareButton?: boolean;
@@ -49,6 +55,7 @@ export function AgentControlBar({
   onToggleCamera,
   onToggleScreenShare,
   onDisconnect,
+  disconnectDisabled = false,
   className,
   showScreenShareButton = true,
   microphoneEnabled,
@@ -140,6 +147,7 @@ export function AgentControlBar({
         type="button"
         className={`${buttonClass} bg-red-500 hover:bg-red-600`}
         onClick={() => onDisconnect?.()}
+        disabled={disconnectDisabled}
         aria-label="Quitter la session"
       >
         <PhoneOff className="h-5 w-5" />
