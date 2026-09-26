@@ -161,6 +161,7 @@ _TABLES = [
         content         TEXT NOT NULL,
         embedding       vector(__DIM__),
         source_sha      TEXT NOT NULL,
+        source_label    TEXT,
         created_at      TEXT NOT NULL
     )
     """,
@@ -170,6 +171,15 @@ _TABLES = [
     "ON knowledge_sections(source_sha)",
     "CREATE INDEX IF NOT EXISTS idx_knowledge_sections_embedding "
     "ON knowledge_sections USING hnsw (embedding vector_cosine_ops)",
+    # La table existe déjà en prod — CREATE TABLE IF NOT EXISTS est un
+    # no-op, donc la colonne est ajoutée à part ( additive, nullable ).
+    "ALTER TABLE knowledge_sections "
+    "ADD COLUMN IF NOT EXISTS source_label TEXT",
+    # UPSERT de l'indexer : ON CONFLICT (subject_id, topic_slug) exige
+    # une contrainte UNIQUE explicite ( sinon "no unique or exclusion
+    # constraint matching the ON CONFLICT specification" ).
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_sections_topic "
+    "ON knowledge_sections(subject_id, topic_slug)",
 ]
 
 

@@ -54,6 +54,19 @@ async def lifespan(app: FastAPI):
     # Idempotent — ne touche jamais aux données existantes.
     init_schema()
 
+    # Indexation du corpus knowledge ( 70 Markdown ) — idempotent par
+    # source_sha : ne ré-embedde que les fichiers modifiés. Non-bloquant :
+    # un provider d'embedding HS ne doit pas empêcher le serveur de démarrer.
+    try:
+        from app.services.knowledge.indexer import index_corpus
+
+        index_corpus()
+    except Exception as exc:  # noqa: BLE001
+        log_event(
+            "KNOWLEDGE_INDEX_FAILED",
+            message=f"Indexation corpus ignorée au démarrage : {exc}",
+        )
+
     # Enregistre la loop pour que log_event (appelé depuis des threads
     # executor pendant les runs agent) puisse publier sur le bus SSE
     # de façon thread-safe.

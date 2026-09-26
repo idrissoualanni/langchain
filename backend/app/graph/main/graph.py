@@ -18,17 +18,14 @@
 # context_schema sont partagés → request.state du middleware expose
 # built_context/learning_decision (POC-2).
 import inspect
-import sqlite3
 
 from langchain.agents import create_agent
-from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import StateGraph
 from langgraph.types import RetryPolicy
 
 from app.services.memory.memory import get_store
 from app.config import (
     AGENT_RECURSION_LIMIT,
-    CHECKPOINTS_DB_PATH,
     MODEL_NAME,
     MODEL_RETRY_ATTEMPTS,
 )
@@ -47,7 +44,7 @@ from app.schemas.context import AgentContext
 from app.logging.events import log_event
 from app.services.models.retry import is_transient_error
 
-_conn: sqlite3.Connection | None = None
+_conn: object | None = None  # legacy SQLite — conservé pour compat import
 _agent = None
 
 # Mission Assistant UI (ModelSelector) : cache d'agents par modele.
@@ -69,7 +66,7 @@ def get_agent(model=None):
     réel du registry) ET enabled. Sinon → repli silencieux tracé
     (événement MODEL_SELECTOR_REJECTED) sur l'instance par défaut.
     """
-    global _conn, _agent
+    global _agent
 
     if model:
         model = str(model).strip()
@@ -271,20 +268,21 @@ def _compile_orchestration_graph(subgraph_agent, checkpointer, store):
 
 def _build_agent(model_name):
     """Construit une instance d'agent — facteur commun (graphe V7)."""
-    # Checkpointer SQLite officiel — persistance du thread state (§7)
-    # UNIQUE, porté par le graphe parent. Partage entre instances
-    # (une seule connexion, check_same_thread=False).
-    global _conn
-    if _conn is None:
-        _conn = sqlite3.connect(
-            CHECKPOINTS_DB_PATH, check_same_thread=False
-        )
-    checkpointer = SqliteSaver(_conn)
+    # Checkpointer LangGraph — persistance du thread state (§7) UNIQUE,
+    # portée par le graphe parent. Délègue au pivot persistence :
+    # PostgresSaver sur Neon si DATABASE_URL, sinon SqliteSaver local.
+    from app.infrastructure.database.persistence import (
+        get_checkpointer,
+        is_postgres_persistence,
+    )
+
+    checkpointer = get_checkpointer()
 
     # Store longue durée officiel — User Memory cross-thread (§6)
     store = get_store()
 
     effective = model_name or MODEL_NAME
+    backend = "PostgreSQL (Neon)" if is_postgres_persistence() else "SQLite"
     if model_name is not None:
         log_event(
             "DATABASE_INIT",
@@ -293,7 +291,7 @@ def _build_agent(model_name):
     else:
         log_event(
             "DATABASE_INIT",
-            message=f"SqliteSaver checkpointer on {CHECKPOINTS_DB_PATH} | model={MODEL_NAME}",
+            message=f"Checkpointer on {backend} | model={MODEL_NAME}",
         )
 
     subgraph = _build_subgraph_agent(model_name)

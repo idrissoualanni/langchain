@@ -3,40 +3,59 @@
 #
 # Lancé en stdio par le registry (app/mcp/registry.py). Tools exposés :
 #   - create_file(path, content)  : crée un fichier (échec si existe)
-#   - write_file(path, content)   : crée ou écrase un fichier
+#   - write_file(path, content)   : crée ou écrase un fichier (versionné)
 #   - read_file(path)             : lit un fichier texte
 #   - list_files(dir)             : liste les fichiers d'un répertoire
 #
-# SÉCURITÉ (§41) — sandbox stricte :
-#   1. Racine imposée : data/workspace/files (MCP_FS_ROOT override).
-#      Tout chemin en dehors est refusé (path traversal, absolu, ~…).
-#   2. Pas d'exécution, pas de shell, pas de suivi de liens symboliques
-#      hors racine (resolve() contrôlé).
+# STOCKAGE 100% EN BASE ( migration Neon ) : le contenu vit dans la table
+# mcp_files, l'historique des écrasements dans mcp_file_versions. ZÉRO
+# fichier sur disque — éphémère sur Render, perdu à chaque redéploiement.
+#
+# SÉCURITÉ (§41) — sandbox stricte, INTÉGRALEMENT CONSERVÉE :
+#   1. Chemin validé ( traversal, absolu, ~, nul ) avant d'atteindre la
+#      base. La sandbox vit dans le path, pas dans le stockage.
+#   2. Pas d'exécution, pas de shell.
 #   3. Taille bornée : écriture <= MCP_FS_MAX_BYTES, lecture tronquée
 #      au-delà (un fichier énorme ne doit pas saturer le contexte).
 #   4. Extensions textuelles seules (refus explicite des binaires /
 #      exécutables — la lecture d'un .exe n'a aucun sens pédagogique).
+#   5. Isolation par utilisateur ( MCP_FS_USER_ID propagé en env du
+#      subprocess stdio — JAMAIS None : pas d'espace partagé ).
 from __future__ import annotations
 
 import os
-from pathlib import Path
+from pathlib import PurePosixPath
 
 from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP("filesystem")
+from app.services.storage.mcp_files import (
+    McpFsError,
+    create_file as db_create_file,
+    delete_file as db_delete_file,
+    file_exists as db_file_exists,
+    list_files as db_list_files,
+    read_file as db_read_file,
+    write_file as db_write_file,
+)
 
-# Racine sandbox : backend/data/workspace/files (parents[4] depuis
-# app/infrastructure/mcp/servers/filesystem_server.py). Déterministe quel
-# que soit le CWD du subprocess MCP ; MCP_FS_ROOT permet l'override (tests).
-# REFACTOR : ce fichier est dans app/infrastructure/mcp/servers/ →
-# parents[4] = backend/ (qui contient data/workspace/files).
-# Avant le déménagement, parents[4] valait la racine du repo :
-# l'ancrage backend/ est la cible correcte.
-_BACKEND_ROOT = Path(__file__).resolve().parents[4]
-_ROOT = Path(os.getenv("MCP_FS_ROOT", str(_BACKEND_ROOT / "data" / "workspace" / "files"))).resolve()
+mcp = FastMCP("filesystem")
 
 _MAX_BYTES = int(os.getenv("MCP_FS_MAX_BYTES", str(200_000)))  # 200 Ko
 _READ_CAP = int(os.getenv("MCP_FS_READ_CAP", str(50_000)))  # 50 Ko envoyés au modèle
+
+# user_id : propagé par toolset.py via l'env du subprocess. Un serveur qui
+# isole ses données par utilisateur ne doit JAMAIS tomber sur un espace
+# partagé — on refuse de démarrer sans identité explicite.
+_USER_ID = os.getenv("MCP_FS_USER_ID", "").strip()
+if not _USER_ID:
+    # En local ( tests directs hors registry ), on accepte un override
+    # explicite ; sinon on ÉCHOUE FORT plutôt que d'écrire sans propriétaire.
+    _USER_ID = os.getenv("MCP_FS_USER_ID_TEST", "").strip()
+if not _USER_ID and __name__ == "__main__":
+    raise SystemExit(
+        "MCP_FS_USER_ID requis : un serveur filesystem isolé par "
+        "utilisateur ne peut pas démarrer sans propriétaire."
+    )
 
 # Extensions autorisées (texte/code uniquement — §41 : pas de binaire).
 _ALLOWED_EXT = {
@@ -48,47 +67,41 @@ _ALLOWED_EXT = {
 }
 
 _MAX_NAME = 120
-
-# La racine existe toujours (créée à l'import, parents compris) — un
-# list_files sur une racine vide renvoie "(vide)" plutôt qu'une erreur.
-_ROOT.mkdir(parents=True, exist_ok=True)
+_LIST_CAP = 200  # borne : pas de flooding du contexte
 
 
-def _resolve(path: str) -> Path:
-    """Résout `path` DANS la sandbox, ou lève ValueError (sécurité §41).
+def _validate(path: str) -> str:
+    """Valide `path` ( sécurités §41 ) et renvoie le chemin relatif pur.
 
-    Refuse : chemins vides, absolus, ~, traversal (..), symlink pointant
-    hors racine, extension non textuelle, nom trop long.
+    Refuse : chemins vides, absolus, ~, traversal (..), caractère nul,
+    extension non textuelle, nom trop long. Ne touche plus au disque —
+    la résolution filesystem disparaît avec la base.
     """
     if not path or not isinstance(path, str):
         raise ValueError("chemin requis")
     if "\x00" in path:
         raise ValueError("caractère nul interdit")
-    if Path(path).is_absolute() or path.startswith("~"):
+    if PurePosixPath(path).is_absolute() or path.startswith("~"):
         raise ValueError("chemin absolu ou ~ interdit — relatif à la racine uniquement")
 
-    # Pas de traversal : on normalise avant résolution. Path("a/b").parts
-    # == ('a', 'b') — le séparateur n'apparaît jamais comme composant.
-    normalized = Path(path)
+    # Pas de traversal : on normalise avant résolution.
+    normalized = PurePosixPath(path)
     if any(part == ".." for part in normalized.parts):
         raise ValueError("traversal (..) interdit")
-    if not normalized.as_posix().strip("/"):
+    rel = normalized.as_posix().strip("/")
+    if not rel:
         raise ValueError("chemin vide")
 
-    resolved = (_ROOT / normalized).resolve()
-    # Symlink hors racine : resolve() a suivi la cible, on revérifie.
-    if _ROOT not in resolved.parents and resolved != _ROOT:
-        raise ValueError("cible hors de la racine (symlink interdit)")
-
-    name = resolved.name
+    name = normalized.name
     if not name or len(name) > _MAX_NAME:
         raise ValueError(f"nom de fichier invalide (<= {_MAX_NAME} caractères)")
-    if resolved.suffix.lower() not in _ALLOWED_EXT:
+    suffix = PurePosixPath(name).suffix.lower()
+    if suffix not in _ALLOWED_EXT:
         raise ValueError(
-            f"extension '{resolved.suffix or '(aucune)'}' interdite — "
+            f"extension '{suffix or '(aucune)'}' interdite — "
             f"texte/code uniquement"
         )
-    return resolved
+    return rel
 
 
 def _guard_size(content: str) -> None:
@@ -106,13 +119,13 @@ def create_file(path: str, content: str) -> str:
     l'agent doit utiliser write_file pour remplacer).
     Retourne le chemin relatif + la taille créée.
     """
-    target = _resolve(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists():
-        raise ValueError(f"'{path}' existe déjà — write_file pour remplacer")
+    rel = _validate(path)
     _guard_size(content)
-    target.write_text(content, encoding="utf-8")
-    return f"Créé : {path} ({len(content.encode('utf-8'))} octets)"
+    try:
+        size, _file_id = db_create_file(_USER_ID, rel, content)
+    except McpFsError as exc:
+        raise ValueError(str(exc)) from exc
+    return f"Créé : {rel} ({size} octets)"
 
 
 @mcp.tool()
@@ -120,28 +133,31 @@ def write_file(path: str, content: str) -> str:
     """Crée ou écrase un fichier avec ce contenu.
 
     Convention pédagogique : l'écrasement est explicite dans le nom de
-    l'outil (jamais de perte de données silencieuse).
+    l'outil. L'ANCIEN contenu est VERSIONNÉ ( mcp_file_versions ) —
+    jamais de perte de données silencieuse.
     """
-    target = _resolve(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
+    rel = _validate(path)
     _guard_size(content)
-    target.write_text(content, encoding="utf-8")
-    return f"Écrit : {path} ({len(content.encode('utf-8'))} octets)"
+    try:
+        size, _file_id, existed = db_write_file(_USER_ID, rel, content)
+    except McpFsError as exc:
+        raise ValueError(str(exc)) from exc
+    verb = "Remplacé ( ancienne version conservée )" if existed else "Créé"
+    return f"{verb} : {rel} ({size} octets)"
 
 
 @mcp.tool()
 def read_file(path: str) -> str:
     """Lit un fichier texte (tronqué à la capacité contexte).
 
-    Refuse les fichiers absents ou binaires — un retour structuré reste
-    préférable à une erreur silencieuse.
+    Refuse les fichiers absents — un retour structuré reste préférable
+    à une erreur silencieuse.
     """
-    target = _resolve(path)
-    if not target.exists():
-        raise FileNotFoundError(f"'{path}' introuvable")
-    if target.is_dir():
-        raise ValueError(f"'{path}' est un répertoire — list_files pour le contenu")
-    raw = target.read_text(encoding="utf-8", errors="strict")
+    rel = _validate(path)
+    try:
+        raw = db_read_file(_USER_ID, rel)
+    except McpFsError as exc:
+        raise FileNotFoundError(str(exc)) from exc
     if len(raw) > _READ_CAP:
         raw = raw[:_READ_CAP] + f"\n…[tronqué — {len(raw) - _READ_CAP} caractères restants]"
     return raw
@@ -149,33 +165,48 @@ def read_file(path: str) -> str:
 
 @mcp.tool()
 def list_files(dir: str = ".") -> str:
-    """Liste les fichiers (récursif, borné) sous ce répertoire de la racine.
+    """Liste les fichiers (récursif, borné) sous ce répertoire.
 
     Retourne un listing texte : un chemin par ligne, dossiers suffixés '/'.
+    Les répertoires n'existent pas en base : ils sont IMPLICITES dans les
+    chemins ( "devoir/main.py" ⇒ dossier "devoir" ).
     """
-    base = _ROOT / Path(dir) if dir and dir != "." else _ROOT
-    if dir and dir != ".":
-        normalized = Path(dir)
-        if any(part == ".." for part in normalized.parts):
+    prefix = dir or "."
+    if prefix != ".":
+        # Mêmes sécurités que _validate, sans la contrainte d'extension
+        # ( on liste un répertoire, pas un fichier ).
+        if "\x00" in prefix:
+            raise ValueError("caractère nul interdit")
+        if PurePosixPath(prefix).is_absolute() or prefix.startswith("~"):
+            raise ValueError("chemin absolu ou ~ interdit")
+        if any(part == ".." for part in PurePosixPath(prefix).parts):
             raise ValueError("traversal (..) interdit")
-        base = (_ROOT / normalized).resolve()
-        if _ROOT not in base.parents and base != _ROOT:
-            raise ValueError("cible hors de la racine")
-    if not base.exists():
-        raise FileNotFoundError(f"'{dir}' introuvable")
 
-    entries: list[str] = []
-    for child in sorted(base.rglob("*")):
-        rel = child.relative_to(_ROOT).as_posix()
-        entries.append(f"{rel}/" if child.is_dir() else rel)
-        if len(entries) >= 200:  # borne : pas de flooding du contexte
-            entries.append("…[liste tronquée à 200 entrées]")
-            break
-    if not entries:
+    try:
+        paths = db_list_files(_USER_ID, prefix, limit=_LIST_CAP)
+    except McpFsError as exc:
+        raise FileNotFoundError(str(exc)) from exc
+
+    if not paths:
         return "(vide)"
-    return "\n".join(entries)
+
+    # Reconstruit l'arbre : un dossier est tout préfixe de chemin présent.
+    dirs: set[str] = set()
+    entries: list[str] = []
+    for p in paths:
+        parts = PurePosixPath(p).parts
+        for i in range(1, len(parts)):
+            dirs.add("/".join(parts[:i]))
+        entries.append(p)
+        # on affiche aussi les dossiers connus sous ce préfixe
+    # trie : dossiers d'abord ( suffixe '/' ), puis fichiers
+    lines = sorted(f"{d}/" for d in dirs) + sorted(entries)
+    if len(paths) >= _LIST_CAP:
+        lines.append(f"…[liste tronquée à {_LIST_CAP} entrées]")
+    if not lines:
+        return "(vide)"
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
-    _ROOT.mkdir(parents=True, exist_ok=True)
     mcp.run()

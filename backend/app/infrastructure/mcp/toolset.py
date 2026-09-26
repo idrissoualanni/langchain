@@ -49,6 +49,7 @@ async def get_mcp_tools(workflow: str, user_id: str = "") -> list[Any]:
         run_env: dict[str, str] = {}
         if user_id:
             run_env["MCP_FS_USER_ID"] = str(user_id)
+            run_env["MCP_CAL_USER_ID"] = str(user_id)
         connections[cfg.name] = {
             "command": cfg.command,
             "args": list(cfg.args),

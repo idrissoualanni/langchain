@@ -209,37 +209,26 @@ def _semantic_relevance(
         return None
 
 
-def get_store() -> SqliteStore:
-    """Singleton SqliteStore — initialisé au startup, thread-safe.
+def get_store():
+    """Singleton store mémoire longue durée — thread-safe.
 
-    Tous les accès (get/put) passent par _store_lock : la connexion
-    sqlite3 partagée ne supporte pas les transactions concurrentes
-    depuis plusieurs threads executor ("cannot start a transaction
-    within a transaction").
+    Délègue au pivot ( app/infrastructure/database/persistence ) :
+    PostgresStore sur Neon si DATABASE_URL, sinon SqliteStore local.
+    La signature ( get/put ) est IDENTIQUE — aucun appelant à changer.
     """
     global _store
     if _store is not None:
         return _store
     with _store_lock:
         if _store is None:
-            conn = sqlite3.connect(
-                LONG_TERM_DB_PATH, check_same_thread=False
+            from app.infrastructure.database.persistence import (
+                get_persistent_store,
             )
-            # CRITIQUE : le SqliteStore gère ses propres BEGIN/COMMIT
-            # explicites. Le mode auto-transaction par défaut de Python
-            # (isolation_level="") laisse une transaction ouverte après
-            # setup() → "cannot start a transaction within a transaction"
-            # sur chaque put/get. Mode autocommit = fix.
-            conn.isolation_level = None
-            _store = SqliteStore(conn)
-            # setup() = migrations (tables/index) — requis avant usage
-            _store.setup()
+
+            _store = get_persistent_store()
             log_event(
                 "MEMORY_STORE_INIT",
-                message=(
-                    f"SqliteStore long-term memory on "
-                    f"{LONG_TERM_DB_PATH} | namespace={NAMESPACE_LABEL}"
-                ),
+                message="Long-term memory store via le pivot persistence",
             )
     return _store
 

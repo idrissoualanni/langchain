@@ -141,25 +141,45 @@ def _postgres_url(db_url: str) -> str:
     return db_url
 
 
+def _is_neon_pooler(db_url: str) -> bool:
+    """True si l'URL pointe sur le POOLER Neon ( ``-pooler.`` dans le host ).
+
+    Le pooler ( PgBouncer en mode transaction ) refuse certains paramètres
+    de startup — notamment idle_in_transaction_session_timeout — avec
+    "unsupported startup parameter in options". Il faut alors soit omettre
+    le paramètre, soit pointer sur le host direct ( non poolé ).
+    """
+    try:
+        return "-pooler." in (db_url or "")
+    except TypeError:
+        return False
+
+
 def _build_engine(db_url: str | None, sqlite_path) -> Engine:
     """Construit l'engine portable (Postgres si DATABASE_URL, sinon SQLite)."""
     if USE_POSTGRES and db_url:
+        # Neon coupe une session restée inactive en transaction
+        # ( idle_in_transaction_session_timeout ). get_conn() garde la
+        # connexion thread-local OUVERTE entre deux requêtes : la 1re
+        # SELECT démarre implicitement une transaction qui reste
+        # "idle in transaction" jusqu'au commit suivant — sous un
+        # service Render peu sollicité, Neon la tue et la requête
+        # d'après arrive sur une connexion morte → 500.
+        # idle_in_transaction_session_timeout=0 : pas de limite de
+        # côté serveur ( on s'appuie sur pool_pre_ping pour la
+        # robustesse ).
+        # ⚠️ Le POOLER Neon rejette ce paramètre au startup — on ne le
+        # passe QUE sur un host non poolé ; sinon on s'en remet à
+        # pool_pre_ping seul.
+        connect_args: dict[str, object] = {}
+        if not _is_neon_pooler(db_url):
+            connect_args["options"] = (
+                "-c idle_in_transaction_session_timeout=0"
+            )
         return create_engine(
             _postgres_url(db_url),
             pool_pre_ping=True,
-            # Neon coupe une session restée inactive en transaction
-            # ( idle_in_transaction_session_timeout ). get_conn() garde la
-            # connexion thread-local OUVERTE entre deux requêtes : la 1re
-            # SELECT démarre implicitement une transaction qui reste
-            # "idle in transaction" jusqu'au commit suivant — sous un
-            # service Render peu sollicité, Neon la tue et la requête
-            # d'après arrive sur une connexion morte → 500.
-            # idle_in_transaction_session_timeout=0 : pas de limite de
-            # côté serveur ( on s'appuie sur pool_pre_ping + le bail
-            # ci-dessous pour la robustesse ).
-            connect_args={
-                "options": "-c idle_in_transaction_session_timeout=0",
-            },
+            connect_args=connect_args,
         )
     engine = create_engine(
         _sqlite_url(sqlite_path),
