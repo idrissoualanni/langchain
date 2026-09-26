@@ -6,8 +6,8 @@
 // frontend : le user se connecte avec un nom , le backend le
 // provisionne , le token est stocké en localStorage.
 //
-// En mode clerk ( production ) ce module est inerte : getDevAuth()
-// retourne null et l'auth passe par Clerk.
+// En mode dev ( VITE_AUTH_MODE=dev ) ce module est inerte :
+// getDevAuth() retourne null et l'auth passe par Neon Auth.
 const DEV_KEY = 'dsh_dev_auth';
 
 export interface DevSession {

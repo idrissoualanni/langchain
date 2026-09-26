@@ -23,7 +23,7 @@ import { CodeAnalysisPanel } from '../components/chat/CodeAnalysisPanel';
 
 export function MemoryPage() {
   const { currentThread } = useSelection();
-  // Mission Identité : user = SESSION ( Clerk/dev )
+  // Mission Identité : user = SESSION ( Neon Auth/dev )
   const { internal: currentUser, signedIn } = useCurrentUser();
   const {
     state,

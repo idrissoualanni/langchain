@@ -55,7 +55,7 @@ export function SettingsDataPage() {
           </SurfaceHeader>
           <SurfaceBody className="space-y-2">
             <p className="text-muted-foreground text-sm">
-              L’identité (nom, email) est fournie par Clerk. Le backend
+              L’identité (nom, email) est fournie par Neon Auth. Le backend
               ne stocke pas votre email : il ne conserve que les données
               nécessaires à l’application.
             </p>

@@ -34,7 +34,7 @@ function AgentResponsePart({
 }: {
   data: AgentResponse;
 }) {
-  // Mission Identité : user = SESSION ( Clerk/dev )
+  // Mission Identité : user = SESSION ( Neon Auth/dev )
   const { internal: currentUser, signedIn } = useCurrentUser();
   const sendMessage = useAssistantStore((s) => s.sendMessage);
   const currentThreadId = useAssistantStore((s) => s.currentThreadId);

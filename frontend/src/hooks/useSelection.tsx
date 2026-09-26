@@ -1,7 +1,7 @@
 // Contexte de sélection — thread courant du contexte actif
 //
 // Mission Cleanup : la PARTIE UTILISATEUR a été supprimée (l'identité
-// vient de Clerk/useCurrentUser — jamais du localStorage, cf. §6).
+// vient de useCurrentUser — jamais du localStorage, cf. §6).
 // Ne reste que currentThread, lu par MemoryPage pour afficher le
 // contexte actif ; la valeur est écrite localement par
 // assistant-ui/store.ts (sélection uniquement, source de vérité = backend).

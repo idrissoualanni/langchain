@@ -1,7 +1,8 @@
 // /settings/profile — informations modifiables réellement supportées.
 //
 // Le backend accepte PUT /api/users/{id}/profile avec { name, description }.
-// Le nom Clerk (identité) n'est PAS modifiable ici : il est géré par Clerk.
+// Le nom d'identité (Neon Auth) n'est pas modifiable ici : il est géré
+// côté fournisseur d'identité.
 import { useEffect, useState } from 'react';
 import { Check, Loader2, Save } from 'lucide-react';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
