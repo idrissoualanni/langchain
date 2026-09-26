@@ -60,17 +60,16 @@ function BrandPanel() {
         </p>
       </div>
 
-      {/* Index des modules : encodage réel du contenu, pas de déco. */}
+      {/* Index des modules. Pas de numérotation : Assistant / Learning /
+          Mémoire ne forment pas une séquence d'usage — l'ordre ne porte
+          aucune information, les marqueurs 01/02/03 étaient de la déco. */}
       <div className="relative z-10 flex flex-col gap-3">
         {[
-          ['01', 'Assistant', 'Raisonnement guidé, jamais la réponse crue'],
-          ['02', 'Learning', 'Suivi de progression par matière'],
-          ['03', 'Mémoire', 'Rappelle ce que tu as déjà appris'],
-        ].map(([n, titre, desc]) => (
-          <div key={n} className="flex items-baseline gap-3">
-            <span className="font-mono text-[10px] tabular-nums text-muted-foreground/70">
-              {n}
-            </span>
+          ['Assistant', 'Raisonnement guidé, jamais la réponse crue'],
+          ['Learning', 'Suivi de progression par matière'],
+          ['Mémoire', 'Rappelle ce que tu as déjà appris'],
+        ].map(([titre, desc]) => (
+          <div key={titre} className="flex items-baseline gap-3">
             <span className="text-[13px] font-medium text-foreground">
               {titre}
             </span>
@@ -90,6 +89,11 @@ function BrandPanel() {
  * - panneau de marque à gauche ( desktop )
  * - zone formulaire centrée à droite, largeur max contrôlée
  * - animation d'entrée en cascade pour les enfants directs
+ *
+ * Hauteur : ce composant ne claim plus min-h-svh — il REMPLIT le
+ * PublicLayout ( flex ligne → l'enfant s'étire ). Claimer sa propre
+ * hauteur minimum le faisait déborder du parent, qui tronquait 40 px de
+ * formulaire ( header du shell ) et déclenchait un scroll imbriqué.
  */
 export function AuthLayout({
   children,
@@ -97,12 +101,16 @@ export function AuthLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-h-svh bg-background">
+    <div className="flex h-full min-h-0 bg-background">
       <BrandPanel />
 
-      <main className="relative flex flex-1 items-center justify-center overflow-y-auto px-5 py-10 sm:px-8">
+      {/* Colonne scrollable : le centrage passe par my-auto sur la carte
+          ( pas items-center ) — un enfant centré qui déborde voit son
+          haut devenir inatteignable dans un conteneur scrollable. */}
+      <main className="relative flex flex-1 flex-col overflow-y-auto px-5 pt-20 pb-10 sm:px-8 sm:pt-16">
         {/* Marque compacte visible uniquement sur mobile ( le panneau
-            gauche est masqué sous lg ). */}
+            gauche est masqué sous lg ). Le padding-top de <main> lui
+            réserve sa bande : jamais de chevauchement avec le formulaire. */}
         <div className="absolute left-5 top-5 flex items-center gap-2.5 lg:hidden sm:left-8 sm:top-8">
           <span
             aria-hidden
@@ -117,7 +125,7 @@ export function AuthLayout({
           initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="w-full max-w-[26rem]"
+          className="my-auto w-full max-w-[26rem]"
         >
           {children}
         </motion.div>

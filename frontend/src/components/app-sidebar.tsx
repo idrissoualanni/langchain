@@ -208,7 +208,7 @@ export function AppSidebar() {
           )}
           <span
             className={cn(
-              'text-muted-foreground/70 ml-auto shrink-0 font-mono text-[10px]'
+              'text-muted-foreground ml-auto shrink-0 font-mono text-[10px]'
             )}
           >
             {internal?.role === 'admin' ? 'admin' : 'user'}

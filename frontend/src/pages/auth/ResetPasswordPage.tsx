@@ -9,7 +9,7 @@
 
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, Loader2 } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, Loader2, X } from 'lucide-react';
 
 import { authClient } from '../../lib/neon';
 import { refreshNeonSession } from '../../auth/NeonTokenBridge';
@@ -32,11 +32,13 @@ export function ResetPasswordPage() {
   const token = params.get('token');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState<Status>(token ? 'form' : 'error');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const valid = RULES.every((r) => r.test(password));
+  const satisfied = RULES.filter((r) => r.test(password)).length;
   const mismatch = confirm.length > 0 && password !== confirm;
   const disabled = busy || !valid || !!mismatch;
 
@@ -136,12 +138,32 @@ export function ResetPasswordPage() {
             <Label htmlFor="password">Mot de passe</Label>
             <Input
               id="password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
               required
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={
+                showPassword
+                  ? 'Masquer le mot de passe'
+                  : 'Afficher le mot de passe'
+              }
+              aria-pressed={showPassword}
+              className="text-muted-foreground hover:text-foreground -mt-7 ml-auto flex items-center gap-1.5 self-end rounded-[var(--radius-control)] py-1 pr-3 text-[11px] transition-colors"
+            >
+              {showPassword ? (
+                <EyeOff className="size-3.5" />
+              ) : (
+                <Eye className="size-3.5" />
+              )}
+              {showPassword ? 'Masquer' : 'Afficher'}
+            </button>
+            {/* UNE seule région live ( le résumé ) : un aria-live par
+                <li> multipliait les annonces à chaque frappe. */}
             <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5 pt-0.5">
               {RULES.map((r) => {
                 const ok = r.test(password);
@@ -149,17 +171,12 @@ export function ResetPasswordPage() {
                   <li
                     key={r.label}
                     className="flex items-center gap-1.5 text-[11px]"
-                    aria-live="polite"
                   >
-                    <span
-                      className={
-                        ok
-                          ? 'text-foreground'
-                          : 'text-muted-foreground'
-                      }
-                    >
-                      {ok ? '✓' : '○'}
-                    </span>
+                    {ok ? (
+                      <CheckCircle2 className="size-3 shrink-0 text-success" />
+                    ) : (
+                      <X className="size-3 shrink-0 text-muted-foreground/50" />
+                    )}
                     <span
                       className={
                         ok
@@ -173,13 +190,21 @@ export function ResetPasswordPage() {
                 );
               })}
             </ul>
+            <p
+              role="status"
+              aria-live="polite"
+              className="text-[11px] text-muted-foreground"
+            >
+              {satisfied} exigence{satisfied > 1 ? 's' : ''} sur{' '}
+              {RULES.length} remplies
+            </p>
           </div>
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="confirm">Confirmer le mot de passe</Label>
             <Input
               id="confirm"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               autoComplete="new-password"

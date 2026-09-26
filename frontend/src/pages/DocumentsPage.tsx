@@ -343,7 +343,7 @@ export function DocumentsPage() {
                 <FileUp size={13} className="text-live" strokeWidth={1.8} />
                 Ajouter un document
               </CardTitle>
-              <span className="font-mono text-[10px] text-muted-foreground/60">
+              <span className="font-mono text-[10px] text-muted-foreground">
                 md · txt · rst · pdf (max 2 Mo) · glisser-déposer
               </span>
             </CardHeader>
@@ -369,14 +369,14 @@ export function DocumentsPage() {
                 <div className="flex items-center gap-2 rounded-md border border-live/30 bg-live/5 px-3 py-2 font-mono text-[11px] text-live">
                   <FileText size={13} className="shrink-0" strokeWidth={1.8} />
                   <span className="truncate">{fileName}</span>
-                  <span className="text-muted-foreground/70">
+                  <span className="text-muted-foreground">
                     · PDF encodé · {pasted.length} caractères base64 · contenu
                     indexé côté serveur
                   </span>
                   <button
                     type="button"
                     onClick={onClearPdf}
-                    className="ml-auto rounded p-1 text-muted-foreground/70 transition-colors hover:text-error"
+                    className="ml-auto rounded p-1 text-muted-foreground transition-colors hover:text-error"
                     title="Retirer le fichier PDF"
                   >
                     <X className="h-3.5 w-3.5" />
@@ -495,10 +495,10 @@ export function DocumentsPage() {
                             {h.filename || h.doc_id}
                           </span>
                           <details className="ml-auto">
-                            <summary className="cursor-pointer list-none font-mono text-[9px] text-muted-foreground/60 hover:text-foreground">
+                            <summary className="cursor-pointer list-none font-mono text-[9px] text-muted-foreground hover:text-foreground">
                               scores
                             </summary>
-                            <span className="font-mono text-[9px] text-muted-foreground/60">
+                            <span className="font-mono text-[9px] text-muted-foreground">
                               {h.relevance.toFixed(3)} · lex {h.lexical_score.toFixed(2)} · sem{' '}
                               {h.semantic_score.toFixed(2)}
                             </span>
@@ -560,14 +560,14 @@ export function DocumentsPage() {
                         >
                           <FileText
                             size={15}
-                            className="shrink-0 text-muted-foreground/50"
+                            className="shrink-0 text-muted-foreground"
                             strokeWidth={1.6}
                           />
                           <div className="min-w-0 flex-1">
                             <div className="truncate font-mono text-xs font-medium text-foreground/90">
                               {k.name}
                             </div>
-                            <div className="font-mono text-[10px] text-muted-foreground/60">
+                            <div className="font-mono text-[10px] text-muted-foreground">
                               {k.subject_id} · {k.scope} ·{' '}
                               {k.enabled ? 'activée' : 'désactivée'}
                             </div>
@@ -620,14 +620,14 @@ export function DocumentsPage() {
                     >
                       <FileText
                         size={15}
-                        className="shrink-0 text-muted-foreground/50"
+                        className="shrink-0 text-muted-foreground"
                         strokeWidth={1.6}
                       />
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-mono text-xs font-medium text-foreground/90">
                           {d.filename}
                         </div>
-                        <div className="font-mono text-[10px] text-muted-foreground/60">
+                        <div className="font-mono text-[10px] text-muted-foreground">
                           {d.chunk_count} extrait(s) · {formatBytes(d.size_bytes)}{' '}
                           · {d.created_at?.replace('T', ' ').slice(0, 16)}
                         </div>
@@ -638,7 +638,7 @@ export function DocumentsPage() {
                         <DropdownMenuTrigger asChild>
                           <button
                             type="button"
-                            className="rounded p-1 text-muted-foreground/50 opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                            className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
                             title="Actions sur ce document"
                             aria-label={`Actions sur ${d.filename}`}
                           >

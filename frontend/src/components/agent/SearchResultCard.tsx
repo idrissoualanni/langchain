@@ -43,7 +43,7 @@ export function SearchResultCard({ data }: { data: SearchData }) {
                 />
               )}
             </div>
-            <div className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground/70">
+            <div className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
               {r.source}
               {r.url ? ` · ${r.url}` : ''}
             </div>

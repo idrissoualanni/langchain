@@ -1,6 +1,6 @@
-// /profile — identité (Clerk) + données applicatives (backend) +
+// /profile — identité (Neon Auth) + données applicatives (backend) +
 // résumé d'apprentissage. Le backend reste la source de vérité des
-// données applicatives ; Clerk reste la source d'identité.
+// données applicatives ; Neon Auth reste la source d'identité.
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -118,8 +118,8 @@ export function ProfilePage() {
                   <Mail size={12} /> {email}
                 </div>
               ) : (
-                <div className="text-muted-foreground/70 mt-0.5 text-[12px]">
-                  Email non disponible (mode {devMode ? 'dev' : 'Clerk'}).
+                <div className="text-muted-foreground mt-0.5 text-[12px]">
+                  Email non disponible (mode {devMode ? 'dev' : 'Neon Auth'}).
                 </div>
               )}
             </div>
@@ -171,7 +171,7 @@ export function ProfilePage() {
               />
               <KeyValue
                 label="Fournisseur d’identité"
-                value={devMode ? 'dev (session locale)' : 'Clerk'}
+                value={devMode ? 'dev (session locale)' : 'Neon Auth'}
               />
             </SurfaceBody>
           </Surface>

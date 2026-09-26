@@ -171,7 +171,7 @@ const JsonBlock: FC<{ data: unknown; maxHeight?: string }> = ({
 );
 
 const SectionLabel: FC<{ children: ReactNode }> = ({ children }) => (
-  <div className="mb-1.5 font-mono text-[9px] font-semibold tracking-[0.15em] text-muted-foreground/70 uppercase">
+  <div className="mb-1.5 font-mono text-[9px] font-semibold tracking-[0.15em] text-muted-foreground uppercase">
     {children}
   </div>
 );
@@ -302,7 +302,7 @@ const ActivityRow: FC<{
           {status.label}
         </Badge>
       </div>
-      <div className="text-muted-foreground/80 mt-1 flex items-center gap-2 pl-6.5 text-[10px] font-medium tracking-wide">
+      <div className="text-muted-foreground mt-1 flex items-center gap-2 pl-6.5 text-[10px] font-medium tracking-wide">
         {KIND_LABELS[activity.type]}
       </div>
       {progress !== null && (

@@ -129,7 +129,7 @@ export function EmptyState({
         <Icon
           size={28}
           strokeWidth={1.6}
-          className="text-muted-foreground/40 mb-3"
+          className="text-muted-foreground mb-3"
           aria-hidden
         />
       )}
@@ -206,7 +206,7 @@ export function StatTile({
         {value}
       </div>
       {hint && (
-        <div className="text-muted-foreground/70 mt-0.5 font-mono text-[10px]">
+        <div className="text-muted-foreground mt-0.5 font-mono text-[10px]">
           {hint}
         </div>
       )}

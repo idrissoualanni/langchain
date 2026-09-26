@@ -50,7 +50,7 @@ export function DropZone({ onFiles, accept, maxBytes, disabled, className }: Dro
       <p className="mt-1 font-mono text-[11px] text-muted-foreground">
         ou cliquez pour parcourir · txt, md, pdf (max {maxBytes ? `${(maxBytes / 1_000_000).toFixed(0)} Mo` : '2 Mo'})
       </p>
-      {accept && <p className="mt-1 font-mono text-[10px] text-muted-foreground/60">{accept}</p>}
+      {accept && <p className="mt-1 font-mono text-[10px] text-muted-foreground">{accept}</p>}
     </div>
   );
 }

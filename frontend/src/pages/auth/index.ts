@@ -4,6 +4,7 @@
 // et les anciens chemins src/auth/*LoginPage.tsx restent compatibles
 // via des wrappers de redirection.
 export { AuthLayout } from './AuthLayout';
+export { PublicLayout } from './PublicLayout';
 export { SignInPage } from './SignInPage';
 export { SignUpPage } from './SignUpPage';
 export { VerifyEmailPage } from './VerifyEmailPage';

@@ -1,16 +1,3 @@
-// App — layout + router + runtime Assistant UI
-//
-// Mission Identité : l'identité vient de Neon Auth ( ou dev ) — PLUS de
-// UserSelector ; routes protégées derrière Protected / session dev.
-// Mission Cleanup : /chat supprimé → redirect vers /assistant.
-// Mission Pages d'Auth : /sign-in, /sign-up, /verify-email,
-// /forgot-password, /reset-password sont des pages DÉDIÉES ( finie
-// l'hybride sign-in/sign-up ). Catch-all → page 404.
-// Refonte visuelle : le runtime Assistant UI est monté au niveau du
-// shell pour que le ThreadList officiel vive dans le rail unique
-// (Sidebar) — cf. brief §15/§16.
-// Mission Pages Utilisateur : navigation Assistant / Learning /
-// Profile / Settings (+ /logs réservé aux admins).
 import {
   Navigate,
   Route,
@@ -31,13 +18,13 @@ import { AssistantPage } from './pages/AssistantPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import {
   DevLoginPage,
+  ForgotPasswordPage,
+  PublicLayout,
+  ResetPasswordPage,
   SignInPage,
   SignUpPage,
   VerifyEmailPage,
-  ForgotPasswordPage,
-  ResetPasswordPage,
 } from './pages/auth';
-import { NeonTokenBridge } from './auth/NeonTokenBridge';
 import { AdminGate } from './auth/AdminGate';
 import { useCurrentUser } from './hooks/useCurrentUser';
 import { SelectionProvider } from './hooks/useSelection';
@@ -104,6 +91,33 @@ function Protected({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/** Route PUBLIQUE :reserved aux visiteurs sans session.
+ *
+ *  Symétrique de Protected — un utilisateur déjà connecté n'a rien à
+ *  faire sur /sign-in ( il ne pourrait plus s'y déconnecter ). Avant ce
+ *  garde, un utilisateur connecté qui ouvrait /sign-in restait coincé
+ *  sur le formulaire.
+ */
+function RequireAnonymous({ children }: { children: React.ReactNode }) {
+  const { signedIn } = useCurrentUser();
+
+  if (signedIn) {
+    return <Navigate to="/assistant" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+/** Une page d'authentification : layout public ( ni sidebar ni ⌘K )
+ *  + garde RequireAnonymous. */
+function PublicRoute({ children }: { children: React.ReactNode }) {
+  return (
+    <PublicLayout>
+      <RequireAnonymous>{children}</RequireAnonymous>
+    </PublicLayout>
+  );
+}
+
 function PageTitle() {
   const { pathname } = useLocation();
   const map: Record<string, string> = {
@@ -142,7 +156,7 @@ function AppShell() {
 
       <SidebarInset className="min-w-0 overflow-hidden">
         <header className="border-border flex h-10 shrink-0 items-center gap-2 border-b px-3">
-          <SidebarTrigger aria-label="Basculer la navigation" aria-expanded={undefined} />
+          <SidebarTrigger aria-label="Basculer la navigation" />
           <PageTitle />
           <span className="ml-auto hidden font-mono text-[10px] text-muted-foreground sm:inline">⌘K</span>
         </header>
@@ -152,17 +166,12 @@ function AppShell() {
             <Routes>
           <Route index element={<Navigate to="/assistant" replace />} />
 
-          {/* Auth — pages DÉDIÉES ( fin de l'hybride sign-in/sign-up ).
-              Routes PUBLIQUES : pas de Protected ( sinon un utilisateur
-              connecté ne pourrait plus se déconnecter ). */}
-          <Route path="/dev-login" element={<DevLoginPage />} />
-          <Route path="/sign-in" element={<SignInPage />} />
-          <Route path="/sign-up" element={<SignUpPage />} />
-          <Route path="/verify-email" element={<VerifyEmailPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          {/* Auth : plus ici — l'arbre PUBLIC est monté avant le shell
+              ( voir AppRoutes ). Une page de connexion n'a rien à faire
+              dans une sidebar dont le ThreadList appelle l'API. */}
 
           <Route
+
             path="/assistant"
             element={
               <Protected>
@@ -344,14 +353,81 @@ function AppRuntime() {
   );
 }
 
+/** Aiguillage racine : l'arbre PUBLIC est déclaré EN PREMIER, tout le
+ *  reste ( y compris les 404 ) tombe dans le shell applicatif.
+ *
+ *  Avant : ces routes vivaient dans le <Routes> imbriqué de AppShell, donc
+ *  dans SidebarProvider + SidebarInset — la sidebar ( et son ThreadList
+ *  qui interroge l'API ) ainsi que le header et la CommandPalette ⌘K
+ *  s'affichaient sur /sign-in, et useHealth() polled /api/health pour un
+ *  visiteur anonyme. */
+function AppRoutes() {
+  return (
+    <Routes>
+      {/* Auth — pages DÉDIÉES ( fin de l'hybride sign-in-sign-up ).
+          Routes PUBLIQUES : pas de Protected ( sinon un utilisateur
+          connecté ne pourrait plus se déconnecter ). */}
+      <Route
+        path="/dev-login"
+        element={
+          <PublicRoute>
+            <DevLoginPage />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/sign-in"
+        element={
+          <PublicRoute>
+            <SignInPage />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/sign-up"
+        element={
+          <PublicRoute>
+            <SignUpPage />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/verify-email"
+        element={
+          <PublicRoute>
+            <VerifyEmailPage />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/forgot-password"
+        element={
+          <PublicRoute>
+            <ForgotPasswordPage />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/reset-password"
+        element={
+          <PublicRoute>
+            <ResetPasswordPage />
+          </PublicRoute>
+        }
+      />
+
+      {/* Application : sidebar, header, ⌘K, runtime Assistant UI. */}
+      <Route path="/*" element={<AppRuntime />} />
+    </Routes>
+  );
+}
+
 export default function App() {
   return (
     <Router>
-      <NeonTokenBridge>
-        <SelectionProvider>
-          <AppRuntime />
-        </SelectionProvider>
-      </NeonTokenBridge>
+      <SelectionProvider>
+        <AppRoutes />
+      </SelectionProvider>
     </Router>
   );
 }

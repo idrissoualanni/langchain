@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CheckCircle2, Loader2, MailCheck, X } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, Loader2, MailCheck, X } from 'lucide-react';
 
 import { authClient } from '../../lib/neon';
 import { Button } from '../../components/ui/button';
@@ -37,6 +37,7 @@ export function SignUpPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<Step>('form');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -47,6 +48,7 @@ export function SignUpPage() {
   const navigate = useNavigate();
 
   const valid = RULES.every((r) => r.test(password));
+  const satisfied = RULES.filter((r) => r.test(password)).length;
   const disabled = busy || !email.trim() || !valid;
 
   // Démarre le compte à rebours de renvoi.
@@ -185,7 +187,7 @@ export function SignUpPage() {
             Créer un compte
           </h1>
           <p className="text-[13px] text-muted-foreground">
-           inscription à Agent Tutor.
+            Crée ton compte et accède à ton tuteur IA personnel.
           </p>
         </div>
 
@@ -221,13 +223,34 @@ export function SignUpPage() {
             <Label htmlFor="password">Mot de passe</Label>
             <Input
               id="password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
               required
             />
-            {/* Exigences : validées en temps réel, pas de liste morte. */}
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={
+                showPassword
+                  ? 'Masquer le mot de passe'
+                  : 'Afficher le mot de passe'
+              }
+              aria-pressed={showPassword}
+              className="text-muted-foreground hover:text-foreground -mt-7 ml-auto flex items-center gap-1.5 self-end rounded-[var(--radius-control)] py-1 pr-3 text-[11px] transition-colors"
+            >
+              {showPassword ? (
+                <EyeOff className="size-3.5" />
+              ) : (
+                <Eye className="size-3.5" />
+              )}
+              {showPassword ? 'Masquer' : 'Afficher'}
+            </button>
+            {/* Exigences : validées en temps réel, pas de liste morte.
+                UNE seule région live ( le résumé ci-dessous ) : un
+                aria-live par <li> produisait quatre annonces à chaque
+                frappe clavier. */}
             <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5 pt-0.5">
               {RULES.map((r) => {
                 const ok = r.test(password);
@@ -235,7 +258,6 @@ export function SignUpPage() {
                   <li
                     key={r.label}
                     className="flex items-center gap-1.5 text-[11px] transition-colors"
-                    aria-live="polite"
                   >
                     {ok ? (
                       <CheckCircle2 className="size-3 shrink-0 text-success" />
@@ -255,6 +277,14 @@ export function SignUpPage() {
                 );
               })}
             </ul>
+            <p
+              role="status"
+              aria-live="polite"
+              className="text-[11px] text-muted-foreground"
+            >
+              {satisfied} exigence{satisfied > 1 ? 's' : ''} sur{' '}
+              {RULES.length} remplies
+            </p>
           </div>
 
           {err && (
@@ -267,6 +297,16 @@ export function SignUpPage() {
             {busy && <Loader2 className="animate-spin" />}
             {busy ? 'Inscription…' : 'S\'inscrire'}
           </Button>
+
+          {/* Le bouton reste grisé tant que le mot de passe est invalide :
+              on le dit, sinon l'utilisateur ne sait pas quoi corriger. */}
+          {!busy && disabled && (
+            <p className="-mt-2 text-center text-[11px] text-muted-foreground">
+              {!email.trim()
+                ? 'Renseigne ton email et un mot de passe valide.'
+                : 'Satisfais les 4 exigences de mot de passe.'}
+            </p>
+          )}
         </form>
 
         <p className="text-center text-[13px] text-muted-foreground">

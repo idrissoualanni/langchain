@@ -69,7 +69,7 @@ function LogLine({ entry }: { entry: LogEntry }) {
       transition={{ duration: 0.12 }}
       className="flex items-baseline gap-3 whitespace-nowrap px-4 py-[3px] font-mono text-[11.5px] leading-[1.5] hover:bg-muted/60"
     >
-      <span className="shrink-0 text-muted-foreground/50">
+      <span className="shrink-0 text-muted-foreground">
         {entry.timestamp?.split('T')[1]?.slice(0, 8) ?? '--:--:--'}
       </span>
       <span
@@ -94,7 +94,7 @@ function LogLine({ entry }: { entry: LogEntry }) {
       )}
       {entry.thread_id && (
         <span
-          className="hidden shrink-0 text-muted-foreground/40 md:inline"
+          className="hidden shrink-0 text-muted-foreground md:inline"
           title={entry.thread_id}
         >
           {entry.thread_id.slice(0, 8)}
@@ -185,7 +185,7 @@ export function LogsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="rechercher…"
-              className="h-8 w-44 rounded-lg border border-border bg-muted pl-7 pr-3 font-mono text-[11px] text-foreground placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-live/50"
+              className="h-8 w-44 rounded-lg border border-border bg-muted pl-7 pr-3 font-mono text-[11px] text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-live/50"
             />
           </div>
 
@@ -249,7 +249,7 @@ export function LogsPage() {
       >
         <AnimatePresence initial={false}>
           {filtered.length === 0 ? (
-            <div className="py-12 text-center font-mono text-[11px] text-muted-foreground/50">
+            <div className="py-12 text-center font-mono text-[11px] text-muted-foreground">
               {paused
                 ? '⏸ en pause — les événements arrivent en arrière-plan'
                 : "en attente d'événements…"}
@@ -266,13 +266,13 @@ export function LogsPage() {
       </div>
 
       {/* Pied */}
-      <div className="flex items-center justify-between border-t border-border bg-card px-6 py-1.5 font-mono text-[10px] text-muted-foreground/70">
+      <div className="flex items-center justify-between border-t border-border bg-card px-6 py-1.5 font-mono text-[10px] text-muted-foreground">
         <span>
           {filtered.length} / {logs.length} lines
         </span>
         <span className="flex items-center gap-2">
           {paused ? '⏸ paused' : '● live'}
-          <span className="text-muted-foreground/40">logs/agent.log</span>
+          <span className="text-muted-foreground">logs/agent.log</span>
         </span>
       </div>
     </div>

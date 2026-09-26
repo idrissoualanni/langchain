@@ -35,8 +35,10 @@ export function VerifyEmailPage() {
   const [email, setEmail] = useState(initialEmail);
   const [code, setCode] = useState(initialOtp);
   const [status, setStatus] = useState<Status>(
-    // Code déjà fourni par le lien → on tente la validation directe.
-    initialOtp ? 'verifying' : 'idle'
+    // Le lien mail fournit les DEUX params. Sans l'email ( /verify-email
+    // ?otp=CODE seul ) l'effet ne démarre rien : initialiser
+    // 'verifying' dans ce cas figeait l'écran sur un spinner éternel.
+    initialOtp && initialEmail ? 'verifying' : 'idle'
   );
   const [err, setErr] = useState<string | null>(null);
   const { signedIn } = useCurrentUser();

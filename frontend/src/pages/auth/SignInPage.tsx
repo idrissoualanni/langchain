@@ -8,7 +8,7 @@
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 import { authClient } from '../../lib/neon';
 import { refreshNeonSession } from '../../auth/NeonTokenBridge';
@@ -20,6 +20,7 @@ import { AuthLayout } from './AuthLayout';
 export function SignInPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -65,7 +66,7 @@ export function SignInPage() {
             Reprendre une session
           </h1>
           <p className="text-[13px] text-muted-foreground">
-            Accédez à votre tuteur IA personnel.
+            Accède à ton tuteur IA personnel.
           </p>
         </div>
 
@@ -96,13 +97,31 @@ export function SignInPage() {
             </div>
             <Input
               id="password"
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
               required
               aria-invalid={!!err}
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={
+                showPassword
+                  ? 'Masquer le mot de passe'
+                  : 'Afficher le mot de passe'
+              }
+              aria-pressed={showPassword}
+              className="text-muted-foreground hover:text-foreground -mt-7 ml-auto flex items-center gap-1.5 self-end rounded-[var(--radius-control)] py-1 pr-3 text-[11px] transition-colors"
+            >
+              {showPassword ? (
+                <EyeOff className="size-3.5" />
+              ) : (
+                <Eye className="size-3.5" />
+              )}
+              {showPassword ? 'Masquer' : 'Afficher'}
+            </button>
           </div>
 
           {err && (
@@ -118,6 +137,16 @@ export function SignInPage() {
             {busy && <Loader2 className="animate-spin" />}
             {busy ? 'Connexion…' : 'Se connecter'}
           </Button>
+
+          {/* Un CTA grisé sans raison laisse l'utilisateur bloqué : on
+              dit ce qu'il manque, dans le registre de l'app. */}
+          {!busy && (disabled || err) && (
+            <p className="-mt-2 text-center text-[11px] text-muted-foreground">
+              {err
+                ? 'Corrige l’erreur ci-dessus pour te connecter.'
+                : 'Remplis ton email et ton mot de passe pour te connecter.'}
+            </p>
+          )}
         </form>
 
         <p className="text-center text-[13px] text-muted-foreground">

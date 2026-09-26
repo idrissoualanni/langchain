@@ -105,7 +105,7 @@ function Section({
         </span>
         <ChevronDown
           size={13}
-          className={`text-muted-foreground/60 transition-transform ${
+          className={`text-muted-foreground transition-transform ${
             open ? 'rotate-180' : ''
           }`}
         />
@@ -226,7 +226,7 @@ export function ContextInspectorCard({
         </div>
 
         {!userId && (
-          <div className="rounded-lg border border-dashed border-border py-6 text-center font-mono text-[11px] text-muted-foreground/60">
+          <div className="rounded-lg border border-dashed border-border py-6 text-center font-mono text-[11px] text-muted-foreground">
             Sélectionnez un utilisateur pour inspecter le contexte.
           </div>
         )}
@@ -257,23 +257,23 @@ export function ContextInspectorCard({
                 current subject
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 font-mono text-[11px]">
-                <div className="text-muted-foreground/70">domain</div>
+                <div className="text-muted-foreground">domain</div>
                 <div className="truncate text-foreground">
                   {subject?.domain ?? '—'}
                 </div>
-                <div className="text-muted-foreground/70">subject</div>
+                <div className="text-muted-foreground">subject</div>
                 <div className="truncate text-foreground">
                   {subject?.name ?? router.subject ?? '—'}
                 </div>
-                <div className="text-muted-foreground/70">topic</div>
+                <div className="text-muted-foreground">topic</div>
                 <div className="truncate text-foreground">
                   {router.topic ?? '—'}
                 </div>
-                <div className="text-muted-foreground/70">confidence</div>
+                <div className="text-muted-foreground">confidence</div>
                 <div className="text-live">
                   {(router.confidence * 100).toFixed(0)}%
                 </div>
-                <div className="text-muted-foreground/70">status</div>
+                <div className="text-muted-foreground">status</div>
                 <div>
                   <span
                     className={`rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
@@ -328,7 +328,7 @@ export function ContextInspectorCard({
                   )}
                 </div>
               ) : (
-                <div className="font-mono text-[10.5px] text-muted-foreground/60">
+                <div className="font-mono text-[10.5px] text-muted-foreground">
                   Aucune matière sélectionnée (tuteur général).
                 </div>
               )}
@@ -414,7 +414,7 @@ export function ContextInspectorCard({
                         </span>
                       </div>
                       {r.url && (
-                        <div className="mt-1 truncate font-mono text-[9.5px] text-muted-foreground/70">
+                        <div className="mt-1 truncate font-mono text-[9.5px] text-muted-foreground">
                           {r.url}
                         </div>
                       )}
@@ -531,7 +531,7 @@ export function ContextInspectorCard({
                     )}
                   </div>
                 ) : (
-                  <div className="font-mono text-[10.5px] text-muted-foreground/60">
+                  <div className="font-mono text-[10.5px] text-muted-foreground">
                     {preview.learning.status === 'not_started'
                       ? 'Pas encore de progression suivie (cas normal).'
                       : 'Indisponible (erreur de lecture — fallback silencieux).'}

@@ -276,7 +276,7 @@ export function LearningProfileCard({ userId }: LearningProfileCardProps) {
                       <span className="text-foreground/85">
                         {g.description}
                       </span>
-                      <span className="font-mono text-[9px] text-muted-foreground/60">
+                      <span className="font-mono text-[9px] text-muted-foreground">
                         {g.subject}/{g.topic ?? 'â€”'}
                       </span>
                     </div>
