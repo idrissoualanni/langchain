@@ -26,8 +26,17 @@ interface LiveKitTokenResponse {
   room_name: string;
 }
 
-/** Résolution de capture du partage d'écran ( Full HD, priorité au détail ). */
-const SCREEN_SHARE_RESOLUTION = { width: 1920, height: 1080, frameRate: 30 };
+/**
+ * PARTAGE D'ÉCRAN DÉSACTIVÉ.
+ *
+ * La capture d'écran ( RoomIO video_enabled + ScreenShareCapturer côté
+ * worker ) reste lourde pour le plan Render free et peut déstabiliser la
+ * session vocale. On coupe côté client : la piste ScreenShare n'est plus
+ * publiquée et le worker ne la consomme plus. Le reste de la session
+ * ( voix, vidéo caméra, agent ) est inchangé.
+ */
+// /** Résolution de capture du partage d'écran ( Full HD, priorité au détail ). */
+// const SCREEN_SHARE_RESOLUTION = { width: 1920, height: 1080, frameRate: 30 };
 
 interface VideoSessionProps {
   /** Nom de la salle LiveKit (utilisé pour la récupération autonome du token). */
@@ -214,12 +223,11 @@ function VideoSessionContent() {
     );
   }
 
-  // Filter video, screen‑share and audio tracks
+  // Filter video and audio tracks.
+  // PARTAGE D'ÉCRAN DÉSACTIVÉ — la piste ScreenShare n'est plus publiée ni
+  // consommée, on ne la filtre donc plus ( voir note en tête de fichier ).
   const videoTracks = tracks.filter(
     (trackRef) => trackRef.source === Track.Source.Camera
-  );
-  const screenShareTracks = tracks.filter(
-    (trackRef) => trackRef.source === Track.Source.ScreenShare
   );
 
   // État agent réel ( et non une heuristique sur les pistes audio ) :
@@ -260,55 +268,56 @@ function VideoSessionContent() {
     }
   };
 
-  const toggleScreenShare = async (enabled: boolean) => {
-    if (!enabled) {
-      await localParticipant.setScreenShareEnabled(false);
-      return;
-    }
-    try {
-      // contentHint 'detail' : préserve la lisibilité du texte et des UI,
-      // priorité au détail plutôt qu'au framerate ( doc livekit-client ).
-      await localParticipant.setScreenShareEnabled(
-        true,
-        {
-          resolution: SCREEN_SHARE_RESOLUTION,
-          contentHint: "detail",
-          audio: false,
-        },
-        {
-          screenShareEncoding: { maxBitrate: 3_000_000, maxFramerate: 30 },
-        }
-      );
-    } catch (e) {
-      // Toutes les erreurs sont signalées clairement : avant, un refus
-      // laissait le bouton sur "Arrêter le partage" alors que rien n'était
-      // partagé.
-      const dom = e as { name?: string; message?: string };
-      if (dom?.name === "NotAllowedError") {
-        toast({
-          title: "Partage refusé",
-          description:
-            "Vous avez refusé l'accès à l'écran. Autorisez-le dans les permissions du navigateur, puis réessayez.",
-          variant: "destructive",
-        });
-      } else if (dom?.name === "NotFoundError") {
-        toast({
-          title: "Aucun écran disponible",
-          description:
-            "Aucune source d'affichage n'a été trouvée sur cet appareil.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Partage d'écran impossible",
-          description:
-            (e instanceof Error ? e.message : "Erreur inconnue") +
-            " — vérifiez votre connexion et réessayez.",
-          variant: "destructive",
-        });
-      }
-    }
-  };
+  // PARTAGE D'ÉCRAN DÉSACTIVÉ ( voir note en tête de fichier ).
+  // const toggleScreenShare = async (enabled: boolean) => {
+  //   if (!enabled) {
+  //     await localParticipant.setScreenShareEnabled(false);
+  //     return;
+  //   }
+  //   try {
+  //     // contentHint 'detail' : préserve la lisibilité du texte et des UI,
+  //     // priorité au détail plutôt qu'au framerate ( doc livekit-client ).
+  //     await localParticipant.setScreenShareEnabled(
+  //       true,
+  //       {
+  //         resolution: SCREEN_SHARE_RESOLUTION,
+  //         contentHint: "detail",
+  //         audio: false,
+  //       },
+  //       {
+  //         screenShareEncoding: { maxBitrate: 3_000_000, maxFramerate: 30 },
+  //       }
+  //     );
+  //   } catch (e) {
+  //     // Toutes les erreurs sont signalées clairement : avant, un refus
+  //     // laissait le bouton sur "Arrêter le partage" alors que rien n'était
+  //     // partagé.
+  //     const dom = e as { name?: string; message?: string };
+  //     if (dom?.name === "NotAllowedError") {
+  //       toast({
+  //         title: "Partage refusé",
+  //         description:
+  //           "Vous avez refusé l'accès à l'écran. Autorisez-le dans les permissions du navigateur, puis réessayez.",
+  //         variant: "destructive",
+  //       });
+  //     } else if (dom?.name === "NotFoundError") {
+  //       toast({
+  //         title: "Aucun écran disponible",
+  //         description:
+  //           "Aucune source d'affichage n'a été trouvée sur cet appareil.",
+  //         variant: "destructive",
+  //       });
+  //     } else {
+  //       toast({
+  //         title: "Partage d'écran impossible",
+  //         description:
+  //           (e instanceof Error ? e.message : "Erreur inconnue") +
+  //           " — vérifiez votre connexion et réessayez.",
+  //         variant: "destructive",
+  //       });
+  //     }
+  //   }
+  // };
 
   return (
     <div className="flex flex-col h-full w-full space-y-4 p-4">
@@ -370,23 +379,15 @@ function VideoSessionContent() {
 
         {/* Remote or screen‑share tile */}
         <div className="relative bg-muted rounded-lg overflow-hidden flex items-center justify-center min-h-[220px]">
-          {screenShareTracks.length > 0 ? (
-            <AgentVideoTile
-              trackRef={screenShareTracks[0]}
-              className="w-full h-full object-contain"
-            />
-          ) : videoTracks.filter((t) => !t.participant.isLocal).length > 0 ? (
+          {/* PARTAGE D'ÉCRAN DÉSACTIVÉ — la piste ScreenShare n'est plus
+              publiée ; la tuile n'affiche donc que la vidéo distante. */}
+          {videoTracks.filter((t) => !t.participant.isLocal).length > 0 ? (
             <AgentVideoTile
               trackRef={videoTracks.find((t) => !t.participant.isLocal)!}
               className="w-full h-full object-cover"
             />
           ) : (
             <div className="text-muted-foreground text-sm">En attente d'un participant</div>
-          )}
-          {screenShareTracks.length > 0 && (
-            <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded animate-pulse">
-              Partage d'écran
-            </div>
           )}
         </div>
       </div>
@@ -425,7 +426,9 @@ function VideoSessionContent() {
           onToggleCamera={async (muted) => {
             await localParticipant.setCameraEnabled(!muted);
           }}
-          onToggleScreenShare={toggleScreenShare}
+          // PARTAGE D'ÉCRAN DÉSACTIVÉ — handler neutre, le bouton est masqué
+          // ci-dessous ( showScreenShareButton=false ).
+          onToggleScreenShare={async () => {}}
           onDisconnect={() => {
             room.disconnect();
           }}
@@ -433,7 +436,9 @@ function VideoSessionContent() {
           // ( ConnectionError "Client initiated disconnect" ).
           disconnectDisabled={connectionState !== "connected"}
           className="backdrop-blur-md bg-background/50 rounded-full p-2"
-          showScreenShareButton={true}
+          // PARTAGE D'ÉCRAN DÉSACTIVÉ : bouton masqué pour ne pas offrir une
+          // fonctionnalité qui n'est plus câblée ( stabilité en prod ).
+          showScreenShareButton={false}
         />
       </div>
     </div>
