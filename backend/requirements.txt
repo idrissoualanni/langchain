@@ -56,3 +56,13 @@ python-multipart
 # ( colonne s3_key ) ; boto3 pointe vers l'endpoint Neon via
 # AWS_ENDPOINT_URL_S3. Sans cette config, fallback BYTEA en base.
 boto3
+
+# VideoSubgraph — ingestion + analyse video.
+# faster-whisper : transcription REELLE hors-ligne ( modele CTranslate2,
+# CPU ). Sans ce paquet, VIDEO_TRANSCRIPTION_MODE=auto bascule
+# silencieusement sur DEFAULT_TRANSCRIPT ( ingest.py ) — un faux transcript
+# est servi comme analyse reelle de la video. C'est le bug #1 en prod.
+faster-whisper>=1.0,<2
+# Extraction de frames pour l'analyse visuelle ( app/graph/subgraphs/
+# video/frames.py ) : headless = sans dependances GUI serveur ( Render ).
+opencv-python-headless>=4.8

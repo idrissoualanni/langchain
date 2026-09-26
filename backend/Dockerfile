@@ -35,9 +35,14 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 FROM python:3.11-slim
 
 # libssl nécessaire aux wheels cryptography / aiohttp déjà compilés.
+# ffmpeg : VideoSubgraph — faster-whisper décode l'audio du conteneur
+# vidéo (MP4…) via libav/ffmpeg. Sans ffmpeg dans le PATH, toute
+# ingestion vidéo lève "tuple index out of range" ( decode ) au lieu de
+# transcrire — d'où la transcription désactivée de fait en production.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 \
     ca-certificates \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
