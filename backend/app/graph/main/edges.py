@@ -37,15 +37,21 @@ from app.graph.nodes import (
     video_node,
     workflow_router_node,
 )
+from app.graph.nodes.trim_context import trim_context_node
+from app.graph.nodes.retrieve_context import retrieve_context_node
 
 
 def register_nodes(graph, subgraph_agent, agent_retry_policy=None) -> None:
-    """Déclare les 15 nodes du Main Graph.
+    """Déclare les 17 nodes du Main Graph (15 + trim_context + retrieve_context).
 
     subgraph_agent : sous-graphe conversationnel (create_agent) —
     hérite checkpointer/store du parent. agent_retry_policy : retry
     borné UNIQUEMENT sur erreurs transitoires (None = sans retry).
     """
+    # Nodes de preprocessing mémoire
+    graph.add_node("trim_context", trim_context_node)
+    graph.add_node("retrieve_context", retrieve_context_node)
+
     graph.add_node("intake", intake_node)
     graph.add_node("router", router_node)
     graph.add_node("retrieval", retrieval_node)
@@ -69,10 +75,15 @@ def register_nodes(graph, subgraph_agent, agent_retry_policy=None) -> None:
 
 
 def register_edges(graph) -> None:
-    """Chaîne principale : entrée, retrieval/fallback, sortie."""
+    """Chaîne principale : entrée, preprocessing mémoire, retrieval/fallback, sortie."""
     graph.add_edge(START, "intake")
-    graph.add_edge("intake", "router")
 
+    # === REFACTOR MÉMOIRE : trimming + retrieve AVANT le routage ===
+    graph.add_edge("intake", "trim_context")
+    graph.add_edge("trim_context", "retrieve_context")
+    graph.add_edge("retrieve_context", "router")
+
+    # === Routage existing ===
     graph.add_conditional_edges(
         "router",
         route_after_router,
