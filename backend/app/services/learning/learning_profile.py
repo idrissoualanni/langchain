@@ -643,6 +643,342 @@ def get_topic_state(
     return subject_state.topics.get(topic)
 
 
+# ------------------------------------------------------------------
+# NOUVELLES MÉTHODES (REFACTOR MÉMOIRE PÉDAGOGIQUE)
+# ------------------------------------------------------------------
+
+
+def get_weak_concepts(
+    user_id: str,
+    subject: str | None,
+    threshold: float,
+    limit: int,
+) -> list[dict]:
+    """Récupère les concepts à réviser (mastery < threshold).
+
+    Args:
+        user_id: identifiant de l'apprenant.
+        subject: filtrer par matière (None = toutes).
+        threshold: seuil en dessous duquel concept = faible.
+        limit: nombre max de concepts retournés.
+
+    Returns:
+        list[dict]: [{subject, topic, mastery, attempts, weak_points, ...}]
+    """
+    profile = read_learning_profile(user_id)
+    if profile is None:
+        return []
+
+    results = []
+    for subj_id, subj_state in profile.subjects.items():
+        if subject is not None and subj_id != subject:
+            continue
+        for topic_id, topic_state in subj_state.topics.items():
+            mastery = topic_state.mastery
+            if mastery is not None and mastery < threshold:
+                results.append({
+                    "subject": subj_id,
+                    "topic": topic_id,
+                    "mastery": mastery,
+                    "attempts": topic_state.attempts,
+                    "weak_points": topic_state.weak_points[-5:],
+                    "last_assessed_at": topic_state.last_assessed_at,
+                    "confidence": topic_state.confidence,
+                })
+
+    # Tri par mastery croissant (les plus faibles d'abord)
+    results.sort(key=lambda x: x.get("mastery") or 1.0)
+    return results[:limit]
+
+
+def get_strong_concepts(
+    user_id: str,
+    subject: str | None,
+    threshold: float,
+    limit: int,
+) -> list[dict]:
+    """Récupère les concepts maîtrisés (mastery >= threshold).
+
+    Args:
+        user_id: identifiant de l'apprenant.
+        subject: filtrer par matière (None = toutes).
+        threshold: seuil au-dessus duquel concept = fort.
+        limit: nombre max de concepts retournés.
+
+    Returns:
+        list[dict]: [{subject, topic, mastery, attempts, strengths, ...}]
+    """
+    profile = read_learning_profile(user_id)
+    if profile is None:
+        return []
+
+    results = []
+    for subj_id, subj_state in profile.subjects.items():
+        if subject is not None and subj_id != subject:
+            continue
+        for topic_id, topic_state in subj_state.topics.items():
+            mastery = topic_state.mastery
+            if mastery is not None and mastery >= threshold:
+                results.append({
+                    "subject": subj_id,
+                    "topic": topic_id,
+                    "mastery": mastery,
+                    "attempts": topic_state.attempts,
+                    "strengths": topic_state.strengths[-5:],
+                    "last_assessed_at": topic_state.last_assessed_at,
+                    "confidence": topic_state.confidence,
+                })
+
+    # Tri par mastery décroissant (les plus forts d'abord)
+    results.sort(key=lambda x: x.get("mastery") or 0.0, reverse=True)
+    return results[:limit]
+
+
+def append_session_summary(
+    user_id: str,
+    summary: str,
+    topics_covered: list[str],
+    misconceptions: list[str] | None = None,
+    next_steps: list[str] | None = None,
+    sentiment: str | None = None,
+    thread_id: str = "",
+) -> dict:
+    """Ajoute un résumé de session au store.
+
+    Stocké sous namespace ("users", "learning", user_id), clé
+    "session_summaries" (liste, max 20 résumés, FIFO).
+
+    Returns:
+        dict: {"session_id": ..., "count": N}
+    """
+    import uuid
+    from datetime import datetime, timezone
+
+    if thread_id == "":
+        try:
+            from langgraph.config import get_config
+            cfg = get_config() or {}
+            thread_id = (cfg.get("configurable") or {}).get("thread_id", "")
+        except Exception:
+            thread_id = ""
+
+    session_id = uuid.uuid4().hex[:12]
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    session_summary = {
+        "session_id": session_id,
+        "thread_id": thread_id,
+        "timestamp": timestamp,
+        "summary": summary,
+        "topics_covered": topics_covered,
+        "misconceptions": misconceptions or [],
+        "next_steps": next_steps or [],
+        "sentiment": sentiment,
+    }
+
+    with _store_lock:
+        store = get_store()
+        item = store.get(
+            _learning_namespace(user_id), "session_summaries"
+        )
+        sessions: list[dict] = (
+            list(item.value) if item and item.value else []
+        )
+        sessions.append(session_summary)
+        # Garder les 20 derniers résumés (FIFO)
+        sessions = sessions[-20:]
+        store.put(
+            _learning_namespace(user_id),
+            "session_summaries",
+            sessions,
+        )
+
+    log_event(
+        "SESSION_SUMMARY_SAVED",
+        message=(
+            f"Session summary saved | user={user_id} | "
+            f"session_id={session_id} | count={len(sessions)}"
+        ),
+        user_id=user_id,
+        thread_id=thread_id,
+        extra={
+            "namespace": NAMESPACE_LABEL,
+            "session_id": session_id,
+            "topics_covered": topics_covered,
+        },
+    )
+
+    return {
+        "session_id": session_id,
+        "count": len(sessions),
+    }
+
+
+def get_past_session_summaries(
+    user_id: str,
+    limit: int = 3,
+) -> list[dict]:
+    """Récupère les résumés des sessions passées.
+
+    Args:
+        user_id: identifiant de l'apprenant.
+        limit: nombre max de résumés (défaut 3, les plus récents).
+
+    Returns:
+        list[dict]: résumés ordonnés du plus récent au plus ancien.
+    """
+    try:
+        with _store_lock:
+            store = get_store()
+            item = store.get(
+                _learning_namespace(user_id), "session_summaries"
+            )
+            sessions: list[dict] = (
+                list(item.value) if item and item.value else []
+            )
+
+        # Plus récents d'abord
+        sessions.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        return sessions[:limit]
+
+    except Exception as exc:
+        log_event(
+            "LEARNING_SESSION_READ_ERROR",
+            level="ERROR",
+            message=f"get_past_session_summaries failed: {exc}",
+            user_id=user_id,
+        )
+        return []
+
+
+def get_active_goals(user_id: str) -> list[dict]:
+    """Récupère les objectifs actifs de l'apprenant.
+
+    Returns:
+        list[dict]: objectifs avec status="active".
+    """
+    profile = read_learning_profile(user_id)
+    if profile is None:
+        return []
+
+    return [
+        g.model_dump()
+        for g in profile.goals
+        if g.status == "active"
+    ]
+
+
+def search_learning_memories(
+    user_id: str,
+    query: str,
+    limit: int = 5,
+) -> list[dict]:
+    """Recherche unifiée dans TOUTE la mémoire pédagogique.
+
+    Recherche dans : session_summaries, observations, goals.
+
+    Args:
+        user_id: identifiant de l'apprenant.
+        query: requête en langage naturel.
+        limit: nombre max de résultats.
+
+    Returns:
+        list[dict]: résultats avec type, score, contenu.
+    """
+    results = []
+    query_lower = query.lower()
+
+    # 1. Rechercher dans les sessions
+    sessions = get_past_session_summaries(user_id, limit=20)
+    for s in sessions:
+        score = _relevance_session(s, query_lower)
+        if score > 0.2:
+            results.append({
+                "type": "session",
+                "score": score,
+                "data": s,
+            })
+
+    # 2. Rechercher dans les misconceptions (observations)
+    observations = list_observations(user_id)
+    for o in observations:
+        weak_points = o.get("weak_points", [])
+        if weak_points:
+            match_count = sum(1 for wp in weak_points if query_lower in wp.lower())
+            if match_count > 0:
+                score = min(match_count / len(weak_points), 1.0)
+                results.append({
+                    "type": "misconception",
+                    "score": score,
+                    "data": o,
+                })
+
+    # 3. Rechercher dans les goals
+    profile = read_learning_profile(user_id)
+    if profile:
+        for g in profile.goals:
+            if query_lower in g.description.lower() or query_lower in g.subject.lower():
+                results.append({
+                    "type": "goal",
+                    "score": 0.5,
+                    "data": g.model_dump(),
+                })
+
+    # Tri par score
+    results.sort(key=lambda x: x.get("score", 0.0), reverse=True)
+    return results[:limit]
+
+
+def _relevance_session(session: dict, query: str) -> float:
+    """Score de pertinence d'une session pour une requête."""
+    score = 0.0
+
+    summary = session.get("summary", "").lower()
+    topics = " ".join(session.get("topics_covered", [])).lower()
+
+    if query in summary:
+        score += 0.5
+    if query in topics:
+        score += 0.5
+
+    # Mots communs
+    query_words = set(query.split())
+    summary_words = set(summary.split())
+    topics_words = set(topics.split())
+
+    overlap = len(query_words & summary_words) / max(len(query_words), 1)
+    overlap2 = len(query_words & topics_words) / max(len(query_words), 1)
+
+    return min(score + overlap * 0.3 + overlap2 * 0.3, 1.0)
+
+
+def delete_all_learning(user_id: str) -> dict:
+    """Supprime TOUTES les données learning d'un apprenant (RGPD).
+
+    WARNING : action irréversible.
+
+    Returns:
+        dict: {"deleted": True, "scope": "learning"}
+    """
+    with _store_lock:
+        store = get_store()
+        ns = _learning_namespace(user_id)
+        # Supprimer toutes les clés du namespace
+        store.put(ns, "profile", None)
+        store.put(ns, "observations", [])
+        store.put(ns, "goals_seq", 0)
+        store.put(ns, "session_summaries", [])
+
+    log_event(
+        "LEARNING_DELETE_ALL",
+        message=f"All learning data deleted | user={user_id}",
+        user_id=user_id,
+        extra={"namespace": NAMESPACE_LABEL, "scope": "learning"},
+    )
+
+    return {"deleted": True, "scope": "learning"}
+
+
 __all__ = [
     "read_learning_profile",
     "write_learning_profile",
@@ -652,6 +988,14 @@ __all__ = [
     "create_learning_goal",
     "update_learning_goal",
     "get_topic_state",
+    # Nouvelles méthodes
+    "get_weak_concepts",
+    "get_strong_concepts",
+    "append_session_summary",
+    "get_past_session_summaries",
+    "get_active_goals",
+    "search_learning_memories",
+    "delete_all_learning",
     "LearningGoal",
     "LearningObservation",
     "LearningProfile",

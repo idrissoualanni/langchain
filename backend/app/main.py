@@ -23,6 +23,7 @@ from app.api import (
     threads,
     users,
 )
+from app.features.transcription.api import router as transcription_router
 from app.api.admin import (
     models_router as admin_models_router,
     knowledge_router as admin_knowledge_router,
@@ -128,6 +129,7 @@ app.include_router(activity.router)
 app.include_router(documents.router)
 app.include_router(storage.router)
 app.include_router(livekit.router)
+app.include_router(transcription.router)
 
 # Admin API — Model/Knowledge/Observability/Dashboard management (secured)
 # Les routers models/knowledge portent déjà leur préfixe /api/admin/...

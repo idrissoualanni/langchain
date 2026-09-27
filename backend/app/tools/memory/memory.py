@@ -1,194 +1,288 @@
 # Memory tools — mémoire longue durée exposée au LLM.
 #
-# Extrait de app/agent/tools/__init__.py (refactor : les tools vivent
-# dans app/tools/memory/). Le stockage (read/write/list/search) reste
-# un SERVICE (app/services/memory/) — ces tools sont la fine couche
-# d'exposition LLM (validation d'usage en docstring).
+# REFACTOR COMPLET : tous les tools utilisent désormais get_config()
+# pour récupérer user_id depuis la config LangGraph (plus de paramètre
+# user_id exposé au LLM).
+#
+# NAMESPACE : ("users", "profile", user_id)
+# CLÉS : "profile" (name, description), "facts" (liste de MemoryFacts)
+#
+# Les nouveaux tools sont dans app/tools/memory/profile.py et facts.py.
+# Ce fichier est la façade backward-compatible + nouveaux tools.
 from langchain_core.tools import tool
 
 from app.services.memory.memory import (
     delete_fact,
+    get_facts,
     list_facts,
+    patch_profile,
     read_profile,
     save_fact,
     search_facts,
     update_fact,
-    write_profile,
 )
+
+# Import des nouveaux tools (aliases vers les noms officiels)
+from app.tools.memory.profile import get_user_profile as _get_user_profile_new
+from app.tools.memory.profile import update_user_profile as _update_user_profile_new
+from app.tools.memory.facts import get_learner_facts as _get_learner_facts
+from app.tools.memory.facts import save_learner_fact as _save_learner_fact
+from app.tools.memory.facts import update_learner_fact as _update_learner_fact
+
+
+# ------------------------------------------------------------------
+# PROFIL (profile.py)
+# ------------------------------------------------------------------
 
 
 @tool
-def get_user_profile(user_id: str) -> dict:
-    """Récupère le profil longue durée de l'utilisateur.
+def get_user_profile() -> dict:
+    """Récupère le profil de l'apprenant (mémoire longue durée).
 
-    Retourne {"name": ..., "description": ...} — valeurs null
-    si aucun profil n'a encore été enregistré pour cet utilisateur.
-    Le profil est persistant : il est partagé entre tous les threads
-    de cet utilisateur.
+    Retourne un dict avec les clés "name" et "description".
+    Retourne {"name": None, "description": None} si aucun profil
+    n'existe encore pour cet apprenant.
+
+    NOTE : retrieve_context charge automatiquement le profil AVANT
+    chaque génération. Ce tool est utile pour drill-down ou vérification.
     """
+    from langgraph.config import get_config
+
+    config = get_config() or {}
+    user_id = (config.get("configurable") or {}).get("user_id", "")
+    if not user_id:
+        return {"error": "user_id manquant dans la config"}
 
     profile = read_profile(user_id)
-
-    if profile["name"] is None and profile["description"] is None:
-        return (
-            "Aucun profil longue durée n'existe encore pour cet "
-            "utilisateur (name=null, description=null)."
-        )
-
-    return profile
+    return {
+        "name": profile.get("name"),
+        "description": profile.get("description"),
+        "exists": profile.get("name") is not None or profile.get("description") is not None,
+    }
 
 
 @tool
 def update_user_profile(
-    user_id: str,
     name: str | None = None,
     description: str | None = None,
 ) -> dict:
-    """Crée ou met à jour le profil longue durée de l'utilisateur.
+    """Crée ou met à jour le profil de l'apprenant (PATCH merge).
 
-    Champs autorisés uniquement : name, description.
-    Passer None (ou omettre) un champ le laisse inchangé.
-    Le profil est persistant et partagé entre tous les threads
-    de l'utilisateur.
+    Ce tool fait un PATCH : seul les champs non-None sont mis à jour.
+    Les champs absents ou None sont conservés tels quels.
+    Le profil est partagé entre TOUS les threads de cet apprenant.
+
+    Args:
+        name: nouveau nom (optionnel, None = inchangé).
+        description: nouvelle description (optionnel, None = inchangé).
+
+    Returns:
+        dict: profil après mise à jour {"name": ..., "description": ...}
     """
+    from langgraph.config import get_config
 
-    fields: dict = {}
+    config = get_config() or {}
+    user_id = (config.get("configurable") or {}).get("user_id", "")
+    if not user_id:
+        return {"error": "user_id manquant dans la config"}
+
+    if name is None and description is None:
+        return {"error": "Aucun champ à mettre à jour (name et description sont None)"}
+
+    fields = {}
     if name is not None:
         fields["name"] = name
     if description is not None:
         fields["description"] = description
 
-    if not fields:
-        return "Aucun champ à mettre à jour (name et description vides)."
+    result = patch_profile(user_id, fields)
+    return result
 
-    return write_profile(user_id, fields)
+
+# ------------------------------------------------------------------
+# FAITS (aliases vers les noms officiels)
+# ------------------------------------------------------------------
 
 
 @tool
-def get_user_memory(
-    user_id: str,
+def get_learner_facts(
     category: str | None = None,
-) -> list:
-    """Liste les faits mémorisés de l'utilisateur (mémoire longue durée).
+    limit: int = 50,
+) -> list[dict]:
+    """Liste les faits mémorisés de l'apprenant (mémoire longue durée).
 
     Args:
-        user_id: identifiant persistant de l'utilisateur.
         category: filtrer par catégorie parmi
             identity, background, personality, preference, interest.
             None = toutes les catégories.
+        limit: nombre maximum de faits à retourner (défaut 50).
 
-    Retourne la liste des faits (id, category, content, source,
-    confidence, created_at, updated_at) — liste vide si aucune
-    mémoire. Ces faits sont partagés entre tous les threads
-    de l'utilisateur.
+    Returns:
+        list[dict]: liste de faits avec id, category, content, source,
+        confidence, created_at, updated_at. Liste vide si aucune mémoire.
+
+    NOTE : retrieve_context ne pré-charge PAS les faits (trop volumineux).
     """
-    return list_facts(user_id, category)
+    from langgraph.config import get_config
+
+    config = get_config() or {}
+    user_id = (config.get("configurable") or {}).get("user_id", "")
+    if not user_id:
+        return [{"error": "user_id manquant dans la config"}]
+
+    return get_facts(user_id, category=category, limit=limit)
 
 
 @tool
-def save_user_memory(
-    user_id: str,
+def save_learner_fact(
     category: str,
     content: str,
     confidence: float = 1.0,
 ) -> dict:
-    """Enregistre UN nouveau fait durable sur l'utilisateur.
+    """Enregistre UN nouveau fait durable sur l'apprenant.
 
-    À utiliser UNIQUEMENT quand l'utilisateur déclare explicitement
-    une information durable sur lui-même (nom, formation, préférence
-    d'apprentissage, centre d'intérêt, trait de caractère).
-    Ne jamais enregistrer une question, un calcul ou une demande
-    ponctuelle.
+    DÉDUPLICATION AUTOMATIQUE : si un fait similaire existe déjà
+    (même catégorie, similarité ≥ 0.72), il est mis à jour.
 
     Args:
-        user_id: identifiant persistant de l'utilisateur.
-        category: identity | background | personality |
-            preference | interest.
-        content: le fait en une phrase courte, à la 3e personne
-            (ex: "Étudiant en mécatronique",
-            "Préfère les explications avec des exemples").
-        confidence: 1.0 pour une déclaration explicite de
-            l'utilisateur (défaut), moins si déduit.
+        category: identity | background | personality | preference | interest.
+        content: le fait en une phrase courte, à la 3e personne.
+        confidence: 1.0 pour une déclaration explicite (défaut).
 
-    La déduplication est automatique : un fait similaire existant
-    sera mis à jour au lieu d'être dupliqué.
+    Returns:
+        dict: fait créé ou mis à jour.
     """
-    return save_fact(
-        user_id, category, content, source="user", confidence=confidence
-    )
+    from langgraph.config import get_config
+
+    config = get_config() or {}
+    user_id = (config.get("configurable") or {}).get("user_id", "")
+    if not user_id:
+        return {"error": "user_id manquant dans la config"}
+
+    return save_fact(user_id, category, content, source="user", confidence=confidence)
 
 
 @tool
-def update_user_memory(
-    user_id: str,
-    memory_id: str,
+def update_learner_fact(
+    fact_id: str,
     content: str | None = None,
     category: str | None = None,
+    confidence: float | None = None,
 ) -> dict:
     """Modifie UN fait précis de la mémoire, ciblé par son id.
 
-    Ne modifie QUE ce fait — les autres restent intacts.
     Args:
-        user_id: identifiant persistant de l'utilisateur.
-        memory_id: id du fait à modifier.
+        fact_id: id du fait à modifier.
         content: nouveau contenu (None = inchangé).
         category: nouvelle catégorie (None = inchangée).
+        confidence: nouvelle confiance (None = inchangée).
+
+    Returns:
+        dict: fait mis à jour.
     """
-    return update_fact(
-        user_id, memory_id, content=content, category=category
-    )
+    from langgraph.config import get_config
+
+    config = get_config() or {}
+    user_id = (config.get("configurable") or {}).get("user_id", "")
+    if not user_id:
+        return {"error": "user_id manquant dans la config"}
+
+    if content is None and category is None and confidence is None:
+        return {"error": "Aucun champ à mettre à jour"}
+
+    return update_fact(user_id, fact_id, content=content, category=category, confidence=confidence)
 
 
 @tool
-def delete_user_memory(user_id: str, memory_id: str) -> dict:
+def delete_user_memory(fact_id: str) -> dict:
     """Supprime UN fait précis de la mémoire, ciblé par son id.
 
-    Ne supprime QUE ce fait — les autres souvenirs et le profil
-    de l'utilisateur restent intacts.
     Args:
-        user_id: identifiant persistant de l'utilisateur.
-        memory_id: id du fait à supprimer.
+        fact_id: id du fait à supprimer.
+
+    Returns:
+        dict: {"deleted": fact_id}
     """
-    return delete_fact(user_id, memory_id)
+    from langchain.config import get_config
+
+    config = get_config() or {}
+    user_id = (config.get("configurable") or {}).get("user_id", "")
+    if not user_id:
+        return {"error": "user_id manquant dans la config"}
+
+    return delete_fact(user_id, fact_id)
 
 
 @tool
 def search_user_memory(
-    user_id: str,
     query: str,
     category: str | None = None,
-) -> list:
+    limit: int = 10,
+) -> list[dict]:
     """Recherche les faits mémorisés pertinents pour une requête.
 
     Args:
-        user_id: identifiant persistant de l'utilisateur.
         query: requête en langage naturel
             (ex: "préférences d'apprentissage").
         category: filtrer en plus par catégorie (optionnel).
+        limit: nombre maximum de résultats (défaut 10).
 
-    Retourne les faits classés par pertinence (liste vide si
-    aucun résultat).
+    Returns:
+        list[dict]: faits classés par pertinence.
     """
-    return search_facts(user_id, query, category=category)
+    from langgraph.config import get_config
 
+    config = get_config() or {}
+    user_id = (config.get("configurable") or {}).get("user_id", "")
+    if not user_id:
+        return [{"error": "user_id manquant dans la config"}]
+
+    return search_facts(user_id, query, category=category, limit=limit)
+
+
+# ------------------------------------------------------------------
+# ALIASES backward-compat (noms anciens → nouveaux)
+# ------------------------------------------------------------------
+
+# Ces aliases permettent au code existant de continuer à fonctionner
+# tout en utilisant les nouveaux noms officiels.
+get_user_memory = get_learner_facts
+save_user_memory = save_learner_fact
+update_user_memory = update_learner_fact
+
+
+# ------------------------------------------------------------------
+# EXPORTS
+# ------------------------------------------------------------------
 
 memory_tools = [
+    # Profil
     get_user_profile,
     update_user_profile,
-    get_user_memory,
-    save_user_memory,
-    update_user_memory,
+    # Faits
+    get_learner_facts,
+    save_learner_fact,
+    update_learner_fact,
     delete_user_memory,
     search_user_memory,
+    # Aliases backward-compat
+    get_user_memory,  # alias de get_learner_facts
+    save_user_memory,  # alias de save_learner_fact
+    update_user_memory,  # alias de update_learner_fact
 ]
 
 __all__ = [
+    # Officiels
     "get_user_profile",
     "update_user_profile",
+    "get_learner_facts",
+    "save_learner_fact",
+    "update_learner_fact",
+    "delete_user_memory",
+    "search_user_memory",
+    # Aliases backward-compat
     "get_user_memory",
     "save_user_memory",
     "update_user_memory",
-    "delete_user_memory",
-    "search_user_memory",
     "memory_tools",
 ]

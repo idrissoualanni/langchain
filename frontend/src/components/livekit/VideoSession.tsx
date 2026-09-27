@@ -16,7 +16,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { AgentAudioVisualizerAura } from "@/components/agents-ui/agent-audio-visualizer-aura";
 import { AgentControlBar } from "@/components/agents-ui/agent-control-bar";
 import { AgentVideoTile } from "@/components/agents-ui/agent-video-tile";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, Video } from "lucide-react";
 import { apiFetch, ApiError } from "@/api/base";
 import { useToast } from "@/hooks/use-toast";
 
@@ -35,8 +35,8 @@ interface LiveKitTokenResponse {
  * publiquée et le worker ne la consomme plus. Le reste de la session
  * ( voix, vidéo caméra, agent ) est inchangé.
  */
-// /** Résolution de capture du partage d'écran ( Full HD, priorité au détail ). */
-// const SCREEN_SHARE_RESOLUTION = { width: 1920, height: 1080, frameRate: 30 };
+/** Résolution de capture du partage d'écran ( Full HD, priorité au détail ). */
+const SCREEN_SHARE_RESOLUTION = { width: 1920, height: 1080, frameRate: 30 };
 
 interface VideoSessionProps {
   /** Nom de la salle LiveKit (utilisé pour la récupération autonome du token). */
@@ -224,11 +224,16 @@ function VideoSessionContent() {
   }
 
   // Filter video and audio tracks.
-  // PARTAGE D'ÉCRAN DÉSACTIVÉ — la piste ScreenShare n'est plus publiée ni
-  // consommée, on ne la filtre donc plus ( voir note en tête de fichier ).
   const videoTracks = tracks.filter(
     (trackRef) => trackRef.source === Track.Source.Camera
   );
+  // Screen share tracks (local ou distant)
+  const screenShareTracks = tracks.filter(
+    (trackRef) => trackRef.source === Track.Source.ScreenShare
+  );
+  const localCameraTrack = videoTracks.find((t) => t.participant.isLocal);
+  const remoteCameraTrack = videoTracks.find((t) => !t.participant.isLocal);
+  const screenShareTrack = screenShareTracks.find((t) => t.participant.isLocal) || screenShareTracks[0];
 
   // État agent réel ( et non une heuristique sur les pistes audio ) :
   // AgentStateListener n'est plus du code mort depuis que la page fournit
@@ -268,56 +273,55 @@ function VideoSessionContent() {
     }
   };
 
-  // PARTAGE D'ÉCRAN DÉSACTIVÉ ( voir note en tête de fichier ).
-  // const toggleScreenShare = async (enabled: boolean) => {
-  //   if (!enabled) {
-  //     await localParticipant.setScreenShareEnabled(false);
-  //     return;
-  //   }
-  //   try {
-  //     // contentHint 'detail' : préserve la lisibilité du texte et des UI,
-  //     // priorité au détail plutôt qu'au framerate ( doc livekit-client ).
-  //     await localParticipant.setScreenShareEnabled(
-  //       true,
-  //       {
-  //         resolution: SCREEN_SHARE_RESOLUTION,
-  //         contentHint: "detail",
-  //         audio: false,
-  //       },
-  //       {
-  //         screenShareEncoding: { maxBitrate: 3_000_000, maxFramerate: 30 },
-  //       }
-  //     );
-  //   } catch (e) {
-  //     // Toutes les erreurs sont signalées clairement : avant, un refus
-  //     // laissait le bouton sur "Arrêter le partage" alors que rien n'était
-  //     // partagé.
-  //     const dom = e as { name?: string; message?: string };
-  //     if (dom?.name === "NotAllowedError") {
-  //       toast({
-  //         title: "Partage refusé",
-  //         description:
-  //           "Vous avez refusé l'accès à l'écran. Autorisez-le dans les permissions du navigateur, puis réessayez.",
-  //         variant: "destructive",
-  //       });
-  //     } else if (dom?.name === "NotFoundError") {
-  //       toast({
-  //         title: "Aucun écran disponible",
-  //         description:
-  //           "Aucune source d'affichage n'a été trouvée sur cet appareil.",
-  //         variant: "destructive",
-  //       });
-  //     } else {
-  //       toast({
-  //         title: "Partage d'écran impossible",
-  //         description:
-  //           (e instanceof Error ? e.message : "Erreur inconnue") +
-  //           " — vérifiez votre connexion et réessayez.",
-  //         variant: "destructive",
-  //       });
-  //     }
-  //   }
-  // };
+  const toggleScreenShare = async (enabled: boolean) => {
+    if (!enabled) {
+      await localParticipant.setScreenShareEnabled(false);
+      return;
+    }
+    try {
+      // contentHint 'detail' : préserve la lisibilité du texte et des UI,
+      // priorité au détail plutôt qu'au framerate ( doc livekit-client ).
+      await localParticipant.setScreenShareEnabled(
+        true,
+        {
+          resolution: SCREEN_SHARE_RESOLUTION,
+          contentHint: "detail",
+          audio: false,
+        },
+        {
+          screenShareEncoding: { maxBitrate: 3_000_000, maxFramerate: 30 },
+        }
+      );
+    } catch (e) {
+      // Toutes les erreurs sont signalées clairement : avant, un refus
+      // laissait le bouton sur "Arrêter le partage" alors que rien n'était
+      // partagé.
+      const dom = e as { name?: string; message?: string };
+      if (dom?.name === "NotAllowedError") {
+        toast({
+          title: "Partage refusé",
+          description:
+            "Vous avez refusé l'accès à l'écran. Autorisez-le dans les permissions du navigateur, puis réessayez.",
+          variant: "destructive",
+        });
+      } else if (dom?.name === "NotFoundError") {
+        toast({
+          title: "Aucun écran disponible",
+          description:
+            "Aucune source d'affichage n'a été trouvée sur cet appareil.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Partage d'écran impossible",
+          description:
+            (e instanceof Error ? e.message : "Erreur inconnue") +
+            " — vérifiez votre connexion et réessayez.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
 
   return (
     <div className="flex flex-col h-full w-full space-y-4 p-4">
@@ -360,35 +364,82 @@ function VideoSessionContent() {
         )}
       </div>
 
-      {/* Main video area — grille responsive : 1 colonne jusqu'à md. */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[400px]">
-        {/* Local video tile */}
-        <div className="relative bg-muted rounded-lg overflow-hidden flex items-center justify-center min-h-[220px]">
-          {videoTracks.some((t) => t.participant.isLocal) ? (
-            <AgentVideoTile
-              trackRef={videoTracks.find((t) => t.participant.isLocal)!}
-              className="w-full h-full object-cover"
-            />
+      {/* Main video area — grille optimisée pour screen share */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[400px]">
+        {/* 
+          ÉCRAN PARTAGÉ — zone principale (2/3 de la grille).
+          L'agent LiveKit peut "voir" ce que l'utilisateur partage et répondre.
+        */}
+        <div className="lg:col-span-2 relative bg-slate-900 rounded-xl overflow-hidden min-h-[300px] lg:min-h-[400px]">
+          {screenShareTrack ? (
+            <>
+              <AgentVideoTile
+                trackRef={screenShareTrack}
+                className="w-full h-full object-contain"
+              />
+              {/* Badge "Écran partagé" */}
+              <div className="absolute top-3 left-3 bg-primary/90 text-primary-foreground text-xs font-medium px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                Écran partagé
+              </div>
+            </>
           ) : (
-            <div className="text-muted-foreground text-sm">Caméra désactivée</div>
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                <Video className="h-8 w-8" />
+              </div>
+              <p className="text-sm font-medium mb-1">Aucun écran partagé</p>
+              <p className="text-xs text-center max-w-[250px]">
+                Cliquez sur le bouton partage d'écran pour montrer votre display à l'agent
+              </p>
+            </div>
           )}
-          <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-            Moi
-          </div>
         </div>
 
-        {/* Remote or screen‑share tile */}
-        <div className="relative bg-muted rounded-lg overflow-hidden flex items-center justify-center min-h-[220px]">
-          {/* PARTAGE D'ÉCRAN DÉSACTIVÉ — la piste ScreenShare n'est plus
-              publiée ; la tuile n'affiche donc que la vidéo distante. */}
-          {videoTracks.filter((t) => !t.participant.isLocal).length > 0 ? (
-            <AgentVideoTile
-              trackRef={videoTracks.find((t) => !t.participant.isLocal)!}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="text-muted-foreground text-sm">En attente d'un participant</div>
-          )}
+        {/* Sidebar — caméra locale + tuteur */}
+        <div className="flex flex-col gap-4">
+          {/* Tuile webcam locale (PiP) */}
+          <div className="relative bg-muted rounded-lg overflow-hidden flex items-center justify-center min-h-[160px] ring-2 ring-primary/20">
+            {localCameraTrack ? (
+              <AgentVideoTile
+                trackRef={localCameraTrack}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="text-muted-foreground text-sm">Caméra désactivée</div>
+            )}
+            <div className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded flex items-center gap-1">
+              <span className="w-1.5 h-1.5 bg-green-400 rounded-full" />
+              Moi
+            </div>
+          </div>
+
+          {/* Tuile tuteur/agent distant */}
+          <div className="relative bg-muted rounded-lg overflow-hidden flex items-center justify-center min-h-[160px]">
+            {remoteCameraTrack ? (
+              <AgentVideoTile
+                trackRef={remoteCameraTrack}
+                className="w-full h-full object-cover"
+              />
+            ) : agentLive ? (
+              <div className="flex flex-col items-center justify-center gap-2">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Sparkles className="h-6 w-6 text-primary animate-pulse" />
+                </div>
+                <p className="text-xs text-muted-foreground">Le tuteur se connecte...</p>
+              </div>
+            ) : (
+              <div className="text-muted-foreground text-sm text-center px-4">
+                Invitez le tuteur pour commencer
+              </div>
+            )}
+            {agentLive && (
+              <div className="absolute bottom-2 left-2 bg-emerald-500/90 text-white text-xs px-2 py-0.5 rounded flex items-center gap-1">
+                <Sparkles className="h-3 w-3" />
+                Tuteur
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -426,9 +477,7 @@ function VideoSessionContent() {
           onToggleCamera={async (muted) => {
             await localParticipant.setCameraEnabled(!muted);
           }}
-          // PARTAGE D'ÉCRAN DÉSACTIVÉ — handler neutre, le bouton est masqué
-          // ci-dessous ( showScreenShareButton=false ).
-          onToggleScreenShare={async () => {}}
+          onToggleScreenShare={toggleScreenShare}
           onDisconnect={() => {
             room.disconnect();
           }}
@@ -436,9 +485,7 @@ function VideoSessionContent() {
           // ( ConnectionError "Client initiated disconnect" ).
           disconnectDisabled={connectionState !== "connected"}
           className="backdrop-blur-md bg-background/50 rounded-full p-2"
-          // PARTAGE D'ÉCRAN DÉSACTIVÉ : bouton masqué pour ne pas offrir une
-          // fonctionnalité qui n'est plus câblée ( stabilité en prod ).
-          showScreenShareButton={false}
+          showScreenShareButton={true}
         />
       </div>
     </div>

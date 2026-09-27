@@ -796,6 +796,92 @@ def delete_fact(
         raise
 
 
+# ------------------------------------------------------------------
+# Nouvelles méthodes (REFACTOR MÉMOIRE)
+# ------------------------------------------------------------------
+
+
+def patch_profile(
+    user_id: str,
+    fields: dict,
+    thread_id: str = "",
+) -> dict:
+    """Alias explicite de write_profile — fait un PATCH (merge).
+
+    Plus clair dans le code : patch_profile vs write_profile.
+    """
+    return write_profile(user_id, fields, thread_id=thread_id)
+
+
+def get_facts(
+    user_id: str,
+    category: str | None = None,
+    limit: int = 50,
+    thread_id: str = "",
+) -> list[dict]:
+    """Liste les MemoryFacts avec une limite.
+
+    Contrairement à list_facts (tous les faits), cette méthode
+    retourne au plus `limit` faits.
+
+    Args:
+        user_id: identifiant de l'apprenant.
+        category: filtrer par catégorie (None = toutes).
+        limit: nombre maximum de faits (défaut 50).
+        thread_id: pour les logs.
+
+    Returns:
+        list[dict]: faits (au plus limit).
+    """
+    facts = list_facts(user_id, category=category, thread_id=thread_id)
+    return facts[:limit]
+
+
+def delete_all_facts(
+    user_id: str,
+    thread_id: str = "",
+) -> dict:
+    """Supprime TOUS les faits d'un apprenant (pour forget_memory).
+
+    WARNING : action irréversible. Utiliser avec confirm=True côté tool.
+
+    Returns:
+        dict: {"deleted_count": N}
+    """
+    if thread_id == "":
+        thread_id = _current_thread_id()
+
+    try:
+        with _store_lock:
+            facts = _load_facts(user_id)
+            count = len(facts)
+            _save_facts(user_id, [])
+            invalidate_memory_cache(user_id)
+
+        log_event(
+            "MEMORY_DELETE_ALL",
+            message=f"All facts deleted | user={user_id} | count={count}",
+            user_id=user_id,
+            thread_id=thread_id,
+            extra={
+                "namespace": NAMESPACE_LABEL,
+                "operation": "delete_all_facts",
+                "count": count,
+            },
+        )
+        return {"deleted_count": count}
+
+    except Exception as exc:
+        log_event(
+            "MEMORY_DELETE_ALL_ERROR",
+            level="ERROR",
+            message=f"delete_all_facts failed | user={user_id} | {exc}",
+            user_id=user_id,
+            thread_id=thread_id,
+        )
+        raise
+
+
 def search_facts(
     user_id: str,
     query: str,

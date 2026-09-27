@@ -122,5 +122,30 @@ class MainState(CustomAgentState):
         "écrit par le runner, consommé par les nodes subgraph.",
     )
 
+    # --- REFACTOR MÉMOIRE : contexte apprenant (transient, non persisté)
+    # Ces champs sont calculés à chaque tour et ne DOIVENT PAS être
+    # persistés en checkpointer. On les nettoie après usage.
+    learner_context: dict = Field(
+        default_factory=dict,
+        description="Contexte apprenant chargé par retrieve_context. "
+        "TRANSIENT — non persisté en checkpointer.",
+    )
+    _context_block: str = Field(
+        default="",
+        description="Bloc system prompt injecté par retrieve_context. "
+        "TRANSIENT — calculé à chaque tour.",
+    )
+    # --- REFACTOR TRIM : indicateurs de trimming
+    _trim_needed: bool = Field(
+        default=False,
+        description="Si True, le milieu de l'historique a été résumé. "
+        "TRANSIENT.",
+    )
+    _middle_summary: str = Field(
+        default="",
+        description="Résumé du milieu des messages (si trim_needed). "
+        "TRANSIENT.",
+    )
+
 
 __all__ = ["CustomAgentState", "MainState"]
