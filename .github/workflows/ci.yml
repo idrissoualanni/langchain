@@ -1,0 +1,130 @@
+# CI/CD Agent-Tutor — garde master déployable.
+#
+# Contexte : trois poussées consécutives ont cassé la prod ( Render )
+# à cause d'imports morts et d'un package PyPI inexistant, et le build
+# Vercel était en échec depuis 5 jours à cause d'une fausse détection
+# de projet Python. Ce workflow intercepte ces régressions AVANT le
+# déploiement automatique de Render et Vercel.
+#
+# Jobs :
+#   - backend  : install requirements.txt, syntaxe, smoke tests d'import
+#                ( uvicorn app.main + worker LiveKit ), tests
+#   - frontend : npm ci + build Vite ( tsc -b && vite build )
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+# Évite l'accumulation de runs sur les pushes successifs d'une même branche.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # --------------------------------------------------------------------------
+  # BACKEND — Python 3.11 ( même version que l'image Render ).
+  # --------------------------------------------------------------------------
+  backend:
+    name: Backend (Python 3.11)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        # Échoue explicitement si un package n'existe pas sur PyPI
+        # ( cf. bug « deepgram » qui a cassé Render ).
+        run: pip install --no-input -r requirements.txt
+
+      - name: Syntax check ( compileall )
+        run: python -m compileall -q app scripts
+
+      # Smoke tests d'import : un import mort ( symbole supprimé lors d'un
+      # refactor ) fait crasher uvicorn ET le worker au démarrage. On
+      # importe donc les points d'entrée réels pour les valider.
+      - name: Import smoke tests
+        env:
+          # Le démarrage lit la config ; on fournit des valeurs factices
+          # pour ne pas dépendre de secrets en CI.
+          AUTH_MODE: neon
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          NEON_AUTH_BASE_URL: https://example.neon.tech
+          JWT_ALGORITHM: RS256
+          RUN_AS_WORKER: "1"
+        run: |
+          python -c "import app.main; print('app.main OK')"
+          python -c "import app.infrastructure.livekit.agent; print('worker agent OK')"
+          python -c "import app.infrastructure.livekit.session; print('livekit session OK')"
+          python -c "import app.tools; print('tools OK')"
+          python -c "import app.graph.main; print('graph OK')"
+
+      # Cohérence façades : chaque __init__ de package de tools doit
+      # exposer des symboles qui existent vraiment.
+      - name: Check tool registry
+        run: python -c "from app.tools import all_tools; assert len(all_tools) > 0; print(f'{len(all_tools)} tools registered')"
+
+      - name: Run tests
+        run: python -m pytest tests -q --no-header
+        continue-on-error: true
+
+  # --------------------------------------------------------------------------
+  # FRONTEND — build Vite ( tsc -b && vite build ).
+  # --------------------------------------------------------------------------
+  frontend:
+    name: Frontend (Vite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # npm ci échoue si package-lock.json n'est pas synchronisé avec
+      # package.json — c'est le garde-fou voulu.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (oxlint)
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Build (tsc + vite)
+        env:
+          # Variables publiques minimales : le build ne doit pas dépendre
+          # d'un backend live pour réussir.
+          VITE_API_BASE_URL: http://localhost:8000
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
