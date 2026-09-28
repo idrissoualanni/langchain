@@ -93,3 +93,4 @@ backend/data/mcp/google/*.json
 
 # Exports bruts de config d'infra (contiennent des IDs/params de services)
 svc_raw.jsonrl.txt
+svc_raw.json

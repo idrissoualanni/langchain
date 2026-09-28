@@ -2,10 +2,8 @@
 
 import * as React from "react";
 import {
-    Loader2,
     Maximize2,
     Minimize2,
-    Video,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 

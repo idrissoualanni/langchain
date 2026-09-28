@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Volume2, VolumeX, Loader2 } from "lucide-react";
+import { Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface TTSReadAloudProps {
@@ -160,9 +160,4 @@ export function useTTS() {
     return { speak, stop, isPlaying, isSupported };
 }
 
-// Types pour Web Speech API
-declare global {
-    interface Window {
-        speechSynthesis: SpeechSynthesis;
-    }
-}
+// speechSynthesis est déjà typé par lib.dom ( TS2687 si on le redéclare ).

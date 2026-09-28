@@ -5,7 +5,8 @@ import { Mic, MicOff, Copy, Send, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTranscription } from "./useTranscription";
-import { apiFetch, ApiError } from "@/api/base";
+import { ApiError } from "@/api/base";
+
 import { useAui } from "@assistant-ui/react";
 import { useNavigate } from "react-router-dom";
 
@@ -28,7 +29,7 @@ export function TranscriptionPanel({
   const [isUploading, setIsUploading] = React.useState(false);
   const [uploadError, setUploadError] = React.useState<string | null>(null);
 
-  const handleTranscript = React.useCallback((text: string, isFinal: boolean) => {
+  const handleTranscript = React.useCallback((_text: string, _isFinal: boolean) => {
     // Ne rien faire en temps réel, attendre validation
   }, []);
 
@@ -93,8 +94,8 @@ export function TranscriptionPanel({
           throw new Error(`Erreur HTTP: ${response.status}`);
         }
 
-        const result = await response.json();
         // Le résultat sera affiché dans le transcript via le hook
+        await response.json();
       } catch (e) {
         const apiError = e instanceof ApiError ? e : null;
         setUploadError(

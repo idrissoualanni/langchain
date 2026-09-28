@@ -1,7 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { apiFetch, ApiError } from "@/api/base";
+import type {
+  TranscriptionSpeechRecognition,
+  TranscriptionSpeechRecognitionConstructor,
+} from "@/types/speech-recognition";
+
+// Alias local : window.SpeechRecognition est déjà déclaré globalement par
+// @assistant-ui/core, on récupère le constructeur via une affectation typée.
+
 
 interface UseTranscriptionOptions {
   language?: string;
@@ -23,12 +30,17 @@ export function useTranscription(
   const [isListening, setIsListening] = React.useState(false);
   const [transcript, setTranscript] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
-  const recognitionRef = React.useRef<SpeechRecognition | null>(null);
+  const recognitionRef = React.useRef<TranscriptionSpeechRecognition | null>(null);
 
   React.useEffect(() => {
     // Vérifier support Web Speech API
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+    // window.SpeechRecognition est déclaré par @assistant-ui/core ( sans
+    // maxAlternatives/callbacks ) ; on force le type complet défini dans
+    // src/types/speech-recognition.d.ts.
+    const SpeechRecognition = (window.SpeechRecognition ||
+      window.webkitSpeechRecognition) as
+      | TranscriptionSpeechRecognitionConstructor
+      | undefined;
 
     if (!SpeechRecognition) {
       setError("Votre navigateur ne supporte pas la reconnaissance vocale");
@@ -120,10 +132,5 @@ export function useTranscription(
   };
 }
 
-// Déclarer les types pour Web Speech API
-declare global {
-  interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
-  }
-}
+// Types Web Speech API : voir src/types/speech-recognition.d.ts
+// ( déclaré globalement une seule fois, avec une instance typée ).

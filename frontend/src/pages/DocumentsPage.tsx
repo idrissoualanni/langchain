@@ -41,7 +41,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
-import { Dialog } from '../components/ui/Dialog';
+import { Dialog } from '../components/ui/dialog';
 import { DropZone } from '../components/ui/drop-zone';
 import { EmptyState } from '../components/ui/empty-state';
 import { ErrorState } from '../components/ui/error-state';

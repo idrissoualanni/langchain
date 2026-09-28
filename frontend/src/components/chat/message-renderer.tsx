@@ -52,14 +52,17 @@ export function MessageRenderer() {
                     components={{
                         // Rendu du texte standard (Markdown supporté)
                         Text: (props) => {
-                            const text = getMessageText(props.content);
+                            // Dans cette version d'assistant-ui, le
+                            // composant Text reçoit directement la
+                            // TextMessagePart ( props.text / props.status ).
+                            const text = getMessageText(props.text);
                             // Stocker le texte pour le TTS quand c'est un message assistant
                             React.useEffect(() => {
                                 if (text) {
                                     setLastAssistantText(text);
                                 }
                             }, [text]);
-                            return <TextMessagePart {...props} />;
+                            return <TextMessagePart text={props.text} status={props.status} type="text" />;
                         },
 
                         // Rendu des sources (citations, références)
