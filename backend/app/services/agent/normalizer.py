@@ -63,11 +63,17 @@ def response_from_text(
     waiting = False
     if activity:
         status = activity.get("status")
-        waiting = status in (
-            "waiting_for_answer",
-            "waiting_for_retry",
-            "checking_understanding",
-        )
+        # V6.7 : un diagramme est une activité NON interactive —
+        # le tool pose awaiting_answer=False ; il ne faut JAMAIS
+        # faire attendre l'étudiant sur une simple visualisation.
+        if activity.get("activity_type") == "diagram":
+            waiting = False
+        else:
+            waiting = status in (
+                "waiting_for_answer",
+                "waiting_for_retry",
+                "checking_understanding",
+            )
     return AgentResponse(
         type="text",
         status="waiting_for_user" if waiting else "completed",
@@ -105,6 +111,25 @@ def response_from_activity(
 
     a_status = activity.get("status") or "idle"
     a_type = activity.get("activity_type")
+
+    # Diagramme (V6.7 tool create_diagram) : activité NON interactive
+    # (awaiting_answer=False) → contrat public type="diagram",
+    # data.chart = code mermaid BRUT validé côté serveur (§19).
+    if a_type == "diagram":
+        return AgentResponse(
+            type="diagram",
+            status="completed",
+            message=message,
+            data=_sanitize_data(
+                {
+                    "activity_id": activity.get("activity_id", ""),
+                    "activity_status": a_status,
+                    "chart": activity.get("chart", ""),
+                    "caption": activity.get("caption", ""),
+                }
+            ),
+        )
+
     data = _sanitize_data(
         {
             "activity_id": activity.get("activity_id", ""),

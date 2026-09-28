@@ -1,30 +1,12 @@
-// API Memory — state + history + profil + MemoryFacts v3
+// API Memory — profil + MemoryFacts v3 (mémoire longue durée de l'utilisateur).
+// Les endpoints thread-scopés (state/history LangGraph) ont été retirés avec
+// la page admin « Mémoire ».
 import type {
-  Checkpoint,
   MemoryFact,
   MemoryOverview,
-  ThreadState,
   UserProfile,
 } from '../types/agent';
 import { apiFetch } from './base';
-
-export async function getThreadState(
-  threadId: string,
-  userId?: string
-): Promise<ThreadState> {
-  const qs = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
-  return apiFetch<ThreadState>(`/api/threads/${threadId}/state${qs}`);
-}
-
-export async function getThreadHistory(
-  threadId: string,
-  userId?: string
-): Promise<Checkpoint[]> {
-  const qs = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
-  return apiFetch<Checkpoint[]>(
-    `/api/threads/${threadId}/history${qs}`
-  );
-}
 
 // ---- Mémoire longue durée (profil user, cross-thread) ----
 

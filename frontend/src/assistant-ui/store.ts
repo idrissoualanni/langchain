@@ -84,8 +84,7 @@ export function setStoreUser(userId: string | null) {
  * Persiste la SÉLECTION du thread courant ( pas une identité ).
  * Le contenu reste la source de vérité du BACKEND ; localStorage
  * ne porte que { thread_id, user_id, name, created_at } pour :
- *   - F5 (§21) : AssistantRuntimeProvider restaure le thread actif ;
- *   - MemoryPage : affiche le contexte actif via useSelection.
+ *   - F5 (§21) : AssistantRuntimeProvider restaure le thread actif.
  * (Mission Cleanup §6 : jamais d'identité ici.)
  */
 function persistSelection(threadId: string) {

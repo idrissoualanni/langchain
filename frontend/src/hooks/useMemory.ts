@@ -1,25 +1,21 @@
-// Hook Memory — state + historique + profil + MemoryFacts v3
+// Hook Memory — mémoire longue durée de l'utilisateur (profil + MemoryFacts v3).
+// La partie thread-scopée (state LangGraph / checkpoints) a été retirée avec
+// la page admin « Mémoire » ; ce hook ne dépend plus que du user.
 import { useCallback, useEffect, useState } from 'react';
 import type {
-  Checkpoint,
   MemoryFact,
   MemoryOverview,
-  ThreadState,
   UserProfile,
 } from '../types/agent';
 import {
   createMemoryFact,
   deleteMemoryFact,
   getMemoryOverview,
-  getThreadHistory,
-  getThreadState,
   updateMemoryFact,
   updateUserProfile,
 } from '../api/memory';
 
-export function useMemory(threadId: string | null, userId?: string | null) {
-  const [state, setState] = useState<ThreadState | null>(null);
-  const [history, setHistory] = useState<Checkpoint[]>([]);
+export function useMemory(userId?: string | null) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [overview, setOverview] = useState<MemoryOverview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -27,39 +23,15 @@ export function useMemory(threadId: string | null, userId?: string | null) {
 
   const refresh = useCallback(async () => {
     // Mémoire longue durée : ne dépend que du user — pas du thread
-    const memoryPromise = userId
-      ? getMemoryOverview(userId).catch(() => null)
-      : Promise.resolve(null);
-
-    if (!threadId) {
-      setState(null);
-      setHistory([]);
-      const mem = await memoryPromise;
-      setOverview(mem);
-      setProfile(
-        mem
-          ? {
-              user_id: mem.user_id,
-              name: mem.identity.name,
-              description: mem.identity.description,
-              exists:
-                mem.identity.name !== null ||
-                mem.identity.description !== null,
-            }
-          : null
-      );
+    if (!userId) {
+      setOverview(null);
+      setProfile(null);
       return;
     }
     setLoading(true);
     try {
       setError(null);
-      const [s, h, mem] = await Promise.all([
-        getThreadState(threadId, userId ?? undefined),
-        getThreadHistory(threadId, userId ?? undefined),
-        memoryPromise,
-      ]);
-      setState(s);
-      setHistory(h);
+      const mem = await getMemoryOverview(userId).catch(() => null);
       setOverview(mem);
       setProfile(
         mem
@@ -78,7 +50,7 @@ export function useMemory(threadId: string | null, userId?: string | null) {
     } finally {
       setLoading(false);
     }
-  }, [threadId, userId]);
+  }, [userId]);
 
   const updateProfile = useCallback(
     async (fields: { name?: string; description?: string }) => {
@@ -131,8 +103,6 @@ export function useMemory(threadId: string | null, userId?: string | null) {
   }, [refresh]);
 
   return {
-    state,
-    history,
     profile,
     overview,
     facts,

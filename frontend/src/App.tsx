@@ -27,11 +27,9 @@ import {
 } from './pages/auth';
 import { AdminGate } from './auth/AdminGate';
 import { useCurrentUser } from './hooks/useCurrentUser';
-import { SelectionProvider } from './hooks/useSelection';
 import { AssistantUIRuntimeProvider } from './assistant-ui/AssistantRuntimeProvider';
 
 // Lazy — code-splitting (§28) : LiveKit/Mermaid/Admin ne bloquent plus le First Paint
-const MemoryPage = lazy(() => import('./pages/MemoryPage').then((m) => ({ default: m.MemoryPage })));
 const LogsPage = lazy(() => import('./pages/LogsPage').then((m) => ({ default: m.LogsPage })));
 const AdminDashboardPage = lazy(() => import('./app/admin/page'));
 const TracesPage = lazy(() => import('./features/admin/traces/TracesPage').then((m) => ({ default: m.TracesPage })));
@@ -124,7 +122,6 @@ function PageTitle() {
     '/assistant': 'Assistant',
     '/learning': 'Learning',
     '/documents': 'Documents',
-    '/memory': 'Mémoire',
     '/profile': 'Profil',
     '/settings': 'Paramètres',
     '/video': 'Vidéo',
@@ -161,7 +158,7 @@ function AppShell() {
           <span className="ml-auto hidden font-mono text-[10px] text-muted-foreground sm:inline">⌘K</span>
         </header>
         <CommandPalette />
-        <div id="main-content" className="min-h-0 flex-1 overflow-hidden">
+        <div id="main-content" className="min-h-0 flex-1 overflow-y-auto">
           <Suspense fallback={<div className="p-6"><LoadingState label="Chargement de la page…" /></div>}>
             <Routes>
           <Route index element={<Navigate to="/assistant" replace />} />
@@ -270,15 +267,6 @@ function AppShell() {
             <Route path="data" element={<SettingsDataPage />} />
           </Route>
 
-          {/* Mémoire — accès direct conservé (aussi via Settings → Memory) */}
-          <Route
-            path="/memory"
-            element={
-              <Protected>
-                <MemoryPage />
-              </Protected>
-            }
-          />
           {/* Logs : ADMIN uniquement (§22) */}
           <Route
             path="/logs"
@@ -425,9 +413,7 @@ function AppRoutes() {
 export default function App() {
   return (
     <Router>
-      <SelectionProvider>
-        <AppRoutes />
-      </SelectionProvider>
+      <AppRoutes />
     </Router>
   );
 }

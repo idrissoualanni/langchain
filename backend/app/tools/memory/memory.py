@@ -265,10 +265,9 @@ memory_tools = [
     update_learner_fact,
     delete_user_memory,
     search_user_memory,
-    # Aliases backward-compat
-    get_user_memory,  # alias de get_learner_facts
-    save_user_memory,  # alias de save_learner_fact
-    update_user_memory,  # alias de update_learner_fact
+    # NB : les aliases backward-compat (get_user_memory, etc.) sont
+    # les MÊMES objets tool — les lister ici enregistrerait deux
+    # fois chaque tool dans all_tools (doublons au binding LLM).
 ]
 
 __all__ = [

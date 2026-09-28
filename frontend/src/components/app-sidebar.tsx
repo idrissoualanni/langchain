@@ -50,7 +50,6 @@ const MAIN_NAV: NavItem[] = [
   { to: '/assistant', label: 'Assistant', icon: Bot },
   { to: '/learning', label: 'Learning', icon: GraduationCap },
   { to: '/documents', label: 'Documents', icon: FileText },
-  { to: '/memory', label: 'Mémoire', icon: ScrollText },
 ];
 
 const WORKSPACE_NAV: NavItem[] = [
