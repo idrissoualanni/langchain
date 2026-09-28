@@ -16,6 +16,13 @@ from typing import Any
 from livekit.agents import JobContext
 
 from app.infrastructure.livekit.config import TUTOR_AGENT_NAME, get_agent_config
+from app.infrastructure.livekit.errors import (
+    CODE_JOB_SHUTDOWN,
+    ErrorGuard,
+    attach_error_handler,
+    publish_error,
+    spoken_message,
+)
 from app.infrastructure.livekit.memory_tools import (
     get_user_profile,
     get_user_memory,
@@ -71,6 +78,10 @@ MEMORY_TOOLS = [
 async def entrypoint(ctx: JobContext) -> None:
     """Point d'entrée appelé lorsqu'un dispatch pour `tutor`
     est attribué à ce worker.
+
+    La gestion d'erreur LiveKit est entièrement déléguée à
+    app.infrastructure.livekit.errors ( attach_error_handler + ErrorGuard ) :
+    aucune panne Inference ne doit laisser l'étudiant face au silence.
     """
     # ------------------------------------------------------------------------
     # Résolution utilisateur
@@ -87,6 +98,17 @@ async def entrypoint(ctx: JobContext) -> None:
             getattr(ctx.job, "metadata", None),
             room_name,
         )
+        publish_error(
+            room_name=room_name,
+            user_id="unknown",
+            code="dispatch_misconfigured",
+            recoverable=False,
+            source="entrypoint",
+            detail=(
+                f"user_id irrésolvable depuis le dispatch "
+                f"(metadata={metadata!r}) — agent stoppé immédiatement"
+            ),
+        )
         ctx.shutdown()
         return
 
@@ -99,18 +121,83 @@ async def entrypoint(ctx: JobContext) -> None:
     # ------------------------------------------------------------------------
     # Connexion à la room
     # ------------------------------------------------------------------------
-    await ctx.connect()
+    try:
+        await ctx.connect()
+    except Exception as exc:  # noqa: BLE001 — RTC fatal : rien à sauver
+        from app.infrastructure.livekit.errors import classify_exception
+
+        code, _ = classify_exception(exc)
+        publish_error(
+            room_name=room_name,
+            user_id=user_id,
+            code=code,
+            recoverable=False,
+            source="rtc",
+            detail=f"ctx.connect() a échoué : {type(exc).__name__}: {exc}",
+        )
+        raise
 
     # ------------------------------------------------------------------------
-    # Session vocale
+    # Session vocale — une erreur de CONFIGURATION ( modèle absent du
+    # catalogue, credentials Inference manquants ) est FATALE ici : on la
+    # publie avec un code actionnable plutôt que de laisser un agent muet
+    # en salle ( le piège historique de production ).
     # ------------------------------------------------------------------------
-    session = build_session()
+    from app.infrastructure.livekit.session import PipelineBuildError
+
+    try:
+        session = build_session()
+    except PipelineBuildError as exc:
+        publish_error(
+            room_name=room_name,
+            user_id=user_id,
+            code="inference_invalid_model",
+            recoverable=False,
+            source="pipeline",
+            detail=str(exc),
+        )
+        ctx.shutdown()
+        return
 
     instructions = await build_instructions_async(user_id)
 
     from app.infrastructure.livekit.agent import TutorAgent
 
     tutor = TutorAgent(instructions=instructions)
+
+    # ------------------------------------------------------------------------
+    # Gestion d'erreurs LiveKit — ATTACHÉE AVANT session.start() : les
+    # events "error"/"close" peuvent être émis dès les premières millisecondes
+    # ( ex : premier token STT refusé ). Un par job, garde fraîche.
+    # ------------------------------------------------------------------------
+    guard = ErrorGuard()
+
+    async def _on_fatal(code: str) -> None:
+        """Arrêt propre ordonné par la garde anti-boucle."""
+        publish_error(
+            room_name=room_name,
+            user_id=user_id,
+            code=code,
+            recoverable=False,
+            source="guard",
+            detail="seuil d'erreurs atteint — shutdown du job",
+        )
+        try:
+            # Annonce vocale in-extremis : la session n'est pas encore
+            # fermée quand "error" arrive avant la fermeture lib.
+            await session.say(spoken_message(code), allow_interruptions=False)
+        except Exception:  # noqa: BLE001 — muet vaut mieux qu'un crash ici
+            pass
+        ctx.shutdown(reason=f"livekit error: {code}")
+
+    attach_error_handler(
+        session,
+        guard=guard,
+        room=ctx.room,
+        room_name=room_name,
+        user_id=user_id,
+        on_fatal=_on_fatal,
+    )
 
     # ------------------------------------------------------------------------
     # Démarrage session
@@ -127,22 +214,41 @@ async def entrypoint(ctx: JobContext) -> None:
     )
 
     # ------------------------------------------------------------------------
-    # Capture d'écran — l'agent "voit" l'écran partagé
+    # Capture d'écran — l'agent "voit" l'écran partagé.
+    # Non critique : un échec ici ne doit JAMAIS tuer la session vocale
+    # ( on loggue + publie, et on continue sans vision ).
     # ------------------------------------------------------------------------
-    capturer = ScreenShareCapturer()
-    await capturer.attach(session)
-
     try:
-        set_screen_sharing(ctx.room.name, capturer.is_sharing)
-    except Exception as exc:
-        logger.debug("état capture non remonté (%s)", exc)
+        capturer = ScreenShareCapturer()
+        await capturer.attach(session)
 
-    async def _on_capture_end() -> None:
         try:
-            set_screen_sharing(ctx.room.name, False)
-            capturer.detach()
-        except Exception:
-            pass
+            set_screen_sharing(ctx.room.name, capturer.is_sharing)
+        except Exception as exc:
+            logger.debug("état capture non remonté (%s)", exc)
+
+        async def _on_capture_end() -> None:
+            try:
+                set_screen_sharing(ctx.room.name, False)
+                capturer.detach()
+            except Exception:
+                pass
+
+        ctx.add_shutdown_callback(_on_capture_end)
+    except Exception as exc:  # noqa: BLE001 — la voix prime sur la vision
+        capturer = None  # type: ignore[assignment]
+
+        async def _on_capture_end() -> None:  # no-op, capture absente
+            return
+
+        publish_error(
+            room_name=room_name,
+            user_id=user_id,
+            code="screen_capture_unavailable",
+            recoverable=True,
+            source="capturer",
+            detail=f"capture écran désactivée pour ce job : {type(exc).__name__}: {exc}",
+        )
 
     # ------------------------------------------------------------------------
     # Transcript
