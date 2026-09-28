@@ -14,9 +14,9 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    branches: [master]
   pull_request:
-    branches: [master, main]
+    branches: [master]
   workflow_dispatch:
 
 # Évite l'accumulation de runs sur les pushes successifs d'une même branche.
