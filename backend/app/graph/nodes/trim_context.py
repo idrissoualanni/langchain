@@ -11,7 +11,6 @@
 # mots de chaque message du milieu (pas de LLM pour le moment).
 from typing import Annotated
 
-from langchain_core.messages import remove_message
 from langgraph.config import RunnableConfig
 
 from app.logging.events import log_event
