@@ -1,4 +1,3 @@
-"use client";
 
 // Santé du système — statuts RÉELS uniquement.
 //
@@ -7,8 +6,8 @@
 // - LiveKit : aucun endpoint de santé n'existe → on affiche honnêtement
 //   "Non monitoré" au lieu d'un "Dégradé" codé en dur (faux).
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
 import { CheckCircle2, XCircle, AlertTriangle, Loader2, Minus } from "lucide-react";
 import { apiRequest } from "@/api/request";
 

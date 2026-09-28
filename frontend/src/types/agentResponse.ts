@@ -15,6 +15,7 @@ export type AgentResponseType =
   | 'evaluation'
   | 'hint'
   | 'code'
+  | 'diagram'
   | 'search'
   | 'clarification'
   | 'error';
@@ -54,6 +55,13 @@ export interface QuizData extends ExerciseData {
 export interface CodeData extends ExerciseData {
   language: string;
   starter_code: string;
+}
+
+/** data d'une AgentResponse type='diagram' — chart = code mermaid brut. */
+export interface DiagramData {
+  chart: string;
+  caption?: string;
+  diagram_type?: string;
 }
 
 export interface EvaluationData extends ExerciseData {

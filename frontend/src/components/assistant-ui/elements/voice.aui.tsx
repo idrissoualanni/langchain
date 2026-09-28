@@ -1,9 +1,8 @@
-"use client";
 
 import * as React from "react";
 import { Loader2, Mic, MicOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/Button";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch, ApiError } from "@/api/base";
 

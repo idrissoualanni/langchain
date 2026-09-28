@@ -1,4 +1,3 @@
-"use client";
 
 import { ComposerPrimitive } from "@assistant-ui/react";
 

@@ -1,20 +1,22 @@
 # Mission Identité — CurrentUserResolver (§4/§5 du brief)
 #
 # LE point unique où l'identité est établie :
-#   Bearer token → vérification Clerk (JWKS réel, mode clerk)
-#   → sub (clerk_user_id) → users.clerk_user_id → internal user_id
+#   Bearer token → vérification Neon Auth (JWKS réel, mode neon)
+#   → sub (provider_user_id) → users.provider_user_id → internal user_id
 #   → rôle → CurrentUser
 #
 # AUCUN endpoint ne doit plus accepter un user_id du client comme
 # source d'identité. Les routes dérivent TOUT de get_current_user().
 #
 # Modes :
-#   AUTH_MODE=clerk → JWT réel (signature via PyJWKClient officiel,
-#     issuer, exp, azp ; JAMAIS verify_signature=False ; JAMAIS de
-#     sub trusté depuis le body ; JAMAIS de secret en dur)
-#   AUTH_MODE=dev   → "Bearer dev:<name>" résolu en interne pour le
-#     développement local sans clés Clerk. Mêmes règles d'ownership
+#   AUTH_MODE=neon → JWT réel Ed25519 (signature via PyJWKClient sur
+#     le well-known Neon, exp, aud ; JAMAIS verify_signature=False ;
+#     JAMAIS de sub trusté depuis le body ; JAMAIS de secret en dur)
+#   AUTH_MODE=dev  → "Bearer dev:<name>" résolu en interne pour le
+#     développement local sans clés. Mêmes règles d'ownership
 #     — pas de contournement possible de l'isolation.
+#
+# Historique : Clerk a été retiré du projet (voir app/config.py).
 import time
 from dataclasses import dataclass
 
@@ -25,10 +27,7 @@ from jwt import PyJWKClient
 from app.config import (
     ADMIN_CLERK_IDS,
     AUTH_MODE,
-    CLERK_AUDIENCES,
-    CLERK_ISSUER,
-    CLERK_JWKS_URL,
-    CLERK_JWT_LEEWAY,
+    JWT_LEEWAY,
     NEON_AUTH_JWKS_URL,
     NEON_AUTH_BASE_URL,
     log_safe,
@@ -41,7 +40,7 @@ from app.logging.events import log_event
 class CurrentUser:
     """Utilisateur courant RÉSOLU (jamais déclaré par le client)."""
 
-    clerk_user_id: str
+    provider_user_id: str
     user_id: str          # internal UUID — clé de TOUT le stockage
     name: str
     role: str             # "user" | "admin"
@@ -52,63 +51,11 @@ class CurrentUser:
 
 
 # ------------------------------------------------------------------
-# Vérification JWT Clerk ( mode clerk — réel )
-# ------------------------------------------------------------------
-
-_jwk_client: PyJWKClient | None = None
-
-
-def _get_jwk_client() -> PyJWKClient:
-    """Client JWKS officiel (cache des clés publiques Clerk)."""
-    global _jwk_client
-    if _jwk_client is None:
-        if not CLERK_JWKS_URL:
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "Auth Clerk non configurée : définir "
-                    "CLERK_ISSUER (ex: https://xxx.clerk.accounts.com)"
-                    " ou CLERK_JWKS_URL dans .env",
-                ),
-            )
-        _jwk_client = PyJWKClient(CLERK_JWKS_URL, cache_keys=True)
-    return _jwk_client
-
-
-def verify_clerk_token(token: str) -> dict:
-    """Vérifie un JWT Clerk : signature, issuer, exp, aud, sub.
-
-    Mécanisme officiel Clerk pour backends Python (PyJWKClient).
-    Lève jwt.PyJWTError en cas d'échec ( transformé en 401 ).
-    """
-    client = _get_jwk_client()
-    signing_key = client.get_signing_key_from_jwt(token)
-
-    options: dict = {"require": ["exp", "iat", "sub", "iss"]}
-    decode_kwargs: dict = {
-        "key": signing_key.key,
-        "algorithms": ["RS256"],
-        "options": options,
-        # Tolérance d'horloge ( secondes ) : absorbe une légère dérive
-        # locale ( iat/nbf perçus comme futurs ). N'affaiblit PAS la
-        # vérification : signature, issuer, audience et exp restent
-        # strictement contrôlés.
-        "leeway": CLERK_JWT_LEEWAY,
-    }
-    if CLERK_ISSUER:
-        decode_kwargs["issuer"] = CLERK_ISSUER
-    if CLERK_AUDIENCES:
-        decode_kwargs["audience"] = CLERK_AUDIENCES
-    return jwt.decode(token, **decode_kwargs)
-
-
-# ------------------------------------------------------------------
 # Vérification JWT Neon Managed Better Auth ( mode neon — réel )
 # ------------------------------------------------------------------
 # Neon Auth ( Better Auth ) signe ses JWT avec les clés publiques du
-# well-known endpoint du projet Neon. Même mécanisme officiel que
-# Clerk ( PyJWKClient ) — seuls l'URL JWKS et les claims changent :
-#   sub  → identifiant utilisateur Neon ( équivalent du clerk_user_id )
+# well-known endpoint du projet :
+#   sub   → identifiant utilisateur Neon ( identité externe )
 #   email/name → nom d'affichage pour le provisioning interne
 
 _neon_jwk_client: PyJWKClient | None = None
@@ -136,14 +83,13 @@ def _get_neon_jwk_client() -> PyJWKClient:
 def verify_neon_token(token: str) -> dict:
     """Vérifie un JWT Neon Auth : signature, exp, sub.
 
-    Variante "générique" de verify_clerk_token : pas d'issuer ni
-    d'audience codés en dur ( Neon/Better Auth ne fournit pas de
+    Pas d'issuer codé en dur ( Neon/Better Auth ne fournit pas de
     vérification d'issuer côté backend — la signature JWKS + l'exp
     suffisent ; la clé publique ne provient QUE du well-known Neon ).
 
     ATTENTION : Neon Auth ( Better Auth ) signe en EdDSA / Ed25519
-    ( clé OKP ), PAS en RS256 comme Clerk. PyJWT supporte EdDSA dès
-    que `cryptography` est installé ( requirements.txt ).
+    ( clé OKP ). PyJWT supporte EdDSA dès que `cryptography` est
+    installé ( requirements.txt ).
     Lève jwt.PyJWTError en cas d'échec ( transformé en 401 ).
     """
     client = _get_neon_jwk_client()
@@ -152,11 +98,13 @@ def verify_neon_token(token: str) -> dict:
     options: dict = {"require": ["exp", "iat", "sub"]}
     decode_kwargs: dict = {
         "key": signing_key.key,
-        # Ed25519 ( OKP ) — signature EdDSA, pas RS256 comme Clerk.
+        # Ed25519 ( OKP ) — signature EdDSA.
         "algorithms": ["EdDSA"],
         "options": options,
-        # Tolérance d'horloge ( secondes ) — voir verify_clerk_token.
-        "leeway": CLERK_JWT_LEEWAY,
+        # Tolérance d'horloge ( secondes ) — absorbe une légère dérive
+        # locale ( iat/nbf perçus comme futurs ). N'affaiblit PAS la
+        # vérification : signature et exp restent strictement contrôlés.
+        "leeway": JWT_LEEWAY,
     }
     # Better Auth pose un claim aud ( = URL du service Neon Auth ).
     # PyJWT rejette par défaut tout token portant un aud non vérifié
@@ -170,30 +118,30 @@ def verify_neon_token(token: str) -> dict:
 
 
 # ------------------------------------------------------------------
-# Provisioning : Clerk user → user interne (§6/§7)
+# Provisioning : identité externe → user interne (§6/§7)
 # ------------------------------------------------------------------
 
 def resolve_internal_user(
-    clerk_user_id: str, display_name: str
+    provider_user_id: str, display_name: str
 ) -> CurrentUser:
-    """Mappe clerk_user_id → user interne, avec provisioning.
+    """Mappe provider_user_id → user interne, avec provisioning.
 
-    - login 1 : aucun user avec ce clerk_user_id → provisionnement
-      (nouvel UUID interne, ENREGISTRÉ avec son clerk_user_id)
+    - login 1 : aucun user avec ce provider_user_id → provisionnement
+      (nouvel UUID interne, ENREGISTRÉ avec son provider_user_id)
     - logins suivants : RETROUVE LE MÊME user interne ( jamais de
       nouvel UUID à chaque connexion )
-    - les users existants sans clerk_user_id ne sont JAMAIS
+    - les users existants sans provider_user_id ne sont JAMAIS
       rattachés arbitrairement (§7) — ils restent intacts.
     """
-    existing = users_db.get_user_by_clerk_id(clerk_user_id)
+    existing = users_db.get_user_by_provider_id(provider_user_id)
     if existing is not None:
         role = (
             "admin"
-            if clerk_user_id in ADMIN_CLERK_IDS
+            if provider_user_id in ADMIN_CLERK_IDS
             else _role_of(existing)
         )
         return CurrentUser(
-            clerk_user_id=clerk_user_id,
+            provider_user_id=provider_user_id,
             user_id=existing["user_id"],
             name=existing.get("name") or display_name or "Utilisateur",
             role=role,
@@ -202,22 +150,22 @@ def resolve_internal_user(
     # Provisioning du premier login
     created = users_db.create_user(
         display_name or "Utilisateur",
-        clerk_user_id=clerk_user_id,
+        provider_user_id=provider_user_id,
         role=(
-            "admin" if clerk_user_id in ADMIN_CLERK_IDS else "user"
+            "admin" if provider_user_id in ADMIN_CLERK_IDS else "user"
         ),
     )
     log_event(
         "AUTH_PROVISION",
-        message=f"User provisioned from Clerk | name={display_name}",
+        message=f"User provisioned from auth provider | name={display_name}",
         user_id=created["user_id"],
     )
     return CurrentUser(
-        clerk_user_id=clerk_user_id,
+        provider_user_id=provider_user_id,
         user_id=created["user_id"],
         name=created.get("name") or display_name or "Utilisateur",
         role=(
-            "admin" if clerk_user_id in ADMIN_CLERK_IDS else "user"
+            "admin" if provider_user_id in ADMIN_CLERK_IDS else "user"
         ),
     )
 
@@ -264,7 +212,7 @@ def _resolve_from_token(token: str) -> CurrentUser:
         row = users_db.get_user(ident)
         if row is not None:
             return CurrentUser(
-                clerk_user_id=row.get("clerk_user_id")
+                provider_user_id=row.get("provider_user_id")
                 or f"dev-{row['user_id'][:8]}",
                 user_id=row["user_id"],
                 name=row["name"],
@@ -280,9 +228,9 @@ def _resolve_from_token(token: str) -> CurrentUser:
         )
 
     # Mode neon : vérification RÉELLE des JWT Neon Managed Better Auth
-    # ( même pipeline que clerk : JWKS → sub → user interne ). Le sub
-    # Neon joue le rôle du clerk_user_id : resolve_internal_user le
-    # mappe en user interne ( provisioning au premier login ).
+    # ( JWKS → sub → user interne ). Le sub Neon joue le rôle de
+    # l'identité externe : resolve_internal_user le mappe en user
+    # interne ( provisioning au premier login ).
     if AUTH_MODE == "neon":
         try:
             claims = verify_neon_token(token)
@@ -314,36 +262,29 @@ def _resolve_from_token(token: str) -> CurrentUser:
         )
         return resolve_internal_user(sub, display)
 
-    # Mode clerk : vérification RÉELLE
-    try:
-        claims = verify_clerk_token(token)
-    except HTTPException:
-        raise
-    except Exception as exc:  # jwt.ExpiredSignatureError, etc.
-        log_event(
-            "AUTH_REJECT",
-            message=f"Token rejected | err={log_safe(exc)}",
-        )
-        raise HTTPException(
-            status_code=401,
-            detail="Token invalide ou expiré",
-        )
-    sub = claims.get("sub") or ""
-    if not sub:
-        raise HTTPException(status_code=401, detail="Token sans sub")
-    # Nom d'affichage depuis les claims ( username / email )
-    display = (
-        claims.get("username")
-        or claims.get("name")
-        or ""
+    # Mode inconnu ( ex: ancienne config "clerk" ) → fail-closed.
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            f"AUTH_MODE='{AUTH_MODE}' non supporté (valeurs : neon, dev)"
+        ),
     )
-    return resolve_internal_user(sub, display)
 
 
 def get_current_user(
     request: Request,
 ) -> CurrentUser:
-    """DÉPENDANCE CENTRALE — l'identité vient UNIQUEMENT d'ici."""
+    """DÉPENDANCE CENTRALE — l'identité vient UNIQUEMENT d'ici.
+
+    Le middleware AuthGate ( app/auth/middleware.py ) a déjà validé la
+    preuve HTTP et déposé le CurrentUser sur request.state.user : on le
+    réutilise ( une seule résolution par requête ). Sans dépôt — route
+    hors du champ du middleware ou appel direct ( tests ) — on résout
+    nous-mêmes le Bearer token : JAMAIS le client ne fournit l'identité.
+    """
+    cached = getattr(request.state, "user", None)
+    if isinstance(cached, CurrentUser):
+        return cached
     token = _extract_bearer(request)
     return _resolve_from_token(token)
 
@@ -394,16 +335,14 @@ _last_jwks_check: dict = {}
 def jwks_reachable() -> bool:
     """Test réseau du JWKS ( sans cache ) — observabilité health.
 
-    L'URL testée dépend du AUTH_MODE : Neon Auth en mode neon, Clerk
-    sinon ( y compris dev — observabilité de la cible de production ).
+    L'URL testée est celle de Neon Auth en mode neon ( seul provider
+    supporté ). En dev, non applicable → False sans erreur.
     """
     global _last_jwks_check
     now = time.time()
     if now - _last_jwks_check.get("ts", 0) < 30:
         return _last_jwks_check.get("ok", False)
-    jwks_url = (
-        NEON_AUTH_JWKS_URL if AUTH_MODE == "neon" else CLERK_JWKS_URL
-    )
+    jwks_url = NEON_AUTH_JWKS_URL if AUTH_MODE == "neon" else ""
     if not jwks_url:
         _last_jwks_check = {"ts": now, "ok": False}
         return False

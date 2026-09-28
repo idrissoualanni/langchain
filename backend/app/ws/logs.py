@@ -3,7 +3,7 @@
 # Mission Identité (§22) : réservé ADMIN. Le protocole WebSocket
 # navigateur ne peut pas poser d'headers custom → le token passe
 # en query `?auth=<token>` : PREUVE vérifiée ( CurrentUserResolver
-# , signature réelle en mode clerk ) , jamais une identité crue.
+# , signature réelle en mode neon ) , jamais une identité crue.
 import asyncio
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect

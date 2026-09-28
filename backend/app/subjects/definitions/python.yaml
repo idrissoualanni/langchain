@@ -27,6 +27,7 @@ tools:
     - create_quiz
     - assess_understanding
     - propose_review
+    - create_diagram
   specialized:
     - execute_code
     - run_tests

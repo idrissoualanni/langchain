@@ -8,7 +8,6 @@
 // (types/agent.ts — ex: recherche_web, execute_code, create_quiz…) ;
 // l'ancien enregistrement `search_documents` ne correspondait à aucun
 // outil backend et tombait donc systématiquement sur le fallback.
-'use client';
 
 import { useState } from 'react';
 import {

@@ -9,7 +9,7 @@
 # POST   /api/admin/knowledge/{id}/access  → accorde un accès
 # DELETE /api/admin/knowledge/{id}/access  → révoque un accès
 #
-# Sécurité : réservé aux admins (vérification ADMIN_CLERK_IDS)
+# Sécurité : réservé aux admins (vérification ADMIN_CLERK_IDS = sub autorisés)
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status

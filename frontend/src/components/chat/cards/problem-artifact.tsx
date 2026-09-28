@@ -1,6 +1,5 @@
-"use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CheckCircle2, CircleDashed, AlertTriangle, FileCheck, Lightbulb } from "lucide-react";
 

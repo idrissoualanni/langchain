@@ -1,5 +1,5 @@
 // Latency Card Component
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Clock } from "lucide-react";
 
 interface LatencyCardProps {

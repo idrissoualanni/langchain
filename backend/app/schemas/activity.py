@@ -47,6 +47,7 @@ ALL_ACTIVITY_STATUSES = [
 ACTIVITY_TYPE_EXERCISE = "exercise"
 ACTIVITY_TYPE_QUIZ = "quiz"
 ACTIVITY_TYPE_UNDERSTANDING_CHECK = "understanding_check"
+ACTIVITY_TYPE_DIAGRAM = "diagram"
 
 # Types de réponse attendue (§23)
 RESPONSE_TYPE_TEXT = "text"
@@ -199,12 +200,17 @@ TERMINAL_STATUSES: frozenset[str] = frozenset(
     }
 )
 
-# Types d'activité §14 (le repos implémente ces 3 ; les autres
-# arriveront avec leurs subgraphs — Problem/Coding/Video).
+# Types d'activité §14 (le repos implémente ceux-ci ; les autres
+# arriveront avec leurs subgraphs — Problem/Video). "code" est
+# produit par le tool create_code_activity et "diagram" par
+# create_diagram (V6.7) — déclarés ici pour cohérence du registre.
+ACTIVITY_TYPE_CODE = "code"
 ACTIVITY_TYPES = (
     ACTIVITY_TYPE_EXERCISE,
     ACTIVITY_TYPE_QUIZ,
     ACTIVITY_TYPE_UNDERSTANDING_CHECK,
+    ACTIVITY_TYPE_CODE,
+    ACTIVITY_TYPE_DIAGRAM,
 )
 
 
@@ -407,6 +413,8 @@ __all__ = [
     "ACTIVITY_TYPE_EXERCISE",
     "ACTIVITY_TYPE_QUIZ",
     "ACTIVITY_TYPE_UNDERSTANDING_CHECK",
+    "ACTIVITY_TYPE_CODE",
+    "ACTIVITY_TYPE_DIAGRAM",
     "ALL_ACTIVITY_STATUSES",
     "ALL_RESPONSE_TYPES",
     "RESPONSE_TYPE_CODE",

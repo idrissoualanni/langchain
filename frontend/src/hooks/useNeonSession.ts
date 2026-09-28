@@ -4,7 +4,6 @@
 // vérité est NeonTokenBridge ( src/auth/NeonTokenBridge.tsx ), qui
 // rafraîchit au login et au focus de l'onglet. Pas de SDK lourd :
 // better-auth@1.6.23 casse le bundler ( imports circulaires ).
-'use client';
 
 import { useSyncExternalStore } from 'react';
 import {

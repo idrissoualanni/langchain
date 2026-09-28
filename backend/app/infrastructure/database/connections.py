@@ -13,6 +13,8 @@ import threading
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Connection, Engine, Result
 
+from app.logging.events import log_event
+
 from app.config import (
     APP_DB_PATH,
     CHECKPOINTS_DB_PATH,
@@ -93,15 +95,17 @@ SCHEMA_STATEMENTS = [
 ]
 
 # Mission Identité — migrations ADDITIVES idempotentes (§6/§7) :
-#   + users.clerk_user_id TEXT UNIQUE  (liaison identité externe)
-#   + users.role TEXT DEFAULT 'user'    (rôles user/admin)
+#   + users.provider_user_id TEXT UNIQUE  (liaison identité externe)
+#   + users.role TEXT DEFAULT 'user'       (rôles user/admin)
 # AUCUNE donnée existante n'est modifiée ou supprimée : les users
-# actuels gardent clerk_user_id NULL (jamais rattachés arbitrairement)
-# et role NULL → résolu en 'user' par le resolver.
+# actuels gardent provider_user_id NULL (jamais rattachés
+# arbitrairement) et role NULL → résolu en 'user' par le resolver.
+# Historique : la colonne s'appelait clerk_user_id (provider Clerk,
+# retiré ) — RENAME idempotent pour préserver les liaisons existantes.
 MIGRATIONS = [
     (
-        "ALTER TABLE users ADD COLUMN clerk_user_id TEXT",
-        "clerk_user_id",
+        "ALTER TABLE users ADD COLUMN provider_user_id TEXT",
+        "provider_user_id",
     ),
     (
         "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'",
@@ -109,12 +113,36 @@ MIGRATIONS = [
     ),
 ]
 
-# Index unique PARTIEL sur clerk_user_id : syntaxe WHERE acceptée par
-# SQLite ET PostgreSQL ; multiples NULL autorisés (users non reliés).
+
+def _migrate_legacy_columns(engine: Engine) -> None:
+    """Renomme les colonnes héritées de l'ère Clerk (idempotent).
+
+    - users.clerk_user_id → users.provider_user_id (données préservées)
+    - index idx_users_clerk supprimé ( recréé sous le nouveau nom ci-
+      dessous ).
+    """
+    cols = _existing_columns(engine)
+    if "clerk_user_id" in cols and "provider_user_id" not in cols:
+        conn = get_conn()
+        conn.execute(
+            "ALTER TABLE users RENAME COLUMN clerk_user_id "
+            "TO provider_user_id"
+        )
+        conn.commit()
+        log_event(
+            "DB_MIGRATION",
+            message="users.clerk_user_id renamed to provider_user_id",
+        )
+
+
+# Index unique PARTIEL sur provider_user_id : syntaxe WHERE acceptée
+# par SQLite ET PostgreSQL ; multiples NULL autorisés (users non
+# reliés). L'index hérité Clerk est supprimé à l'init (idempotent).
 UNIQUE_INDEX = """
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_clerk
-ON users(clerk_user_id) WHERE clerk_user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_provider
+ON users(provider_user_id) WHERE provider_user_id IS NOT NULL;
 """
+DROP_LEGACY_INDEX = "DROP INDEX IF EXISTS idx_users_clerk"
 
 
 # ----------------------------------------------------------------------
@@ -418,12 +446,16 @@ def init_db() -> None:
         for stmt in SCHEMA_STATEMENTS:
             conn.execute(stmt)
         conn.commit()
+        # Héritage Clerk → Neon Auth : rename clerk_user_id AVANT les
+        # migrations additives (préserve les liaisons existantes ).
+        _migrate_legacy_columns(engine)
         # Migrations additives — idempotentes et non destructives
         cols = _existing_columns(engine)
         for stmt, col in MIGRATIONS:
             if col not in cols:
                 conn.execute(stmt)
                 conn.commit()
+        conn.execute(DROP_LEGACY_INDEX)
         conn.execute(UNIQUE_INDEX)
         conn.commit()
         _initialized = True

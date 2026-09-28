@@ -7,7 +7,6 @@
 // Signature : le panneau gauche n'est pas une image générique mais une
 // composition typographique éditoriale ( citations réelles d'élèves +
 // index des modules ). Il se replie sous le breakpoint lg.
-'use client';
 
 import { motion } from 'framer-motion';
 import type { ReactNode } from 'react';

@@ -18,11 +18,11 @@ class UserOut(BaseModel):
     name: str
     created_at: str
     # Mission Identité — infos session (optionnelles)
-    clerk_user_id: str | None = None
+    provider_user_id: str | None = None
     role: str = "user"
     # MODE DEV UNIQUEMENT : token de session simulée pour les
     # suites de régression ("dev:<internal_user_id>"). Jamais
-    # renseigné en mode clerk.
+    # renseigné en production.
     dev_token: str | None = None
 
 

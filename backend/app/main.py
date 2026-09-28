@@ -38,6 +38,7 @@ from app.infrastructure.database.schema import init_schema
 from app.logging.events import log_event, setup_logging
 from app.logging.sse import sse_events
 from app.ws.logs import router as ws_router
+from app.auth.middleware import AuthGateMiddleware
 from app.config import ALLOWED_ORIGINS
 
 
@@ -112,6 +113,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# AuthGate — barrière d'authentification GLOBALE (§ Mission Identité) :
+# /api/** exige une session valide (401), /api/admin/** et /ws/logs
+# exigent un admin (403). Déclarée APRÈS CORS → elle s'exécute AVANT
+# ( pile ASGI ) : les réponses 401/403/503 partent avec leurs headers
+# CORS. Les Depends(require_admin) des routes restent la couche fine.
+app.add_middleware(AuthGateMiddleware)
 
 # Routes API
 app.include_router(users.router)

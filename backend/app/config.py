@@ -69,52 +69,39 @@ MODEL_NAME = os.getenv("MODEL_OLLAMA", "qwen2.5")
 
 
 # ------------------------------------------------------------------
-# Clerk — authentification (mission Identité)
+# Authentification (mission Identité) — provider unique : Neon Auth
 # ------------------------------------------------------------------
+# Historique : le projet utilisait Clerk (@clerk/clerk-react côté
+# frontend + vérification JWKS RS256 côté backend). Clerk a été
+# RETIRÉ (exigeait un domaine personnel, incompatible *.vercel.app)
+# au profit de Neon Managed Better Auth (JWT Ed25519, well-known
+# public). Si une configuration pointe encore vers Clerk, elle est
+# ignorée : un AUTH_MODE inconnu échoue en 503 (fail-closed).
+#
 # AUTH_MODE :
 #   neon   → vérification RÉELLE des JWT Neon Managed Better Auth via
 #            JWKS (production, voir NEON_AUTH_JWKS_URL ci-dessous)
-#   clerk  → vérification RÉELLE des JWT Clerk via JWKS (production)
 #   dev    → Bearer "dev:<name>" résolu en user interne (développement
-#            local sans clés Clerk ; AUCUN secret)
+#            local sans clés ; AUCUN secret)
 # Le mode dev est un fallback d' intégration, PAS un second système
 # d'authentification : la résolution passe par le même
 # CurrentUserResolver et les mêmes règles d'ownership.
-AUTH_MODE = os.getenv("AUTH_MODE", "clerk").strip().lower()
+AUTH_MODE = os.getenv("AUTH_MODE", "neon").strip().lower()
 
-# Clé publique Clerk frontend ( publishable ) — injectée au frontend
-CLERK_PUBLISHABLE_KEY = os.getenv("CLERK_PUBLISHABLE_KEY", "")
-
-# JWKS du backend : par défaut dérivé de l'instance Clerk
-# ( <instance>.clerk.accounts.dev ou domaine custom ) via
-# CLERK_JWKS_URL ; sinon construit depuis CLERK_ISSUER.
-CLERK_ISSUER = os.getenv("CLERK_ISSUER", "")
-CLERK_JWKS_URL = os.getenv(
-    "CLERK_JWKS_URL",
-    f"{CLERK_ISSUER}/.well-known/jwks.json" if CLERK_ISSUER else "",
-)
-
-# Audience acceptée ( optionnelle : Clerk utilise souvent
-# "default" ; vide = pas de vérification d'audience )
-CLERK_AUDIENCES = [
-    a.strip()
-    for a in os.getenv("CLERK_AUDIENCES", "").split(",")
-    if a.strip()
-]
-
-# Tolérance d'horloge ( secondes ) pour la validation JWT Clerk.
+# Tolérance d'horloge ( secondes ) pour la validation JWT.
 # Les postes peuvent dériver ( horloge en retard ) : sans leeway, un
 # token fraîchement émis a un "iat" perçu comme futur → 401
 # ImmatureSignatureError. 60 s couvre ces dérives sans affaiblir la
 # vérification ( signature/issuer/exp restent stricts ).
 try:
-    CLERK_JWT_LEEWAY = int(os.getenv("CLERK_JWT_LEEWAY", "60"))
+    JWT_LEEWAY = int(os.getenv("JWT_LEEWAY", "60"))
 except ValueError:
-    CLERK_JWT_LEEWAY = 60
+    JWT_LEEWAY = 60
 
-# Rôles admin — liste des clerk_user_id autorisés admin ( config ,
-# PAS le frontend ) ; séparés par virgules. Le rôle par défaut est
-# "user".
+# Sub du fournisseur d'identité autorisés admin ( config , PAS le
+# frontend ) ; séparés par virgules. Le rôle par défaut est "user".
+# Nom historique ADMIN_CLERK_IDS conservé (compatibilité déploiements
+# existants) — il désigne désormais des sub Neon/Better Auth.
 ADMIN_CLERK_IDS = [
     a.strip()
     for a in os.getenv("ADMIN_CLERK_IDS", "").split(",")
@@ -127,8 +114,8 @@ ADMIN_CLERK_IDS = [
 # ------------------------------------------------------------------
 # Neon Auth émet ses propres JWT ( Better Auth ) signés avec les clés
 # publiques exposées au well-known endpoint du projet. Le backend les
-# vérifie via PyJWKClient — même mécanisme que Clerk, JWKS différent.
-# L'URL JWKS est PUBLIQUE ( well-known ) : aucun secret ici.
+# vérifie via PyJWKClient. L'URL JWKS est PUBLIQUE ( well-known ) :
+# aucun secret ici.
 NEON_AUTH_JWKS_URL = os.getenv("NEON_AUTH_JWKS_URL", "").strip()
 
 # Base d'auth Neon ( optionnelle — pour l'affichage/observabilité ).

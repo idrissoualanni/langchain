@@ -4,7 +4,6 @@
 // en mode dev. Le user interne ( UUID ) vient de GET /api/users/me
 // ( CurrentUserResolver backend ) — le frontend ne CHOISIT plus qui il
 // est, il le découvre ( §10/§18 ).
-'use client';
 
 import { createContext, useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../api/base';

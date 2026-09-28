@@ -11,7 +11,6 @@
 //
 // ModelSelector OFFICIEL : ModelContext via aui.modelContext
 // .register() — la sélection arrive à chaque requête chat.
-'use client';
 
 import {
   useEffect,

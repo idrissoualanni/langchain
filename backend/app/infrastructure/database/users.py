@@ -8,7 +8,7 @@ from app.logging.events import log_event
 from app.infrastructure.database.connections import get_conn
 
 _SELECT_USER = (
-    "SELECT user_id, name, created_at, clerk_user_id, role "
+    "SELECT user_id, name, created_at, provider_user_id, role "
     "FROM users "
 )
 
@@ -18,24 +18,24 @@ def _now_iso() -> str:
 
 
 def create_user(
-    name: str, clerk_user_id: str | None = None, role: str = "user"
+    name: str, provider_user_id: str | None = None, role: str = "user"
 ) -> dict:
     """Crée un utilisateur : UUID backend, retourne le user complet.
 
-    Mission Identité : clerk_user_id optionnel (provisioning au
-    premier login Clerk) ; role user/admin ('user' par défaut).
+    Mission Identité : provider_user_id optionnel (provisioning au
+    premier login Neon Auth) ; role user/admin ('user' par défaut).
     """
     user_id = str(uuid.uuid4())
     created_at = _now_iso()
     conn = get_conn()
     conn.execute(
-        "INSERT INTO users (user_id, name, created_at, clerk_user_id, role) "
-        "VALUES (:user_id, :name, :created_at, :clerk_user_id, :role)",
+        "INSERT INTO users (user_id, name, created_at, provider_user_id, role) "
+        "VALUES (:user_id, :name, :created_at, :provider_user_id, :role)",
         {
             "user_id": user_id,
             "name": name,
             "created_at": created_at,
-            "clerk_user_id": clerk_user_id,
+            "provider_user_id": provider_user_id,
             "role": role,
         },
     )
@@ -51,7 +51,7 @@ def create_user(
         "user_id": user_id,
         "name": name,
         "created_at": created_at,
-        "clerk_user_id": clerk_user_id,
+        "provider_user_id": provider_user_id,
         "role": role,
     }
 
@@ -73,14 +73,14 @@ def get_user(user_id: str) -> dict | None:
     return dict(row) if row else None
 
 
-def get_user_by_clerk_id(clerk_user_id: str) -> dict | None:
-    """Mission Identité — lookup par identité externe Clerk.
+def get_user_by_provider_id(provider_user_id: str) -> dict | None:
+    """Mission Identité — lookup par identité externe (sub Neon Auth).
 
     Retrouve TOUJOURS le même user interne à la reconnexion ( la
-    clé clerk_user_id est UNIQUE en base ).
+    clé provider_user_id est UNIQUE en base ).
     """
     row = get_conn().execute(
-        _SELECT_USER + "WHERE clerk_user_id = :clerk_user_id",
-        {"clerk_user_id": clerk_user_id},
+        _SELECT_USER + "WHERE provider_user_id = :provider_user_id",
+        {"provider_user_id": provider_user_id},
     ).fetchone()
     return dict(row) if row else None

@@ -3,12 +3,11 @@
 // Catch-all : avant cette page, une URL inconnue tombait dans le vide
 // ( Routes sans correspondance → écran blanc ). On explique et on
 // propose deux sorties au lieu de planter l'utilisateur.
-'use client';
 
 import { Link } from 'react-router-dom';
 import { Home, Search } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 
 export function NotFoundPage() {
   return (

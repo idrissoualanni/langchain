@@ -1,4 +1,3 @@
-"use client";
 
 import { MessagePrimitive } from "@assistant-ui/react";
 import { Sources } from "@/components/assistant-ui/elements/sources.aui";

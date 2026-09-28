@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import { SessionProvider, useSession } from "@livekit/components-react";
 import { Room, TokenSource } from "livekit-client";

@@ -9,15 +9,14 @@
 //
 // NB : la réception effective de l'email suppose un transport mail
 // configuré côté projet Neon. Voir README_AUTH.
-'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CheckCircle2, Eye, EyeOff, Loader2, MailCheck, X } from 'lucide-react';
 
 import { authClient } from '../../lib/neon';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import { Label } from '../../components/ui/label';
 import { AuthLayout } from './AuthLayout';
 

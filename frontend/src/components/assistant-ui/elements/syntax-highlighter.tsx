@@ -1,4 +1,3 @@
-"use client";
 
 import { PrismAsyncLight } from "react-syntax-highlighter";
 import { makePrismAsyncLightSyntaxHighlighter } from "@assistant-ui/react-syntax-highlighter";

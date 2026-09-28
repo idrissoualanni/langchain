@@ -7,15 +7,14 @@
 //
 // Déplacée depuis src/auth/ : les PAGES vivent dans src/pages/, les
 // composants de logique d'auth dans src/auth/.
-'use client';
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Terminal } from 'lucide-react';
 
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import { Label } from '../../components/ui/label';
 import { AuthLayout } from './AuthLayout';
 

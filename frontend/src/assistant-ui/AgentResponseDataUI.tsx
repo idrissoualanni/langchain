@@ -9,7 +9,6 @@
 // Nos cartes existantes (components/agent/*) sont RÉUTILISÉES
 // telles quelles — Assistant UI est une couche interface, pas
 // un moteur pédagogique (règle absolue de la mission).
-'use client';
 
 import { useAssistantDataUI } from '@assistant-ui/react';
 import { useAssistantStore } from './store';

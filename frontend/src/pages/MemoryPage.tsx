@@ -13,7 +13,7 @@ import {
 import { useSelection } from '../hooks/useSelection';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useMemory } from '../hooks/useMemory';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { LongTermMemoryCard } from '../components/memory/LongTermMemoryCard';
 import { ContextInspectorCard } from '../components/memory/ContextInspectorCard';
 import { LearningProfileCard } from '../components/memory/LearningProfileCard';

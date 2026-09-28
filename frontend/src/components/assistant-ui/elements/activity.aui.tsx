@@ -1,4 +1,3 @@
-"use client";
 
 // Activités de test retirées — le point d'entrée unique est désormais
 // le popover @mentions (deep-research, agenda, code, exercise…).

@@ -10,6 +10,7 @@
 import type {
   AgentResponse,
   CodeData,
+  DiagramData,
   EvaluationData,
   ExerciseData,
   HintData,
@@ -18,6 +19,7 @@ import type {
 } from '../../types/agentResponse';
 import { ClarificationCard } from './ClarificationCard';
 import { CodeActivityCard } from './CodeActivityCard';
+import { DiagramCard } from './DiagramCard';
 import { ErrorCard } from './ErrorCard';
 import { EvaluationCard } from './EvaluationCard';
 import { ExerciseCard } from './ExerciseCard';
@@ -76,6 +78,9 @@ export function ResponseRenderer({
           userId={userId ?? null}
         />
       );
+
+    case 'diagram':
+      return <DiagramCard data={data as unknown as DiagramData} />;
 
     case 'search':
       return <SearchResultCard data={data as unknown as SearchData} />;

@@ -1,4 +1,3 @@
-"use client";
 
 const BAR_COUNT = 24;
 

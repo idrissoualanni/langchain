@@ -15,6 +15,7 @@ tools:
     - create_exercise
     - evaluate_answer
     - give_hint
+    - create_diagram
   specialized: []
 knowledge:
   sources:

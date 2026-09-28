@@ -1,4 +1,3 @@
-"use client";
 
 import { memo, useCallback, useRef, useState } from "react";
 import {
@@ -24,7 +23,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/textarea";
 
 const ANIMATION_DURATION = 200;

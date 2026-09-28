@@ -33,15 +33,15 @@ import { AssistantUIRuntimeProvider } from './assistant-ui/AssistantRuntimeProvi
 // Lazy — code-splitting (§28) : LiveKit/Mermaid/Admin ne bloquent plus le First Paint
 const MemoryPage = lazy(() => import('./pages/MemoryPage').then((m) => ({ default: m.MemoryPage })));
 const LogsPage = lazy(() => import('./pages/LogsPage').then((m) => ({ default: m.LogsPage })));
-const AdminDashboardPage = lazy(() => import('./app/admin/page'));
+const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
 const TracesPage = lazy(() => import('./features/admin/traces/TracesPage').then((m) => ({ default: m.TracesPage })));
 const ModelsPage = lazy(() => import('./features/admin/models/ModelsPage').then((m) => ({ default: m.ModelsPage })));
 const KnowledgePage = lazy(() => import('./features/admin/knowledge/KnowledgePage').then((m) => ({ default: m.KnowledgePage })));
 const ObservabilityPage = lazy(() => import('./features/admin/observability/ObservabilityPage').then((m) => ({ default: m.ObservabilityPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage })));
 const DocumentsPage = lazy(() => import('./pages/DocumentsPage').then((m) => ({ default: m.DocumentsPage })));
-const VideoPage = lazy(() => import('./app/video/page'));
-const VoicePage = lazy(() => import('./app/voice/page'));
+const VideoPage = lazy(() => import('./pages/video/VideoPage'));
+const VoicePage = lazy(() => import('./pages/voice/VoicePage'));
 const LearningLayout = lazy(() => import('./pages/learning/LearningLayout').then((m) => ({ default: m.LearningLayout })));
 const LearningOverviewPage = lazy(() => import('./pages/learning/LearningOverviewPage').then((m) => ({ default: m.LearningOverviewPage })));
 const LearningProgressPage = lazy(() => import('./pages/learning/LearningProgressPage').then((m) => ({ default: m.LearningProgressPage })));

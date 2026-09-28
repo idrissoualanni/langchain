@@ -46,6 +46,7 @@ AgentResponseType = Literal[
     "evaluation",     # feedback d'évaluation
     "hint",           # indice progressif
     "code",           # activité de code (éditeur)
+    "diagram",        # diagramme mermaid (data.chart = code brut)
     "search",         # réponse s'appuyant sur la recherche
     "clarification",  # demande de précision
     "error",          # échec utilisateur-visible

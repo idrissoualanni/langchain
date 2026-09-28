@@ -96,14 +96,16 @@ check(
     str(TERMINAL_STATUSES),
 )
 check(
-    "A: §14 ACTIVITY_TYPES = 3 types (exercise/quiz/understanding_check)",
-    set(ACTIVITY_TYPES)
-    == {
+    "A: §14 ACTIVITY_TYPES ⊇ 3 types historiques (exercise/quiz/"
+    "understanding_check) + extensions code/diagram",
+    {
         ACTIVITY_TYPE_EXERCISE,
         ACTIVITY_TYPE_QUIZ,
         ACTIVITY_TYPE_UNDERSTANDING_CHECK,
     }
-    and len(ACTIVITY_TYPES) == 3,
+    <= set(ACTIVITY_TYPES)
+    and "code" in ACTIVITY_TYPES
+    and "diagram" in ACTIVITY_TYPES,
     str(ACTIVITY_TYPES),
 )
 check(

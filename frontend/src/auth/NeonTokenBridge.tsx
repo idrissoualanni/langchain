@@ -7,7 +7,6 @@
 //
 // État partagé entre instances ( la page de login déclenche le refresh,
 // Protected et la sidebar s'y abonnent ).
-'use client';
 
 import { useEffect, useState } from 'react';
 import { authClient } from '../lib/neon';

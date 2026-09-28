@@ -1,8 +1,8 @@
 // Models Page Component
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/Button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Plus, RefreshCw } from "lucide-react";
 import type { ModelConfig } from "@/types";
 import { ModelTable } from "./ModelTable";

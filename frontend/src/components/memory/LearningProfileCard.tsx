@@ -20,7 +20,7 @@ import type {
   LearningProfileData,
   TopicLearningData,
 } from '../../types/learning';
-import { Card } from '../ui/card';
+import { Card } from '../ui/Card';
 
 interface LearningProfileCardProps {
   userId: string | null;

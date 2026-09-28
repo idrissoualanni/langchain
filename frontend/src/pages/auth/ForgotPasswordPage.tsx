@@ -10,15 +10,14 @@
 //
 // Honnêteté : un écran qui promet un mail qui n'arrive jamais est pire
 // qu'un écran qui dit la vérité. L'utilisateur n'est pas enfermé.
-'use client';
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Info, Loader2 } from 'lucide-react';
 
 import { authClient } from '../../lib/neon';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import { Label } from '../../components/ui/label';
 import { AuthLayout } from './AuthLayout';
 

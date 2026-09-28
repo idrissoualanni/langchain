@@ -1,4 +1,3 @@
-"use client";
 
 import { XIcon } from "lucide-react";
 import { useAui, useAuiState } from "@assistant-ui/react";

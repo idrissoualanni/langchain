@@ -5,7 +5,7 @@
 # vérifié via le header Authorization ( fetch-based ) OU le query
 # `auth` ( EventSource natif ne peut pas poser de headers ). Dans
 # les DEUX cas le token est une PREUVE vérifiée par le même
-# CurrentUserResolver ( signature/exp/sub réels en mode clerk ) —
+# CurrentUserResolver ( signature/exp/sub réels en mode neon ) —
 # jamais une identité déclarée.
 import asyncio
 import json

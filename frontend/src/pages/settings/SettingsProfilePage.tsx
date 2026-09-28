@@ -6,8 +6,8 @@ import { useEffect, useState } from 'react';
 import { Check, Loader2, Save } from 'lucide-react';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { getUserProfile, updateUserProfile } from '../../api/memory';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import { Textarea } from '../../components/ui/textarea';
 import {
   PageHeader,

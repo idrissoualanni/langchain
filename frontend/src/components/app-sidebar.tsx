@@ -1,6 +1,9 @@
 // AppSidebar — rail de navigation unique (Assistant / Learning / Profile
-// / Settings), conversations et indicateurs de service.
+// / Settings), conversations et contrôles utilisateur/thème.
 // Le menu Admin est un groupe SÉPARÉ, réservé aux administrateurs.
+// L'indicateur de santé des services ( ollama / langgraph / sqlite ) ne
+// vit PLUS ici : il appartient au dashboard Admin ( → /admin ), où les
+// badges StatusBadge sont remontés sous la barre latérale.
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   BookOpenText,
@@ -20,10 +23,8 @@ import {
   Mic,
 } from 'lucide-react';
 import { NeonUserMenu } from '../auth/NeonUserMenu';
-import { useHealth } from '@/hooks/useHealth';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useTheme } from '@/hooks/useTheme';
-import { cn } from '@/lib/utils';
 import {
   Sidebar,
   SidebarContent,
@@ -38,7 +39,6 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { ThreadList } from '@/components/assistant-ui/elements/thread-list.aui';
-import { StatusBadge } from '@/components/layout/StatusBadge';
 
 interface NavItem {
   to: string;
@@ -86,14 +86,13 @@ function NavEntry({ item }: { item: NavItem }) {
 }
 
 export function AppSidebar() {
-  const { health } = useHealth();
   const { internal, devMode, devLogout, isAdmin } = useCurrentUser();
   const { resolvedTheme, toggle } = useTheme();
 
   return (
     <Sidebar collapsible="offcanvas">
       {/* Marque — monochrome */}
-      <SidebarHeader>
+      <SidebarHeader className="gap-0 border-b border-sidebar-border/60 py-3">
         <div className="flex h-9 items-center gap-2.5 px-1">
           <div className="bg-foreground text-background flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-control)]">
             <Bot size={15} strokeWidth={1.9} />
@@ -109,8 +108,12 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="flex min-h-0 flex-1 gap-0 overflow-hidden">
-        <SidebarGroup>
+      {/* Content : UN SEUL point de scroll pour toute la colonne
+          ( groupes de navigation + conversations ). Avant : overflow-hidden
+          sur le wrapper → les groupes débordants étaient CLIPÉS sans
+          pouvoir défiler, et seule la liste de threads scrollait. */}
+      <SidebarContent className="min-h-0 flex-1 gap-0 overflow-y-auto">
+        <SidebarGroup className="pb-1">
           <SidebarGroupLabel className="font-mono text-[10px] tracking-[0.1em] uppercase">
             principal
           </SidebarGroupLabel>
@@ -124,7 +127,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
+        <SidebarGroup className="pb-1">
           <SidebarGroupLabel className="font-mono text-[10px] tracking-[0.1em] uppercase">
             workspace
           </SidebarGroupLabel>
@@ -138,7 +141,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {isAdmin && (
-          <SidebarGroup>
+          <SidebarGroup className="pb-1">
             <SidebarGroupLabel className="font-mono tracking-[0.1em] uppercase">
               admin
             </SidebarGroupLabel>
@@ -167,50 +170,45 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
 
-        <SidebarSeparator className="my-2" />
+        <SidebarSeparator className="my-1" />
 
-        {/* Conversations — ThreadList officiel Assistant UI */}
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="text-muted-foreground px-4 pt-2 pb-1 font-mono text-[10px] tracking-[0.1em] uppercase">
+        {/* Conversations — ThreadList officiel Assistant UI. Le groupe
+            peut dépasser la hauteur restante : min-h-0 + le scroll du
+            SidebarContent parent gèrent ça sans double ascenseur. */}
+        <SidebarGroup className="min-h-0 pb-2">
+          <SidebarGroupLabel className="font-mono text-[10px] tracking-[0.1em] uppercase">
             conversations
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
             <ThreadList />
-          </div>
-        </div>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="gap-2 border-t">
+      <SidebarFooter className="gap-1.5 border-t border-sidebar-border/60 py-2">
         {/* Paramètres — regroupés dans le pied de la sidebar */}
         <SidebarMenu>
           <NavEntry item={SETTINGS_NAV} />
         </SidebarMenu>
 
-        {/* Services — indicateurs discrets */}
-        <div className="space-y-1.5 px-1">
-          <StatusBadge label="ollama" ok={health ? health.ollama : null} />
-          <StatusBadge label="langgraph" ok={health ? health.langgraph : null} />
-          <StatusBadge label="sqlite" ok={health ? health.sqlite : null} />
-        </div>
-
-        {/* Profil + réglages */}
-        <div className="flex items-center gap-2 px-1">
+        {/* Profil + thème. La ligne ne doit JAMAIS déborder ni rogner
+            les boutons : min-w-0 sur le menu (truncate interne),
+            shrink-0 sur le rôle et le toggle. */}
+        <div className="flex min-w-0 items-center gap-2 px-1">
           {devMode ? (
             <button
               onClick={devLogout}
-              className="text-muted-foreground hover:text-destructive min-w-0 truncate text-xs font-medium"
+              className="text-muted-foreground hover:text-destructive min-w-0 flex-1 truncate text-left text-xs font-medium"
               title="Déconnexion (dev)"
             >
               ⏻ {internal?.name ?? 'dev'}
             </button>
           ) : (
-            <NeonUserMenu />
+            <div className="min-w-0 flex-1">
+              <NeonUserMenu />
+            </div>
           )}
-          <span
-            className={cn(
-              'text-muted-foreground ml-auto shrink-0 font-mono text-[10px]'
-            )}
-          >
+          <span className="text-muted-foreground shrink-0 font-mono text-[10px]">
             {internal?.role === 'admin' ? 'admin' : 'user'}
           </span>
           <button

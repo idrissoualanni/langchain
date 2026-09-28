@@ -4,7 +4,6 @@
 //   POST /sign-in/email → refreshNeonSession() → /assistant
 //
 // Design system Glace / Papier / Encre via Button / Input / Label.
-'use client';
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -12,8 +11,8 @@ import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 import { authClient } from '../../lib/neon';
 import { refreshNeonSession } from '../../auth/NeonTokenBridge';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import { Label } from '../../components/ui/label';
 import { AuthLayout } from './AuthLayout';
 

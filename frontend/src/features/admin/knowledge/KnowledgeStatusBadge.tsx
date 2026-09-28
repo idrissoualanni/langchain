@@ -1,5 +1,5 @@
 // Knowledge Status Badge Component
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/Badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface KnowledgeStatusBadgeProps {

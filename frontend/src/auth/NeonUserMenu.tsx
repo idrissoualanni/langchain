@@ -3,7 +3,6 @@
 // Remplace le UserButton Clerk : avatar + nom + déconnexion via le
 // client Neon ( Better Auth managé ). L'identité affichée vient du
 // user interne résolu backend ( /api/users/me ).
-'use client';
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';

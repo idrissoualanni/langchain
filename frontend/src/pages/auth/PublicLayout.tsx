@@ -12,7 +12,6 @@
 // la hauteur disponible, et la page grandit si le formulaire dépasse
 // l'écran. dvh ( pas svh ) : la barre navigateatrice mobile ne fait
 // plus rebondir la mise en page.
-'use client';
 
 import type { ReactNode } from 'react';
 

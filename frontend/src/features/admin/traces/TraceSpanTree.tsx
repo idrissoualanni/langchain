@@ -1,7 +1,7 @@
 // TraceSpanTree — arbre de spans d'une trace LangSmith (debugging).
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils';
 import type { TraceSpan } from './tracesApi';
 

@@ -1,4 +1,3 @@
-"use client";
 
 // ActivityPanel V1 — panneau latéral droit (spec FUNCTIONALITIES §38).
 //
@@ -32,8 +31,8 @@ import {
 import type { FC, ReactNode } from "react";
 
 import { CodeActivityCard } from "@/components/agent/CodeActivityCard";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MermaidDiagram } from "@/components/assistant-ui/elements/mermaid-diagram.aui";

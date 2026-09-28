@@ -31,9 +31,9 @@ import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useDocuments } from '../hooks/useDocuments';
 import { searchDocuments as searchDocumentsApi } from '../api/documents';
 import { apiFetch } from '../api/base';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Input } from '../components/ui/input';
-import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import { Input } from '../components/ui/Input';
+import { Button } from '../components/ui/Button';
 import {
   DropdownMenu,
   DropdownMenuContent,

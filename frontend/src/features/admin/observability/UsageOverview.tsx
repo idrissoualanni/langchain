@@ -1,5 +1,5 @@
 // Usage Overview Component
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 
 interface UsageOverviewProps {
   totalRequests?: number;

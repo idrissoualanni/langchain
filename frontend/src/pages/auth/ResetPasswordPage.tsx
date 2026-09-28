@@ -5,7 +5,6 @@
 //
 // Le token arrive dans l'URL ( route protégée par possession du lien ).
 // États : loading ( token attendu ) → form → success | error.
-'use client';
 
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -13,8 +12,8 @@ import { CheckCircle2, Eye, EyeOff, Loader2, X } from 'lucide-react';
 
 import { authClient } from '../../lib/neon';
 import { refreshNeonSession } from '../../auth/NeonTokenBridge';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import { Label } from '../../components/ui/label';
 import { AuthLayout } from './AuthLayout';
 

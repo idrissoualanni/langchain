@@ -105,8 +105,8 @@ def health_auth() -> dict:
     """État de l'authentification : mode et joignabilité du JWKS.
 
     Mode-aware : en AUTH_MODE=neon c'est le well-known Neon Auth qui
-    est testé ( voir jwks_reachable ), sinon celui de Clerk. Le JWKS
-    étant publique, aucune donnée sensible n'est renvoyée.
+    est testé ( voir jwks_reachable ). Le JWKS étant public, aucune
+    donnée sensible n'est renvoyée.
     """
     return {
         "mode": auth_mode(),

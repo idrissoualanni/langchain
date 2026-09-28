@@ -65,7 +65,7 @@ def _require_owner_or_admin(
 
 @router.get("/me", response_model=UserOut)
 def api_me(current: CurrentUser = Depends(get_current_user)) -> UserOut:
-    """Utilisateur COURANT résolu depuis la session (Clerk).
+    """Utilisateur COURANT résolu depuis la session (Neon Auth).
 
     C'est LA route d'identité du frontend : remplace UserSelector.
     """
@@ -78,10 +78,10 @@ def api_me(current: CurrentUser = Depends(get_current_user)) -> UserOut:
 # ------------------------------------------------------------------
 # Provisioning de TEST — MODE DEV UNIQUEMENT
 # ------------------------------------------------------------------
-# En mode dev ( AUTH_MODE=dev , développement local sans clés
-# Clerk ) les suites de régression historiques créent leurs users
-# de test via POST /api/users. Ce endpoint n'existe PLUS en mode
-# clerk : l'inscription passe par Clerk ( SignUp ) puis le
+# En mode dev ( AUTH_MODE=dev , développement local sans clés )
+# les suites de régression historiques créent leurs users
+# de test via POST /api/users. Ce endpoint n'existe PLUS en
+# production : l'inscription passe par Neon Auth ( SignUp ) puis le
 # resolver provisionne l'utilisateur interne au premier login.
 # Le user_id du body N'EST JAMAIS une source d'identité — le
 # token dev:devuuid sert de session simulée pour les tests.

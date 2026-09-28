@@ -5,11 +5,11 @@ from app.infrastructure.database import users as _users_db
 
 
 def create_user(
-    name: str, clerk_user_id: str | None = None, role: str = "user"
+    name: str, provider_user_id: str | None = None, role: str = "user"
 ) -> dict:
     """Crée un utilisateur et retourne son enregistrement complet."""
     return _users_db.create_user(
-        name, clerk_user_id=clerk_user_id, role=role
+        name, provider_user_id=provider_user_id, role=role
     )
 
 
@@ -23,14 +23,14 @@ def get_user(user_id: str) -> dict | None:
     return _users_db.get_user(user_id)
 
 
-def get_user_by_clerk_id(clerk_user_id: str) -> dict | None:
-    """Retrouve un utilisateur par son identifiant externe Clerk."""
-    return _users_db.get_user_by_clerk_id(clerk_user_id)
+def get_user_by_provider_id(provider_user_id: str) -> dict | None:
+    """Retrouve un utilisateur par son identifiant externe (Neon Auth)."""
+    return _users_db.get_user_by_provider_id(provider_user_id)
 
 
 __all__ = [
     "create_user",
     "list_users",
     "get_user",
-    "get_user_by_clerk_id",
+    "get_user_by_provider_id",
 ]

@@ -1,4 +1,3 @@
-"use client";
 
 import { VideoTrack } from "@livekit/components-react";
 import type { TrackReference } from "@livekit/components-react";

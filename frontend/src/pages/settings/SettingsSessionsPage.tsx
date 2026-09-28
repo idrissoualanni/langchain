@@ -22,7 +22,7 @@ import {
   SurfaceHeader,
   SurfaceTitle,
 } from '../../components/user/kit';
-import { Button } from '../../components/ui/button';
+import { Button } from '../../components/ui/Button';
 
 interface AgentStatus {
   status?: string;

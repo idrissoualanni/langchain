@@ -5,7 +5,6 @@
 // et boucle en déconnexion/reconnexion sans fin.
 // On décode l'expiration ( exp ) côté frontend et on renouvelle 5 min
 // avant le terme — l'agent et la room restent joints.
-"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/api/base";

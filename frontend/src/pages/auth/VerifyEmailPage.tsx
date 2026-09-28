@@ -10,7 +10,6 @@
 //
 // États : idle → verifying → success | error ( code invalide / expiré ).
 // L'erreur nomme toujours la cause et l'action possible.
-'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -19,8 +18,8 @@ import { CheckCircle2, Loader2 } from 'lucide-react';
 import { authClient } from '../../lib/neon';
 import { refreshNeonSession } from '../../auth/NeonTokenBridge';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import { Label } from '../../components/ui/label';
 import { AuthLayout } from './AuthLayout';
 
