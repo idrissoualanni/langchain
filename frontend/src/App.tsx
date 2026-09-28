@@ -27,11 +27,9 @@ import {
 } from './pages/auth';
 import { AdminGate } from './auth/AdminGate';
 import { useCurrentUser } from './hooks/useCurrentUser';
-import { SelectionProvider } from './hooks/useSelection';
 import { AssistantUIRuntimeProvider } from './assistant-ui/AssistantRuntimeProvider';
 
 // Lazy — code-splitting (§28) : LiveKit/Mermaid/Admin ne bloquent plus le First Paint
-const MemoryPage = lazy(() => import('./pages/MemoryPage').then((m) => ({ default: m.MemoryPage })));
 const LogsPage = lazy(() => import('./pages/LogsPage').then((m) => ({ default: m.LogsPage })));
 const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'));
 const TracesPage = lazy(() => import('./features/admin/traces/TracesPage').then((m) => ({ default: m.TracesPage })));
@@ -124,7 +122,6 @@ function PageTitle() {
     '/assistant': 'Assistant',
     '/learning': 'Learning',
     '/documents': 'Documents',
-    '/memory': 'Mémoire',
     '/profile': 'Profil',
     '/settings': 'Paramètres',
     '/video': 'Vidéo',
@@ -270,15 +267,6 @@ function AppShell() {
             <Route path="data" element={<SettingsDataPage />} />
           </Route>
 
-          {/* Mémoire — accès direct conservé (aussi via Settings → Memory) */}
-          <Route
-            path="/memory"
-            element={
-              <Protected>
-                <MemoryPage />
-              </Protected>
-            }
-          />
           {/* Logs : ADMIN uniquement (§22) */}
           <Route
             path="/logs"
@@ -425,9 +413,7 @@ function AppRoutes() {
 export default function App() {
   return (
     <Router>
-      <SelectionProvider>
-        <AppRoutes />
-      </SelectionProvider>
+      <AppRoutes />
     </Router>
   );
 }

@@ -1,7 +1,7 @@
 // /settings/data — transparence sur les données stockées.
 // Aucune action fictive (pas d'export/suppression non supportés).
 import { Link } from 'react-router-dom';
-import { Database, ExternalLink, ShieldCheck } from 'lucide-react';
+import { Database, ShieldCheck } from 'lucide-react';
 import {
   KeyValue,
   PageHeader,
@@ -76,12 +76,6 @@ export function SettingsDataPage() {
               className="border-border bg-background hover:bg-muted inline-flex items-center gap-2 rounded-[var(--radius-control)] border px-3 py-1.5 text-[12.5px] font-medium"
             >
               <Database size={13} /> Mémoire
-            </Link>
-            <Link
-              to="/memory"
-              className="border-border bg-background hover:bg-muted inline-flex items-center gap-2 rounded-[var(--radius-control)] border px-3 py-1.5 text-[12.5px] font-medium"
-            >
-              <ExternalLink size={13} /> Éditeur mémoire complet
             </Link>
           </SurfaceBody>
         </Surface>

@@ -1,5 +1,5 @@
-// API Subjects — registry + context preview (V4)
-import type { ContextPreview, SubjectInfo } from '../types/agent';
+// API Subjects — registry (V4)
+import type { SubjectInfo } from '../types/agent';
 import { apiFetch } from './base';
 
 export async function listSubjects(): Promise<SubjectInfo[]> {
@@ -20,19 +20,4 @@ export async function getSubjectTopics(
   id: string
 ): Promise<SubjectTopic[]> {
   return apiFetch<SubjectTopic[]>(`/api/subjects/${id}/topics`);
-}
-
-export async function previewContext(payload: {
-  user_id: string;
-  thread_id?: string;
-  query: string;
-  subject?: string;
-}): Promise<ContextPreview> {
-  return apiFetch<ContextPreview>(
-    '/api/subjects/preview/context',
-    {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }
-  );
 }

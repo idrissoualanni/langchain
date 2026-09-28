@@ -1,8 +1,6 @@
 // /settings/memory — aperçu de la mémoire longue durée (lecture).
-// L'édition complète (faits, profil) reste sur /memory.
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Database, ExternalLink } from 'lucide-react';
+import { Database } from 'lucide-react';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { getMemoryOverview } from '../../api/memory';
 import type { MemoryOverview } from '../../types/agent';
@@ -50,14 +48,6 @@ export function SettingsMemoryPage() {
         eyebrow="settings · memory"
         title="Mémoire"
         description="Ce que l’application retient de vous, par catégorie."
-        actions={
-          <Link
-            to="/memory"
-            className="border-border bg-background hover:bg-muted inline-flex items-center gap-2 rounded-[var(--radius-control)] border px-3 py-1.5 text-[12.5px] font-medium"
-          >
-            <ExternalLink size={13} /> Gérer la mémoire
-          </Link>
-        }
       />
 
       <div className="max-w-3xl space-y-5 p-6">

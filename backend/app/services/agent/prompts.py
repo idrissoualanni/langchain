@@ -1,3 +1,5 @@
+from app.services.agent.tool_descriptions import build_tool_catalog
+
 CORE_PROMPT = """Tu es un tuteur adaptatif.
 
 Ton objectif est d'aider l'étudiant à comprendre, raisonner
@@ -227,7 +229,20 @@ respecte STRICTEMENT ces règles :
     n'attends pas de réponse de l'étudiant — enchaîne normalement.
     Ne l'évalue pas, n'appelle pas evaluate_answer dessus, et ne
     pose pas de question fermée liée au dessin dans le même tour.
+
+## Catalogue des tools (descriptions officielles)
+
+Chaque tool ci-dessous est décrit par QUAND l'utiliser et COMMENT.
+Les mentions [carte: …] indiquent la carte frontend que le type de
+réponse produira — c'est ce qui fait qu'une réponse s'affiche en
+exercice, quiz, diagramme, etc. plutôt qu'en markdown brut. Pour
+sortir du markdown, tu DOIS passer par ces tools.
+
+{TOOL_CATALOG}
 """
+
+# Injection unique du catalogue (source : tool_descriptions.py).
+CORE_PROMPT = CORE_PROMPT.format(TOOL_CATALOG=build_tool_catalog())
 
 # Alias rétro-compatibilité (graph.py importe SYSTEM_PROMPT)
 SYSTEM_PROMPT = CORE_PROMPT
