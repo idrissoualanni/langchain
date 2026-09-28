@@ -119,7 +119,7 @@ async def _main() -> None:
         )
         sys.exit(1)
 
-    from app.infrastructure.livekit.agent import server  # noqa: PLC0415
+    from app.infrastructure.livekit.server import server  # noqa: PLC0415
 
     logger.info(
         "Démarrage worker tuteur | host=%s | agent=tutor",
