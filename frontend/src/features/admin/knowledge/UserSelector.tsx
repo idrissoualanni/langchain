@@ -1,8 +1,8 @@
 // User Selector Component
 import { useState } from "react";
-import { Input } from "@/components/ui/Input";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { X, Search } from "lucide-react";
 
 interface UserSelectorProps {

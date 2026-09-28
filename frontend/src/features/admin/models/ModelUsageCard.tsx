@@ -8,8 +8,8 @@
 // Note : le taux d'erreur par modèle n'est PAS fourni par l'endpoint — la carte
 // affiche "N/A" plutôt qu'un "0.0%" trompeur.
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/api/request";
 
 interface ModelUsageCardProps {

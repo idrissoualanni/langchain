@@ -1,13 +1,1 @@
-# Python compiled files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Coverage reports
-coverage/
-htmlcov/
-.coverage
-.coverage.*
-
-# Node modules (implied by frontend/package-lock.json)
-node_modules/
+(empty)

@@ -11,8 +11,8 @@
 // soit par HTTP 503 + `{"available": false, "error": ...}` (listes). Dans les deux cas
 // on affiche un état "Données indisponibles" + bouton Réessayer, jamais de données inventées.
 import { useState, useEffect, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { RefreshCw, BarChart3, Activity, AlertTriangle } from "lucide-react";
 import { UsageOverview } from "./UsageOverview";
 import { ModelUsageTable } from "./ModelUsageTable";

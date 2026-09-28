@@ -31,9 +31,9 @@ import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useDocuments } from '../hooks/useDocuments';
 import { searchDocuments as searchDocumentsApi } from '../api/documents';
 import { apiFetch } from '../api/base';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
-import { Input } from '../components/ui/Input';
-import { Button } from '../components/ui/Button';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Input } from '../components/ui/input';
+import { Button } from '../components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,7 +41,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
-import { Dialog } from '../components/ui/Dialog';
+import { Dialog } from '../components/ui/dialog';
 import { DropZone } from '../components/ui/drop-zone';
 import { EmptyState } from '../components/ui/empty-state';
 import { ErrorState } from '../components/ui/error-state';

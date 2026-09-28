@@ -1,5 +1,5 @@
 // Model Capability Badge Component
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ModelCapabilityBadgeProps {

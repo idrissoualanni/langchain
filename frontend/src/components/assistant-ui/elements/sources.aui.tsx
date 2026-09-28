@@ -4,7 +4,7 @@ import { FileTextIcon } from "lucide-react";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { SourceMessagePartComponent } from "@assistant-ui/react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/badge";
 
 // Sources élément officiel Assistant UI (v0.15) — adapté aux tokens du
 // projet. Rendu par le slot `Source` de MessagePrimitive.Parts/GroupedParts :

@@ -13,8 +13,8 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, Terminal } from 'lucide-react';
 
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { AuthLayout } from './AuthLayout';
 

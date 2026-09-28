@@ -1,7 +1,7 @@
 // EmptyState — état vide humain (§22/§25) : Quoi ? Pourquoi ? Que faire ?
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/Button';
+import { Button } from '@/components/ui/button';
 
 interface EmptyStateProps {
   icon?: ReactNode;

@@ -31,24 +31,23 @@ export type MermaidDiagramProps = {
 };
 
 /**
- * Wrapper conditionnel pour useMessagePartText : cet hook n'existe
- * QUE dans le contexte d'un message assistant-ui (part text). Rendu
- * hors contexte (panneau d'activité, DiagramCard), il throw — on
- * considère alors le contenu comme stable (jamais en streaming).
- * Appelé inconditionnellement depuis MermaidDiagram ; c'est le
- * CONTEXTE qui détermine la branche, pas une condition du composant.
+ * Détecte si le message courant est en cours de streaming.
+ * useMessagePartText n'existe QUE dans le contexte d'une part de texte
+ * d'un message assistant-ui. Rendu hors contexte (panneau d'activité,
+ * DiagramCard), il throw — on considère alors le contenu comme stable
+ * (jamais en streaming). L'hook est appelé inconditionnellement depuis
+ * MermaidDiagram ; c'est le CONTEXTE qui détermine la branche, pas une
+ * condition du composant.
  */
-function StreamingProbe(): never {
-  // Jamais rendu : sert uniquement de site d'appel pour l'hook.
-  const part = useMessagePartText();
-  if (part.status.type !== "complete") {
-    throw STREAMING_SIGNAL;
+function useIsStreaming(): boolean {
+  try {
+    const part = useMessagePartText();
+    return part.status.type !== "complete";
+  } catch {
+    // Hors contexte message → contenu stable.
+    return false;
   }
-  throw STABLE_SIGNAL;
 }
-
-const STREAMING_SIGNAL = Symbol("streaming");
-const STABLE_SIGNAL = Symbol("stable");
 
 /** Heuristique : le bloc semble-t-il syntaxiquement fermé ? */
 function looksComplete(code: string): boolean {

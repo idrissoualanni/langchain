@@ -15,7 +15,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { Lock } from 'lucide-react';
 
 import { useCurrentUser } from '../hooks/useCurrentUser';
-import { Button } from '../components/ui/Button';
+import { Button } from '../components/ui/button';
 
 export function AdminGate({ children }: { children: ReactNode }) {
   const { signedIn, loading, isAdmin, devMode } = useCurrentUser();
