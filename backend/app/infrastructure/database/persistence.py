@@ -214,6 +214,19 @@ def get_persistent_store():
                 from langgraph.store.postgres import PostgresStore
                 from psycopg_pool import ConnectionPool
 
+                # ⚠️ psycopg décode jsonb → objets Python par défaut ;
+                # langgraph._json_loads attend bytes / orjson.Fragment
+                # ( orjson.loads(objet) → JSONDecodeError sur CHAQUE
+                # lecture du store : faits mémoire, observations
+                # learning… ). Loader IDENTITÉ : psycopg rend les bytes
+                # JSON bruts, langgraph fait le orjson.loads lui-même —
+                # insensible aux variations d'attributs Fragment entre
+                # versions d'orjson.
+                from psycopg.types.json import set_json_loads
+
+                def _configure_conn(conn):
+                    set_json_loads(lambda raw: raw, context=conn)
+
                 _store_pool = ConnectionPool(
                     _postgres_conninfo(),
                     min_size=1,
@@ -222,6 +235,7 @@ def get_persistent_store():
                         "autocommit": True,
                         "prepare_threshold": 0,
                     },
+                    configure=_configure_conn,
                 )
                 _store_pool.open()
                 _store = PostgresStore(_store_pool)
