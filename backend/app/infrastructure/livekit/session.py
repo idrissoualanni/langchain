@@ -10,7 +10,6 @@ from typing import Any
 
 from livekit.agents import (
     AgentSession,
-    InferenceContext,
     TurnHandlingOptions,
     inference,
     llm,

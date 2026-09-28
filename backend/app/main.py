@@ -129,7 +129,7 @@ app.include_router(activity.router)
 app.include_router(documents.router)
 app.include_router(storage.router)
 app.include_router(livekit.router)
-app.include_router(transcription.router)
+app.include_router(transcription_router)
 
 # Admin API — Model/Knowledge/Observability/Dashboard management (secured)
 # Les routers models/knowledge portent déjà leur préfixe /api/admin/...
