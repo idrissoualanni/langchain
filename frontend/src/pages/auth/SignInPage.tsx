@@ -95,33 +95,36 @@ export function SignInPage() {
                 Mot de passe oublié&nbsp;?
               </Link>
             </div>
-            <Input
-              id="password"
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-              aria-invalid={!!err}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              aria-label={
-                showPassword
-                  ? 'Masquer le mot de passe'
-                  : 'Afficher le mot de passe'
-              }
-              aria-pressed={showPassword}
-              className="text-muted-foreground hover:text-foreground -mt-7 ml-auto flex items-center gap-1.5 self-end rounded-[var(--radius-control)] py-1 pr-3 text-[11px] transition-colors"
-            >
-              {showPassword ? (
-                <EyeOff className="size-3.5" />
-              ) : (
-                <Eye className="size-3.5" />
-              )}
-              {showPassword ? 'Masquer' : 'Afficher'}
-            </button>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+                aria-invalid={!!err}
+                className="pr-16"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={
+                  showPassword
+                    ? 'Masquer le mot de passe'
+                    : 'Afficher le mot de passe'
+                }
+                aria-pressed={showPassword}
+                className="text-muted-foreground hover:text-foreground absolute inset-y-0 right-0 flex items-center gap-1.5 rounded-[var(--radius-control)] px-3 text-[11px] transition-colors"
+              >
+                {showPassword ? (
+                  <EyeOff className="size-3.5" />
+                ) : (
+                  <Eye className="size-3.5" />
+                )}
+                {showPassword ? 'Masquer' : 'Afficher'}
+              </button>
+            </div>
           </div>
 
           {err && (

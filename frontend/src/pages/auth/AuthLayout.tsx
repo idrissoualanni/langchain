@@ -94,6 +94,12 @@ function BrandPanel() {
  * PublicLayout ( flex ligne → l'enfant s'étire ). Claimer sa propre
  * hauteur minimum le faisait déborder du parent, qui tronquait 40 px de
  * formulaire ( header du shell ) et déclenchait un scroll imbriqué.
+ *
+ * NB : PAS de h-full ici — height:100% contre un parent à hauteur
+ * indéfinie ( min-h-dvh ) retombe en auto et DÉSACTIVE le stretch
+ * flexbox : le panneau de marque s'arrêtait à sa hauteur de contenu
+ * (~530 px), laissant un blanc sous la séparation. flex-1 ( grow sur
+ * la largeur, stretch automatique sur la hauteur ) est le bon outil.
  */
 export function AuthLayout({
   children,
@@ -101,7 +107,7 @@ export function AuthLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="flex h-full min-h-0 bg-background">
+    <div className="flex min-h-0 flex-1 bg-background">
       <BrandPanel />
 
       {/* Colonne scrollable : le centrage passe par my-auto sur la carte
