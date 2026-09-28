@@ -222,11 +222,16 @@ if _looks_masked(LIVEKIT_API_SECRET):
 # reste du projet, aucune clé provider à gérer. Les noms doivent
 # exister dans livekit.agents.inference ( STTModels / LLMModels /
 # TTSModels ) — un nom invalide lève à la première inference.
+# ⚠️ Le défaut a été corrigé : « google/gemma-4-31b-it » n'existe PAS
+# dans le catalogue Inference (le worker démarre, s'enregistre, puis
+# échoue silencieusement au premier tour de parole — visible seulement
+# dans les logs du job). Liste vérifiée contre livekit-agents 1.8.x :
+# openai/gpt-4o-mini, google/gemini-2.5-flash, moonshotai/kimi-k2.5…
 LIVEKIT_AGENT_STT_MODEL = _env_or_default(
     "LIVEKIT_AGENT_STT_MODEL", "deepgram/nova-3"
 )
 LIVEKIT_AGENT_LLM_MODEL = _env_or_default(
-    "LIVEKIT_AGENT_LLM_MODEL", "google/gemma-4-31b-it"
+    "LIVEKIT_AGENT_LLM_MODEL", "openai/gpt-4o-mini"
 )
 LIVEKIT_AGENT_TTS_MODEL = _env_or_default(
     "LIVEKIT_AGENT_TTS_MODEL", "rime/coda"
