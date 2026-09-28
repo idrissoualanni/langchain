@@ -26,15 +26,28 @@ interface GroupSelectorProps {
 export function GroupSelector({ selectedGroups, onChange }: GroupSelectorProps) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadGroups = async () => {
+      // NOTE : l'API /api/admin/groups n'existe pas encore côté backend.
+      // On affiche un état d'erreur honnête au lieu d'un "Loading…" éternel
+      // ou d'une liste vide silencieuse ( même philosophie que le reste de
+      // l'admin : jamais de données inventées ni d'état trompeur ).
       try {
         const response = await apiRequest('/api/admin/groups');
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
         const data = await response.json();
         setGroups(data.groups || []);
+        setLoadError(null);
       } catch (error) {
         console.error("Failed to load groups:", error);
+        setLoadError(
+          "Le service de groupes n'est pas encore disponible sur ce backend " +
+            "(endpoint /api/admin/groups manquant). Saisie manuelle possible ci-dessous.",
+        );
       } finally {
         setLoading(false);
       }
@@ -55,11 +68,14 @@ export function GroupSelector({ selectedGroups, onChange }: GroupSelectorProps) 
   };
 
   if (loading) {
-    return <div className="text-sm text-muted-foreground">Loading groups...</div>;
+    return <div className="text-sm text-muted-foreground">Chargement des groupes…</div>;
   }
 
   return (
     <div className="space-y-2">
+      {loadError && (
+        <p className="text-xs text-warning leading-relaxed">{loadError}</p>
+      )}
       <Select onValueChange={handleAddGroup}>
         <SelectTrigger>
           <SelectValue placeholder="Select a group to add" />

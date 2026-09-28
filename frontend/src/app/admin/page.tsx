@@ -38,7 +38,7 @@ export default function AdminDashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex min-h-0 flex-1 items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -46,7 +46,7 @@ export default function AdminDashboardPage() {
 
   if (error) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center space-y-4">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
         <AlertCircle className="h-12 w-12 text-destructive" />
         <p className="text-lg font-medium text-destructive">{error}</p>
         <p className="text-sm text-muted-foreground">
@@ -57,8 +57,8 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto w-full max-w-[72rem] space-y-8 p-4 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-3xl font-bold tracking-tight">Dashboard Admin</h1>
         <p className="text-sm text-muted-foreground">
           Dernière mise à jour: {new Date().toLocaleTimeString()}

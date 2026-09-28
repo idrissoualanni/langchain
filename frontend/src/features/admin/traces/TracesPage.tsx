@@ -96,7 +96,7 @@ export function TracesPage() {
   }, [loadSide]);
 
   return (
-    <div className="space-y-6 p-4">
+    <div className="mx-auto w-full max-w-[72rem] space-y-6 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold">Traces LangSmith</h1>
