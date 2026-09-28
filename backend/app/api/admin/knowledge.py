@@ -278,4 +278,104 @@ def _get_rules_for_kb(kb_id: str) -> list[AccessRuleResponse]:
     ]
 
 
+# ==================================================================
+# CONTENU du corpus — Neon knowledge_sections ( vectorisé à l'écriture )
+#
+# Le corpus de cours vit DANS Neon ( mission : aucune base de
+# connaissance codée en dur dans le projet ). Ces routes permettent
+# d'AJOUTER / lister / supprimer des sections depuis l'admin : chaque
+# section est embeddée par le provider actif ( embeddings.yaml ) au
+# moment de l'écriture — la recherche sémantique la voit immédiatement.
+# ==================================================================
+
+from pydantic import ConfigDict  # noqa: E402
+
+from app.services.knowledge import store as knowledge_store  # noqa: E402
+
+
+class SectionUpsertRequest(BaseModel):
+    """Création/remplacement d'une section de cours."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject_id: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1)
+    source_label: str | None = Field(default=None, max_length=200)
+
+
+class SectionUpsertResponse(BaseModel):
+    id: int
+    subject_id: str
+    topic_slug: str
+    title: str
+    embedded: bool
+
+
+class SectionListResponse(BaseModel):
+    sections: list[dict]
+    total: int
+
+
+@router.get("/content", response_model=SectionListResponse)
+def admin_list_sections(
+    subject_id: str | None = None,
+    current_user: CurrentUser = Depends(require_admin),
+) -> SectionListResponse:
+    """Inventaire des sections du corpus ( sans les vecteurs )."""
+    sections = knowledge_store.list_sections(subject_id)
+    return SectionListResponse(sections=sections, total=len(sections))
+
+
+@router.post(
+    "/content",
+    response_model=SectionUpsertResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def admin_upsert_section(
+    data: SectionUpsertRequest,
+    current_user: CurrentUser = Depends(require_admin),
+) -> SectionUpsertResponse:
+    """Ajoute ( ou remplace ) une section — vectorisée à l'écriture.
+
+    Erreurs explicites : titre invalide, contenu vide, provider
+    d'embedding KO ( on n'insère jamais de section sans vecteur ).
+    """
+    try:
+        result = knowledge_store.upsert_section(
+            subject_id=data.subject_id,
+            title=data.title,
+            content=data.content,
+            source_label=data.source_label,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"Vectorisation impossible ( provider d'embedding ou "
+                f"base injoignable ) : {exc}"
+            ),
+        )
+    return SectionUpsertResponse(**result)
+
+
+@router.delete("/content/{section_id}")
+def admin_delete_section(
+    section_id: int,
+    current_user: CurrentUser = Depends(require_admin),
+) -> dict:
+    """Supprime une section du corpus par id."""
+    if not knowledge_store.delete_section(section_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Section {section_id} introuvable",
+        )
+    return {"success": True, "deleted": section_id}
+
+
 __all__ = ["router"]

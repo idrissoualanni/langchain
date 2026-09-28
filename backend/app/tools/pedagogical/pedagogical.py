@@ -48,10 +48,7 @@ from app.schemas.activity import (
     RESPONSE_TYPE_SHORT_ANSWER,
     new_activity_id,
 )
-from app.services.context.knowledge_retriever import (
-    KNOWLEDGE_DIR,
-    _split_sections,
-)
+from app.services.knowledge import store
 from app.logging.events import log_event
 
 # Mots trop courants retirés du scoring d'évaluation
@@ -73,90 +70,28 @@ def _find_section(subject: str, topic: str) -> dict | None:
     """Cherche la section knowledge (source + topic + content) d'un
     topic donné d'une matière. Retour None si introuvable.
 
-    Pont Registry ↔ knowledge (mission intégration) : le router V4
-    route des topics REGISTRY (« fonctions ») alors que les
-    fichiers knowledge sont découpés en SECTIONS (« definition »).
-    Résolution en 2 étapes, sans hardcoding :
-      1. le topic EST une section (comportement V4.1 inchangé) ;
-      2. sinon, s'il est un topic Registry, on résout son fichier
-         knowledge (stem ou titre H1 — cf. resolve_topic_source)
-         et on prend sa PREMIÈRE section réelle (pas « _intro »,
-         qui est ambigu : chaque fichier en a un).
+    Le corpus vit dans Neon ( knowledge_sections ) — plus aucun
+    fichier. La résolution Registry ↔ section ( topic Registry
+    « fonctions » → section réelle ) est portée par le store :
+    slug exact, puis sous-chaîne, puis repli sémantique top-1.
+    « _intro » n'est jamais résolu en section d'exercice ( ambigu :
+    chaque fichier en a un ) — le store l'exclut.
     """
     from app.subjects.registry import get_subject
 
-    cfg = get_subject(subject)
-    if cfg is None:
+    if get_subject(subject) is None:
         return None
-
-    topic_norm = _strip_accents((topic or "").lower())
-
-    # « _intro » est ambigu (présent dans chaque fichier) :
-    # on ne le résout JAMAIS en section d'exercice — le LLM est
-    # guidé vers les topics réels (§38 : pas d'invention).
-    from app.services.context.knowledge_retriever import resolve_topic_source
-
-    resolved = resolve_topic_source(subject, topic)
-    src_yaml_resolved = resolved[0] if resolved else None
-    for src in cfg.knowledge.get("sources", []):
-        path = KNOWLEDGE_DIR / f"{src}.md"
-        if not path.exists():
-            continue
-        try:
-            content = path.read_text(encoding="utf-8")
-        except Exception:
-            continue
-        sections = _split_sections(content)
-        for sec_topic, sec_content in sections:
-            if (
-                sec_topic != "_intro"
-                and _strip_accents(sec_topic.lower()) == topic_norm
-            ):
-                return {
-                    "source": f"{path.parent.name}/{path.stem}",
-                    "topic": sec_topic,
-                    "content": sec_content,
-                }
-
-        # Pont Registry : topic Registry (ex: fonctions, boucles)
-        # → fichier knowledge correspondant → première section
-        # réelle (definition / for / classes...).
-        if src_yaml_resolved and src == src_yaml_resolved:
-            real_sections = [
-                (t, c)
-                for t, c in sections
-                if t != "_intro" and c.strip()
-            ]
-            if real_sections:
-                sec_topic, sec_content = real_sections[0]
-                return {
-                    "source": f"{path.parent.name}/{path.stem}",
-                    "topic": sec_topic,
-                    "content": sec_content,
-                }
-    return None
+    return store.match_section(subject, topic)
 
 
 def _available_topics(subject: str) -> list[str]:
-    """Topics réellement disponibles (sections knowledge présentes)."""
+    """Topics réellement disponibles (sections knowledge présentes
+    dans Neon pour la matière)."""
     from app.subjects.registry import get_subject
 
-    cfg = get_subject(subject)
-    if cfg is None:
+    if get_subject(subject) is None:
         return []
-    topics: list[str] = []
-    for src in cfg.knowledge.get("sources", []):
-        path = KNOWLEDGE_DIR / f"{src}.md"
-        if not path.exists():
-            continue
-        try:
-            content = path.read_text(encoding="utf-8")
-        except Exception:
-            continue
-        for sec_topic, _ in _split_sections(content):
-            if sec_topic and sec_topic != "_intro":
-                topics.append(sec_topic)
-    return topics
+    return store.list_topics(subject)
 
 
 def _strip_accents(text: str) -> str:

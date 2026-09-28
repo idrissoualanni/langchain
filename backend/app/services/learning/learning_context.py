@@ -97,16 +97,14 @@ def get_learning_context(
                 # (« functions ») — même fichier knowledge ⇒
                 # même progression. On cherche la clé canonique
                 # SANS inventer de topic.
-                from app.services.context.knowledge_retriever import (
-                    resolve_topic_source,
-                )
+                from app.services.knowledge import store as kn_store
 
-                canonical = resolve_topic_source(subject, topic)
+                canonical = kn_store.match_section(subject, topic)
                 if canonical:
                     from app.subjects.registry import get_subject
 
                     cfg_r = get_subject(subject)
-                    stem = canonical[0].rsplit("/", 1)[-1]
+                    stem = canonical["source"].rsplit("/", 1)[-1]
                     if cfg_r and stem in cfg_r.topics:
                         topic_state = subject_state.topics.get(
                             stem

@@ -30,10 +30,15 @@ MAX_UPLOAD_BYTES = int(
     os.getenv("MAX_UPLOAD_BYTES", str(200 * 1024 * 1024))  # 200 Mo en S3
 )
 
-KINDS = ("document", "image", "video")
+KINDS = ("document", "image", "video", "knowledge")
 
 # Préfixes de clés S3 par kind ( isolation structurelle ).
-_KIND_PREFIX = {"document": "documents", "image": "images", "video": "videos"}
+_KIND_PREFIX = {
+    "document": "documents",
+    "image": "images",
+    "video": "videos",
+    "knowledge": "knowledge",
+}
 
 
 class ObjectStorageError(Exception):

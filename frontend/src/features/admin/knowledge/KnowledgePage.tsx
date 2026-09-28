@@ -12,6 +12,8 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { KnowledgeTable } from "./KnowledgeTable";
 import { KnowledgeAccessPanel } from "./KnowledgeAccessPanel";
+import { KnowledgeCorpusPanel } from "./KnowledgeCorpusPanel";
+import { SubjectDefinitionsPanel } from "./SubjectDefinitionsPanel";
 import { apiRequest } from "@/api/request";
 
 interface KnowledgeBase {
@@ -352,6 +354,12 @@ export function KnowledgePage() {
           />
         </CardContent>
       </Card>
+
+      {/* Corpus de cours — contenu vectorisé dans Neon ( ajouter / lister /
+          supprimer des sections ; la recherche sémantique les voit
+          immédiatement ) */}
+      <KnowledgeCorpusPanel />
+      <SubjectDefinitionsPanel />
     </div>
   );
 }

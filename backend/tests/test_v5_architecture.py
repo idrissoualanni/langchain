@@ -1,7 +1,79 @@
-# Tests V5 â€” mÃ©canismes natifs LangChain + architecture (Â§Â§45-56)
+# Tests V5 â€" mÃ©canismes natifs LangChain + architecture (Â§Â§45-56)
 import sys
 
 sys.path.insert(0, ".")
+
+# ============================================================
+# Store knowledge STUB — le corpus vit dans Neon ( knowledge_sections,
+# vectorisé ), le projet ne porte plus aucun fichier. Les tests tournent
+# HORS LIGNE sur un corpus en mémoire, via le MÊME contrat que Neon.
+# ============================================================
+from app.services.knowledge import store as _kn_store
+
+_FAKE_CORPUS: dict[str, list[dict]] = {
+    "python": [
+        {
+            "topic": "return",
+            "title": "return",
+            "content": (
+                "L'instruction return termine une fonction et renvoie "
+                "une valeur à l'appelant. Sans return explicite, la "
+                "fonction renvoie None."
+            ),
+            "source": "python/functions",
+            "relevance": 0.82,
+        },
+        {
+            "topic": "fonctions",
+            "title": "fonctions",
+            "content": (
+                "Une fonction est un bloc de code réutilisable qui "
+                "prend des paramètres et retourne une valeur."
+            ),
+            "source": "python/fonctions",
+            "relevance": 0.75,
+        },
+    ],
+}
+
+
+def _fake_search_semantic(subject_id, query, limit=3):
+    q = (query or "").lower()
+    words = q.split()
+    scored = [
+        h
+        for h in _FAKE_CORPUS.get(subject_id, [])
+        if any(w in (h["topic"] + " " + h["content"]).lower() for w in words)
+    ]
+    return scored[:limit]
+
+
+def _fake_has_corpus(subject_id):
+    return subject_id in _FAKE_CORPUS
+
+
+_kn_store.search_semantic = _fake_search_semantic
+_kn_store.has_subject_corpus = _fake_has_corpus
+_kn_store.get_section = lambda sid, slug: next(
+    (
+        {"source": h["source"], "topic": h["topic"], "content": h["content"]}
+        for h in _FAKE_CORPUS.get(sid, [])
+        if h["topic"] == (slug or "").lower()
+    ),
+    None,
+)
+_kn_store.list_topics = lambda sid: [
+    h["topic"] for h in _FAKE_CORPUS.get(sid, [])
+]
+_kn_store.match_section = lambda sid, topic: _kn_store.get_section(
+    sid, topic
+) or next(
+    (
+        {"source": h["source"], "topic": h["topic"], "content": h["content"]}
+        for h in _FAKE_CORPUS.get(sid, [])
+    ),
+    None,
+)
 
 results = []
 
@@ -15,7 +87,7 @@ def check(label, cond, detail=""):
 
 
 # ============================================================
-# Â§54 â€” ROUTING STRUCTURÃ‰ (RoutingResult pydantic validÃ©)
+# Â§54 â€" ROUTING STRUCTURÃ‰ (RoutingResult pydantic validÃ©)
 # ============================================================
 from app.services.context.router import route_subject
 from app.schemas.context import RoutingResult
@@ -57,7 +129,7 @@ check(
 # Unsupported (Â§50)
 r = route_subject("Explique-moi l astrophysique.")
 check(
-    "S50: unsupported â†’ General Tutor",
+    "S50: unsupported â†' General Tutor",
     r.status == "unsupported" and r.subject == "astrophysique",
 )
 
@@ -66,23 +138,31 @@ r = route_subject("Quel temps fait-il demain ?")
 check("S17: unknown, pas de subject inventÃ©", r.status == "unknown" and r.subject is None)
 
 # ============================================================
-# Â§49 â€” TEST AJOUT DE MATIÃˆRE (registry dÃ©couvre, moteur intact)
+# §49 — TEST AJOUT DE MATIÈRE (registry découvre, moteur intact)
+#
+# Depuis la migration Neon : le corpus knowledge ne vit plus dans
+# le dépôt ( aucun fichier à écrire ). Le registry teste le YAML
+# de config ; la partie knowledge est servie par le store stub.
 # ============================================================
-import shutil
 from pathlib import Path
 
 DEF_DIR = Path("app/subjects/definitions")
-KN_DIR = Path("app/knowledge")
 
-# Sauvegarde pour restauration
-astro_yaml = DEF_DIR / "astronomy.yaml"
-astro_kn = KN_DIR / "sciences" / "astronomie" / "star_life.md"
+# Mission Neon : la définition est seedée dans subject_definitions
+# ( registry DB-backed ) — plus aucun fichier écrit.
+from app.infrastructure.database.persistence import _postgres_url as _pu5
+from sqlalchemy import create_engine as _ce5, text as _t5
 
-# Capture de l'original AVANT mutation (restauré en fin de test).
-orig_yaml = astro_yaml.read_text(encoding="utf-8") if astro_yaml.exists() else None
-orig_kn = astro_kn.read_text(encoding="utf-8") if astro_kn.exists() else None
+_eng5 = _ce5(_pu5(), pool_pre_ping=True)
+with _eng5.connect() as _c:
+    _row = _c.execute(
+        _t5("SELECT yaml FROM subject_definitions WHERE subject_id='astronomy'")
+    ).first()
+orig_yaml = _row[0] if _row else None
 
-astro_yaml.write_text(
+astro_yaml = None  # plus de fichier — la définition vit en base
+
+_astro_yaml_text = (
     """id: astronomy
 name: Astronomie
 domain: sciences
@@ -113,19 +193,41 @@ aliases:
 model:
   provider: ollama
   name: qwen2.5
-""",
-    encoding="utf-8",
-)
-astro_kn.parent.mkdir(parents=True, exist_ok=True)
-astro_kn.write_text(
-    "# Astronomie â€” Vie des Ã©toiles\n\n"
-    "## etoiles\n"
-    "Une Ã©toile est une boule de plasma tenant en Ã©quilibre "
-    "entre sa gravitÃ© et la pression de fusion nuclÃ©aire de son "
-    "cÅ“ur. L'Ã©nergie rayonnÃ©e provient de la fusion de l'hydrogÃ¨ne "
-    "en hÃ©lium.\n",
-    encoding="utf-8",
-)
+""")
+
+with _eng5.begin() as _c:
+    _c.execute(
+        _t5(
+            "INSERT INTO subject_definitions (subject_id, yaml, sha256, updated_at) "
+            "VALUES ('astronomy', :y, :sha, :u) "
+            "ON CONFLICT (subject_id) DO UPDATE SET "
+            "yaml = EXCLUDED.yaml, sha256 = EXCLUDED.sha256, "
+            "updated_at = EXCLUDED.updated_at"
+        ),
+        {
+            "y": _astro_yaml_text,
+            "sha": __import__("hashlib").sha256(
+                _astro_yaml_text.encode("utf-8")
+            ).hexdigest(),
+            "u": __import__("time").strftime("%Y-%m-%dT%H:%M:%S"),
+        },
+    )
+
+# Corpus stub pour la matière de test ( équivalent Neon )
+_FAKE_CORPUS["astronomy"] = [
+    {
+        "topic": "etoiles",
+        "title": "etoiles",
+        "content": (
+            "Une étoile est une boule de plasma tenant en équilibre "
+            "entre sa gravité et la pression de fusion nucléaire de "
+            "son cœur. L'énergie rayonnée provient de la fusion de "
+            "l'hydrogène en hélium."
+        ),
+        "source": "sciences/astronomie/star_life",
+        "relevance": 0.85,
+    }
+]
 
 # Invalider le cache registry pour dÃ©couvrir astronomy
 from app.subjects import registry as reg
@@ -158,7 +260,7 @@ check(
     f"{k['status']}",
 )
 
-# builder/graph/runner/middleware NON modifiÃ©s â€” vÃ©rifiÃ©s par
+# builder/graph/runner/middleware NON modifiÃ©s â€" vÃ©rifiÃ©s par
 # le fait qu'on n'a touchÃ© Ã  aucun fichier moteur.
 
 # §52 — knowledge absent : matière valide SANS source knowledge
@@ -172,7 +274,7 @@ check(
 )
 
 # ============================================================
-# Â§53 â€” TOOL INEXISTANT (declared mais non enregistrÃ©)
+# Â§53 â€" TOOL INEXISTANT (declared mais non enregistrÃ©)
 # ============================================================
 from app.subjects.tool_registry import resolve_tools
 
@@ -191,7 +293,7 @@ check(
 )
 
 # ============================================================
-# Â§30 â€” BUILT CONTEXT STRUCTURÃ‰
+# Â§30 â€" BUILT CONTEXT STRUCTURÃ‰
 # ============================================================
 from app.services.context import build_context
 from app.schemas.context import BuiltContext
@@ -243,7 +345,7 @@ check(
     and ctx.stats.knowledge_items >= 1,
 )
 
-# Â§48 â€” pas de mÃ©lange de configs
+# Â§48 â€" pas de mÃ©lange de configs
 ctx_bio = build_context(
     user_id=TEST_USER,
     thread_id="t-v5",
@@ -364,7 +466,7 @@ check(
 )
 
 # ============================================================
-# Â§4 â€” RUNTIME CONTEXT (AgentContext transportÃ© par context=)
+# Â§4 â€" RUNTIME CONTEXT (AgentContext transportÃ© par context=)
 # ============================================================
 from app.schemas.context import AgentContext
 
@@ -396,7 +498,7 @@ check(
 )
 
 # ============================================================
-# Â§46 â€” CROSS-THREAD (mÃ©moire user visible, threads sÃ©parÃ©s)
+# Â§46 â€" CROSS-THREAD (mÃ©moire user visible, threads sÃ©parÃ©s)
 # ============================================================
 ctx_t1 = build_context(
     user_id=TEST_USER, thread_id="thread-A1", query="mes preferences ?"
@@ -405,14 +507,14 @@ ctx_t2 = build_context(
     user_id=TEST_USER, thread_id="thread-A2", query="mes preferences ?"
 )
 check(
-    "S46: mÃ©moire user accessible cross-thread (A1â†’A2)",
+    "S46: mÃ©moire user accessible cross-thread (A1â†'A2)",
     len(ctx_t1.user.text) > 0
     and ctx_t1.user.text == ctx_t2.user.text
     and ctx_t1.thread.thread_id != ctx_t2.thread.thread_id,
 )
 
 # ============================================================
-# Â§47 â€” ISOLATION UTILISATEURS
+# Â§47 â€" ISOLATION UTILISATEURS
 # ============================================================
 USER_B = "u-v5b-" + uuid.uuid4().hex[:8]
 save_fact(USER_B, category="identity", content="S appelle Bruno")
@@ -434,7 +536,7 @@ check(
 )
 
 # ============================================================
-# Â§55 â€” DYNAMIC PROMPT (changement mÃ©moire visible au prochain appel)
+# Â§55 â€" DYNAMIC PROMPT (changement mÃ©moire visible au prochain appel)
 # ============================================================
 from app.services.context import build_system_prompt
 from app.services.agent.prompts import CORE_PROMPT
@@ -469,15 +571,26 @@ if fails:
 # Nettoyage astronomy (matiÃ¨re de test Â§49)
 # Restauration astronomy (matiere de test S49) : restaurer l'original,
 # ne jamais detruire un fichier tracke.
-if orig_yaml is None:
-    astro_yaml.unlink(missing_ok=True)
-else:
-    astro_yaml.write_text(orig_yaml, encoding="utf-8")
-if orig_kn is None:
-    shutil.rmtree(astro_kn.parent, ignore_errors=True)
-else:
-    astro_kn.parent.mkdir(parents=True, exist_ok=True)
-    astro_kn.write_text(orig_kn, encoding="utf-8")
+with _eng5.begin() as _c:
+    if orig_yaml is None:
+        _c.execute(
+            _t5("DELETE FROM subject_definitions WHERE subject_id='astronomy'")
+        )
+    else:
+        _c.execute(
+            _t5(
+                "UPDATE subject_definitions SET yaml=:y, "
+                "sha256=:sha, updated_at=:u WHERE subject_id='astronomy'"
+            ),
+            {
+                "y": orig_yaml,
+                "sha": __import__("hashlib").sha256(
+                    orig_yaml.encode("utf-8")
+                ).hexdigest(),
+                "u": __import__("time").strftime("%Y-%m-%dT%H:%M:%S"),
+            },
+        )
+_FAKE_CORPUS.pop("astronomy", None)
 reg.invalidate()
 print("cleanup astronomy ok")
 if fails:

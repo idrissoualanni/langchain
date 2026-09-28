@@ -291,15 +291,13 @@ def resolve_registry_topic(
         # canonisation fichier → topic Registry (une seule clé
         # de profil par fichier knowledge : fonctions ≡ functions)
         if last:
-            from app.services.context.knowledge_retriever import (
-                resolve_topic_source,
-            )
+            from app.services.knowledge import store as kn_store
 
             for t in cfg.topics:
                 if t == last:
                     continue
-                resolved = resolve_topic_source(subject, t)
-                if resolved and resolved[0].endswith(f"/{last}"):
+                resolved = kn_store.match_section(subject, t)
+                if resolved and resolved["source"].endswith(f"/{last}"):
                     return t
     return None
 

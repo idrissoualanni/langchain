@@ -1,16 +1,20 @@
-# Knowledge Access Control — ACL pour bases de connaissance (§11-§18)
+# Knowledge Access Control — ACL pour bases de connaissance (§11-§18).
 #
 # Contrôle d'accès aux knowledge bases avant retrieval.
-# Répond à : "Cette knowledge base est-elle accessible à cet utilisateur dans ce contexte ?"
+# Répond à : "Cette knowledge base est-elle accessible à cet utilisateur
+# dans ce contexte ?"
 #
 # Scopes :
 #   - public : accessible à tous
-#   - group : accessible aux membres d'un groupe
-#   - user : accessible à un utilisateur spécifique
-#   - admin : réservé aux administrateurs
+#   - group  : accessible aux membres d'un groupe
+#   - user   : accessible à un utilisateur spécifique
+#   - admin  : réservé aux administrateurs
 #
-# Architecture :
-#   User → Knowledge Access Resolver → allowed knowledge bases → Retriever
+# PERSISTANCE : les KB et règles vivent dans NEON ( knowledge_bases /
+# knowledge_access_rules ) — les dict en mémoire étaient perdus à chaque
+# redémarrage. Convention : une KB dont l'id = subject_id restreint le
+# corpus de cette matière ( appliqué par knowledge_retriever via
+# user_id — sans KB enregistrée, le corpus reste ouvert ).
 #
 # Isolation garantie :
 #   - User A ≠ User B
@@ -18,15 +22,20 @@
 #   - Revoked access = no access
 from __future__ import annotations
 
-import os
+import json
+import time
 from typing import Literal
 
 from pydantic import BaseModel, Field
+from sqlalchemy import create_engine, text
+
+from app.infrastructure.database.persistence import _postgres_url
+from app.logging.events import log_event
 
 
 class KnowledgeAccessRule(BaseModel):
     """Règle d'accès à une knowledge base."""
-    
+
     knowledge_base_id: str
     scope: Literal["public", "group", "user", "admin"] = "private"
     target_id: str = ""  # user_id ou group_id selon scope
@@ -35,7 +44,7 @@ class KnowledgeAccessRule(BaseModel):
 
 class KnowledgeBaseInfo(BaseModel):
     """Informations sur une knowledge base."""
-    
+
     id: str
     name: str
     description: str = ""
@@ -48,8 +57,8 @@ class KnowledgeBaseInfo(BaseModel):
 
 
 class AccessResult(BaseModel):
-    """Résultat d'une vérification d'accès."""
-    
+    """Résultat de vérification d'accès."""
+
     allowed: bool
     knowledge_base_id: str
     user_id: str
@@ -58,46 +67,133 @@ class AccessResult(BaseModel):
     matched_rule: KnowledgeAccessRule | None = None
 
 
-# Registry en mémoire des règles d'accès (sera persisté en DB)
-_access_rules: dict[str, list[KnowledgeAccessRule]] = {}  # kb_id -> rules
-_knowledge_bases: dict[str, KnowledgeBaseInfo] = {}  # kb_id -> info
+def _engine():
+    return create_engine(_postgres_url(), pool_pre_ping=True)
+
+
+def _kb_row_to_info(row) -> KnowledgeBaseInfo:
+    return KnowledgeBaseInfo(
+        id=row[0],
+        name=row[1],
+        description=row[2] or "",
+        subject_id=row[3] or "",
+        scope=row[4] or "private",
+        owner_user_id=row[5] or "",
+        group_ids=json.loads(row[6] or "[]"),
+        enabled=bool(row[7]),
+        metadata=json.loads(row[8] or "{}"),
+    )
+
+
+def _rules_for(kb_id: str) -> list[KnowledgeAccessRule]:
+    """Règles ( actives ET désactivées ) d'une KB, depuis Neon."""
+    with _engine().connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT knowledge_base_id, scope, target_id, enabled "
+                "FROM knowledge_access_rules WHERE knowledge_base_id = :k"
+            ),
+            {"k": kb_id},
+        ).fetchall()
+    return [
+        KnowledgeAccessRule(
+            knowledge_base_id=r[0], scope=r[1], target_id=r[2], enabled=bool(r[3])
+        )
+        for r in rows
+    ]
 
 
 def register_knowledge_base(info: KnowledgeBaseInfo) -> None:
-    """Enregistre une knowledge base dans le registry."""
-    _knowledge_bases[info.id] = info
+    """Enregistre ( ou met à jour ) une knowledge base — Neon."""
+    with _engine().begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO knowledge_bases "
+                "(id, name, description, subject_id, scope, owner_user_id, "
+                " group_ids, enabled, metadata, created_at) "
+                "VALUES (:i, :n, :d, :s, :sc, :o, :g, :e, :m, :c) "
+                "ON CONFLICT (id) DO UPDATE SET "
+                "name=EXCLUDED.name, description=EXCLUDED.description, "
+                "subject_id=EXCLUDED.subject_id, scope=EXCLUDED.scope, "
+                "owner_user_id=EXCLUDED.owner_user_id, "
+                "group_ids=EXCLUDED.group_ids, enabled=EXCLUDED.enabled, "
+                "metadata=EXCLUDED.metadata"
+            ),
+            {
+                "i": info.id,
+                "n": info.name,
+                "d": info.description,
+                "s": info.subject_id,
+                "sc": info.scope,
+                "o": info.owner_user_id,
+                "g": json.dumps(info.group_ids),
+                "e": info.enabled,
+                "m": json.dumps(info.metadata),
+                "c": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            },
+        )
 
 
 def get_knowledge_base(kb_id: str) -> KnowledgeBaseInfo | None:
-    """Récupère les infos d'une knowledge base."""
-    return _knowledge_bases.get(kb_id)
+    with _engine().connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT id, name, description, subject_id, scope, "
+                "owner_user_id, group_ids, enabled, metadata "
+                "FROM knowledge_bases WHERE id = :i"
+            ),
+            {"i": kb_id},
+        ).first()
+    return _kb_row_to_info(row) if row else None
 
 
 def list_knowledge_bases() -> list[KnowledgeBaseInfo]:
-    """Liste toutes les knowledge bases enregistrées."""
-    return list(_knowledge_bases.values())
+    with _engine().connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT id, name, description, subject_id, scope, "
+                "owner_user_id, group_ids, enabled, metadata "
+                "FROM knowledge_bases ORDER BY id"
+            )
+        ).fetchall()
+    return [_kb_row_to_info(r) for r in rows]
 
 
 def add_access_rule(rule: KnowledgeAccessRule) -> None:
-    """Ajoute une règle d'accès pour une knowledge base."""
-    if rule.knowledge_base_id not in _access_rules:
-        _access_rules[rule.knowledge_base_id] = []
-    _access_rules[rule.knowledge_base_id].append(rule)
+    """Ajoute une règle d'accès — Neon ( idempotent par triple unique )."""
+    with _engine().begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO knowledge_access_rules "
+                "(knowledge_base_id, scope, target_id, enabled) "
+                "VALUES (:k, :s, :t, :e) "
+                "ON CONFLICT (knowledge_base_id, scope, target_id) "
+                "DO UPDATE SET enabled = EXCLUDED.enabled"
+            ),
+            {
+                "k": rule.knowledge_base_id,
+                "s": rule.scope,
+                "t": rule.target_id,
+                "e": rule.enabled,
+            },
+        )
 
 
 def remove_access_rule(rule: KnowledgeAccessRule) -> bool:
-    """Supprime une règle d'accès."""
-    if rule.knowledge_base_id not in _access_rules:
-        return False
-    
-    rules = _access_rules[rule.knowledge_base_id]
-    for i, r in enumerate(rules):
-        if (r.scope == rule.scope and 
-            r.target_id == rule.target_id and
-            r.knowledge_base_id == rule.knowledge_base_id):
-            rules.pop(i)
-            return True
-    return False
+    with _engine().begin() as conn:
+        n = conn.execute(
+            text(
+                "DELETE FROM knowledge_access_rules "
+                "WHERE knowledge_base_id = :k AND scope = :s "
+                "AND target_id = :t"
+            ),
+            {
+                "k": rule.knowledge_base_id,
+                "s": rule.scope,
+                "t": rule.target_id,
+            },
+        ).rowcount
+    return bool(n)
 
 
 def check_access(
@@ -107,22 +203,13 @@ def check_access(
     is_admin: bool = False,
 ) -> AccessResult:
     """Vérifie si un utilisateur a accès à une knowledge base (§12-§15).
-    
+
     Algorithme :
       1. Si admin → accès toujours autorisé
       2. Chercher règles explicites pour cet utilisateur
       3. Chercher règles pour ses groupes
       4. Vérifier si public
       5. Sinon → refusé
-    
-    Args :
-        knowledge_base_id : ID de la knowledge base
-        user_id : ID de l'utilisateur
-        group_ids : IDs des groupes de l'utilisateur
-        is_admin : l'utilisateur est-il admin
-    
-    Returns :
-        AccessResult avec allowed=True/False et reason
     """
     # 1. Admin → toujours accès
     if is_admin:
@@ -133,9 +220,10 @@ def check_access(
             reason="Admin access",
             scope="admin",
         )
-    
+
+    rules = _rules_for(knowledge_base_id)
+
     # 2. Règles user-specific
-    rules = _access_rules.get(knowledge_base_id, [])
     for rule in rules:
         if not rule.enabled:
             continue
@@ -148,7 +236,7 @@ def check_access(
                 scope="user",
                 matched_rule=rule,
             )
-    
+
     # 3. Règles group-specific
     if group_ids:
         for rule in rules:
@@ -163,7 +251,7 @@ def check_access(
                     scope="group",
                     matched_rule=rule,
                 )
-    
+
     # 4. Public
     for rule in rules:
         if not rule.enabled:
@@ -177,7 +265,7 @@ def check_access(
                 scope="public",
                 matched_rule=rule,
             )
-    
+
     # 5. Vérifier si la KB elle-même est publique
     kb_info = get_knowledge_base(knowledge_base_id)
     if kb_info and kb_info.scope == "public":
@@ -188,7 +276,7 @@ def check_access(
             reason="Knowledge base is public",
             scope="public",
         )
-    
+
     # 6. Refusé
     return AccessResult(
         allowed=False,
@@ -204,25 +292,12 @@ def get_accessible_knowledge_bases(
     group_ids: list[str] | None = None,
     is_admin: bool = False,
 ) -> list[str]:
-    """Retourne la liste des knowledge bases accessibles à un utilisateur.
-    
-    Usage : filtrer les résultats de retrieval AVANT de chercher.
-    
-    Args :
-        user_id : ID de l'utilisateur
-        group_ids : IDs des groupes
-        is_admin : l'utilisateur est-il admin
-    
-    Returns :
-        Liste des knowledge_base_id accessibles
-    """
+    """Knowledge bases accessibles à un utilisateur ( filtrage retrieval )."""
     accessible = []
-    
-    for kb_id in _knowledge_bases.keys():
-        result = check_access(kb_id, user_id, group_ids, is_admin)
+    for kb in list_knowledge_bases():
+        result = check_access(kb.id, user_id, group_ids, is_admin)
         if result.allowed:
-            accessible.append(kb_id)
-    
+            accessible.append(kb.id)
     return accessible
 
 
@@ -231,23 +306,15 @@ def grant_access(
     scope: Literal["public", "group", "user"],
     target_id: str = "",
 ) -> bool:
-    """Accorde l'accès à une knowledge base (§14).
-    
-    Args :
-        knowledge_base_id : ID de la KB
-        scope : type d'accès (public, group, user)
-        target_id : user_id ou group_id (vide si public)
-    
-    Returns :
-        True si succès
-    """
-    rule = KnowledgeAccessRule(
-        knowledge_base_id=knowledge_base_id,
-        scope=scope,
-        target_id=target_id,
-        enabled=True,
+    """Accorde l'accès à une knowledge base (§14)."""
+    add_access_rule(
+        KnowledgeAccessRule(
+            knowledge_base_id=knowledge_base_id,
+            scope=scope,
+            target_id=target_id,
+            enabled=True,
+        )
     )
-    add_access_rule(rule)
     return True
 
 
@@ -256,28 +323,21 @@ def revoke_access(
     scope: Literal["public", "group", "user"],
     target_id: str = "",
 ) -> bool:
-    """Révoque l'accès à une knowledge base (§14).
-    
-    Args :
-        knowledge_base_id : ID de la KB
-        scope : type d'accès
-        target_id : user_id ou group_id
-    
-    Returns :
-        True si une règle a été supprimée
-    """
-    rule = KnowledgeAccessRule(
-        knowledge_base_id=knowledge_base_id,
-        scope=scope,
-        target_id=target_id,
-        enabled=True,
+    """Révoque l'accès à une knowledge base (§14)."""
+    return remove_access_rule(
+        KnowledgeAccessRule(
+            knowledge_base_id=knowledge_base_id,
+            scope=scope,
+            target_id=target_id,
+            enabled=True,
+        )
     )
-    return remove_access_rule(rule)
 
 
 def clear_all_rules() -> None:
     """Supprime toutes les règles (pour tests/reset)."""
-    _access_rules.clear()
+    with _engine().begin() as conn:
+        conn.execute(text("DELETE FROM knowledge_access_rules"))
 
 
 def clear_rules_for_kb(kb_id: str) -> int:
@@ -287,23 +347,49 @@ def clear_rules_for_kb(kb_id: str) -> int:
     clear_all_rules(), les autres KB ne sont pas affectées (§26 :
     isolation des données entre ressources).
     """
-    rules = _access_rules.pop(kb_id, [])
-    return len(rules)
+    with _engine().begin() as conn:
+        n = conn.execute(
+            text("DELETE FROM knowledge_access_rules WHERE knowledge_base_id = :k"),
+            {"k": kb_id},
+        ).rowcount
+    return int(n or 0)
 
 
 def list_rules_for_kb(kb_id: str) -> list[KnowledgeAccessRule]:
     """Liste les règles d'accès d'UNE knowledge base."""
-    return list(_access_rules.get(kb_id, []))
+    return _rules_for(kb_id)
 
 
 def unregister_knowledge_base(kb_id: str) -> bool:
     """Retire une KB du registry. Retourne True si elle existait."""
-    return _knowledge_bases.pop(kb_id, None) is not None
+    with _engine().begin() as conn:
+        n = conn.execute(
+            text("DELETE FROM knowledge_bases WHERE id = :i"),
+            {"i": kb_id},
+        ).rowcount
+    return bool(n)
 
 
 def clear_all_knowledge_bases() -> None:
     """Supprime toutes les KB enregistrées (pour tests/reset)."""
-    _knowledge_bases.clear()
+    with _engine().begin() as conn:
+        conn.execute(text("DELETE FROM knowledge_bases"))
+
+
+def is_corpus_restricted(subject_id: str) -> bool:
+    """Le corpus d'une matière est-il restreint par une KB enregistrée ?
+
+    Convention : une KB d'id = subject_id ( ex. 'python' ) restreint le
+    corpus de cette matière. Aucune KB → corpus ouvert ( rétro-compat ).
+    """
+    return get_knowledge_base(subject_id) is not None
+
+
+def ensure_acl_tables() -> None:
+    """Crée les tables ACL si absentes ( usage direct hors init_schema )."""
+    from app.infrastructure.database.schema import init_schema
+
+    init_schema()
 
 
 __all__ = [
@@ -324,4 +410,6 @@ __all__ = [
     "list_rules_for_kb",
     "unregister_knowledge_base",
     "clear_all_knowledge_bases",
+    "is_corpus_restricted",
+    "ensure_acl_tables",
 ]

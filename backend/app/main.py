@@ -27,6 +27,7 @@ from app.features.transcription.api import router as transcription_router
 from app.api.admin import (
     models_router as admin_models_router,
     knowledge_router as admin_knowledge_router,
+    subjects_router as admin_subjects_router,
     observability_router as admin_observability_router,
     dashboard_router as admin_dashboard_router,
 )
@@ -55,18 +56,10 @@ async def lifespan(app: FastAPI):
     # Idempotent — ne touche jamais aux données existantes.
     init_schema()
 
-    # Indexation du corpus knowledge ( 70 Markdown ) — idempotent par
-    # source_sha : ne ré-embedde que les fichiers modifiés. Non-bloquant :
-    # un provider d'embedding HS ne doit pas empêcher le serveur de démarrer.
-    try:
-        from app.services.knowledge.indexer import index_corpus
-
-        index_corpus()
-    except Exception as exc:  # noqa: BLE001
-        log_event(
-            "KNOWLEDGE_INDEX_FAILED",
-            message=f"Indexation corpus ignorée au démarrage : {exc}",
-        )
+    # Corpus knowledge : il vit DÉSORMAIS dans Neon ( knowledge_sections,
+    # vectorisé ) — plus aucun fichier Markdown dans le dépôt, donc
+    # plus d'indexation au démarrage. La réindexation passe par la
+    # migration initiale ( hors serveur ).
 
     # Enregistre la loop pour que log_event (appelé depuis des threads
     # executor pendant les runs agent) puisse publier sur le bus SSE
@@ -136,6 +129,7 @@ app.include_router(transcription_router)
 # complet ; observability/dashboard utilisent /observability et /dashboard.
 app.include_router(admin_models_router, tags=["admin-models"])
 app.include_router(admin_knowledge_router, tags=["admin-knowledge"])
+app.include_router(admin_subjects_router, tags=["admin-subjects"])
 app.include_router(admin_observability_router, prefix="/api/admin", tags=["admin-observability"])
 app.include_router(admin_dashboard_router, prefix="/api/admin", tags=["admin-dashboard"])
 

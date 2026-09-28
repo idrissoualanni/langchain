@@ -28,6 +28,7 @@ from app.services.context.fallback import (
     decide_fallback,
     fallback_note_for_prompt,
 )
+from app.config import ADMIN_CLERK_IDS
 from app.services.context.knowledge_retriever import search_knowledge
 from app.schemas.model_capabilities import (
     get_model_capabilities,
@@ -207,6 +208,8 @@ def retrieve_sources(
                 topic=routing.topic,
                 query=query,
                 limit=max_knowledge,
+                user_id=user_id,
+                is_admin=user_id in ADMIN_CLERK_IDS,
             )
             knowledge_result = KnowledgeSearchResult(
                 status=raw["status"],

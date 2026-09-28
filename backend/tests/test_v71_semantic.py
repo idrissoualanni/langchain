@@ -354,10 +354,12 @@ print("\n--- §11 NO HARDCODE : ajouter une matière = 0 modif router ---")
 import shutil  # noqa: E402
 from pathlib import Path  # noqa: E402
 
-DEF_DIR = Path("app/subjects/definitions")
-TEST_YAML = DEF_DIR / "zz_v71_test_subject.yaml"
-TEST_YAML.write_text(
-    """id: v71_test_music
+# Mission Neon : plus aucun YAML dans le dépôt — la matière de test
+# est seedée dans subject_definitions ( registry DB-backed ).
+from app.services.knowledge import store as _kn_store71
+
+_V71_YAML = """
+id: v71_test_music
 name: Musique
 domain: arts
 description: >
@@ -394,9 +396,9 @@ semantic_terms:
   harmonie:
     - accords ensemble de notes qui sonnent ensemble
     - chords harmony notes together
-""",
-    encoding="utf-8",
-)
+"""
+
+_kn_store71.upsert_subject_definition("v71_test_music", _V71_YAML)
 
 try:
     from app.subjects import registry as reg
@@ -441,7 +443,14 @@ try:
         "registry",
     )
 finally:
-    TEST_YAML.unlink(missing_ok=True)
+    try:
+        from sqlalchemy import text as _t
+        from app.infrastructure.database.persistence import _postgres_url as _pu
+        from sqlalchemy import create_engine as _ce
+        with _ce(_pu(), pool_pre_ping=True).begin() as _c:
+            _c.execute(_t("DELETE FROM subject_definitions WHERE subject_id='v71_test_music'"))
+    except Exception:
+        pass
     reg.invalidate()
     from app.services.context.semantic.candidates import (
         invalidate_candidates_cache as _inv,

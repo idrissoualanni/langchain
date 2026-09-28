@@ -180,6 +180,73 @@ _TABLES = [
     # constraint matching the ON CONFLICT specification" ).
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_sections_topic "
     "ON knowledge_sections(subject_id, topic_slug)",
+
+    # ---------------------------------------------------------------
+    # Bucket knowledge — fichiers Markdown SOURCES du corpus, stockés
+    # dans Neon ( mission : aucune base de connaissance dans le dépôt ).
+    # Les sections vectorisées ( knowledge_sections ) sont DÉRIVÉES de
+    # ces fichiers ; le bucket garde l'original restituable.
+    # ---------------------------------------------------------------
+    """
+    CREATE TABLE IF NOT EXISTS knowledge_files (
+        id          BIGSERIAL PRIMARY KEY,
+        path        TEXT NOT NULL UNIQUE,
+        subject_id  TEXT NOT NULL,
+        content     TEXT NOT NULL,
+        sha256      TEXT NOT NULL,
+        created_at  TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_knowledge_files_subject "
+    "ON knowledge_files(subject_id)",
+
+    # ---------------------------------------------------------------
+    # Définitions de matières — YAML sources dans Neon ( plus aucun
+    # YAML préconfiguré dans le dépôt ). Le registry les charge au
+    # démarrage ; l'admin peut en ajouter/éditer.
+    # ---------------------------------------------------------------
+    """
+    CREATE TABLE IF NOT EXISTS subject_definitions (
+        subject_id  TEXT PRIMARY KEY,
+        yaml        TEXT NOT NULL,
+        sha256      TEXT NOT NULL,
+        updated_at  TEXT NOT NULL
+    )
+    """,
+
+    # ---------------------------------------------------------------
+    # ACL knowledge bases — registry + règles d'accès PERSISTÉS ( les
+    # dict en mémoire étaient perdus à chaque redémarrage et la
+    # recherche ne les appliquait pas ). Convention : une KB d'id =
+    # subject_id restreint le corpus de cette matière.
+    # ---------------------------------------------------------------
+    """
+    CREATE TABLE IF NOT EXISTS knowledge_bases (
+        id            TEXT PRIMARY KEY,
+        name          TEXT NOT NULL,
+        description   TEXT NOT NULL DEFAULT '',
+        subject_id    TEXT NOT NULL DEFAULT '',
+        scope         TEXT NOT NULL DEFAULT 'private',
+        owner_user_id TEXT NOT NULL DEFAULT '',
+        group_ids     TEXT NOT NULL DEFAULT '[]',
+        enabled       BOOLEAN NOT NULL DEFAULT TRUE,
+        metadata      TEXT NOT NULL DEFAULT '{}',
+        created_at    TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS knowledge_access_rules (
+        id                BIGSERIAL PRIMARY KEY,
+        knowledge_base_id TEXT NOT NULL,
+        scope             TEXT NOT NULL,
+        target_id         TEXT NOT NULL DEFAULT '',
+        enabled           BOOLEAN NOT NULL DEFAULT TRUE
+    )
+    """,
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_access_rules "
+    "ON knowledge_access_rules(knowledge_base_id, scope, target_id)",
+    "CREATE INDEX IF NOT EXISTS idx_knowledge_access_rules_kb "
+    "ON knowledge_access_rules(knowledge_base_id)",
 ]
 
 
