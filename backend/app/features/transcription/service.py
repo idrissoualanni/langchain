@@ -61,7 +61,7 @@ class TranscriptionService:
                 "model": model,
                 "punctuate": True,
                 "profanity_filter": False,
-                " utterances": False,
+                "utterances": False,
             },
         )
 

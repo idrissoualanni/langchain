@@ -25,7 +25,10 @@ tavily-python
 
 # Realtime
 livekit-api
-deepgram>=1.0
+# SDK Deepgram v2 : expose Deepgram() + LiveOptions utilisés par
+# app/features/transcription/service.py. Le package "deepgram" n'existe
+# pas sur PyPI ( build Render en échec ) ; deepgram-sdk<3 garde l'API v2.
+deepgram-sdk>=2.12,<3.0
 # Agent tuteur vocal — worker STT/LLM/TTS via LiveKit Inference.
 # Versions pinnées au moment de l'ajout ( livekit-agents 1.8.2 ).
 livekit-agents>=1.8.2
