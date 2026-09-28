@@ -158,7 +158,9 @@ function AppShell() {
           <span className="ml-auto hidden font-mono text-[10px] text-muted-foreground sm:inline">⌘K</span>
         </header>
         <CommandPalette />
-        <div id="main-content" className="min-h-0 flex-1 overflow-hidden">
+        {/* Les pages (assistant aside mis à part, qui gère son propre
+            scroll interne) doivent pouvoir défiler : overflow-auto ici. */}
+        <div id="main-content" className="min-h-0 flex-1 overflow-y-auto">
           <Suspense fallback={<div className="p-6"><LoadingState label="Chargement de la page…" /></div>}>
             <Routes>
           <Route index element={<Navigate to="/assistant" replace />} />

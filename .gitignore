@@ -1,6 +1,6 @@
-# Python
+# Compiled and build artifacts
 __pycache__/
 *.pyc
 
-# Environment
-.env
+# Dependencies
+node_modules/
