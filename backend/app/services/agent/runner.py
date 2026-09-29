@@ -23,6 +23,8 @@ from app.logging.events import log_event
 from app.services.models.retry import (
     invoke_llm_with_retry,
     invoke_llm_with_retry_sync,
+    invoke_async_with_retry,
+    invoke_async_with_retry_sync,
 )
 
 
@@ -477,8 +479,12 @@ async def run_agent_stream(
         # Timeout réel + retries BORNÉS transitoires (mission §3) :
         # asyncio.wait_for + retry policy (jamais sur validation/
         # authorization, see app/models/retry.py).
-        result = await invoke_llm_with_retry(
-            lambda: agent.invoke(
+        #
+        # .ainvoke() : le Main Graph contient des nodes async
+        # ( retrieve_context_node… ) — .invoke() synchrone lève alors
+        # "No synchronous function provided to retrieve_context".
+        result = await invoke_async_with_retry(
+            lambda: agent.ainvoke(
                 input_state, config=config, context=context
             ),
             user_id=user_id,
@@ -600,8 +606,9 @@ def run_agent(
 
     # Timeout réel + retries BORNÉS transitoires (mission §3) — même
     # politique que le mode async (app/models/retry.py).
-    result = invoke_llm_with_retry_sync(
-        lambda: agent.invoke(input_state, config=config, context=context),
+    # .ainvoke() : nodes async dans le graph ( voir run_agent_stream ).
+    result = invoke_async_with_retry_sync(
+        lambda: agent.ainvoke(input_state, config=config, context=context),
         user_id=user_id,
         thread_id=thread_id,
         label=f"run_agent_sync:{thread_id}",

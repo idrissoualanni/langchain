@@ -102,6 +102,45 @@ async def invoke_llm_with_retry(
             await asyncio.sleep(_retry_delay(attempt))
 
 
+async def invoke_async_with_retry(
+    coro_fn,
+    *,
+    user_id: str = "",
+    thread_id: str = "",
+    label: str = "graph-ainvoke",
+    max_attempts: int = MODEL_RETRY_ATTEMPTS,
+    timeout_seconds: float | None = MODEL_REQUEST_TIMEOUT_SECONDS,
+):
+    """Invoque coro_fn() (retourne une coroutine) avec timeout + retry.
+
+    Obligatoire pour les graphs LangGraph contenant des nodes async
+    ( retrieve_context_node… ) : l'API synchrone .invoke() lève alors
+    "No synchronous function provided to X". On passe par .ainvoke().
+    """
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            return await asyncio.wait_for(
+                coro_fn(), timeout=timeout_seconds
+            )
+        except Exception as exc:
+            if attempt >= max_attempts or not is_transient_error(exc):
+                raise
+            log_event(
+                "LLM_RETRY",
+                level="WARNING",
+                message=(
+                    f"{label} retry {attempt}/{max_attempts} "
+                    f"(transitoire)"
+                ),
+                user_id=user_id,
+                thread_id=thread_id,
+                extra={"operation": "retry", "label": label},
+            )
+            await asyncio.sleep(_retry_delay(attempt))
+
+
 def invoke_llm_with_retry_sync(
     call,
     *,
@@ -128,8 +167,39 @@ def invoke_llm_with_retry_sync(
         loop.close()
 
 
+def invoke_async_with_retry_sync(
+    coro_fn,
+    *,
+    user_id: str = "",
+    thread_id: str = "",
+    label: str = "graph-ainvoke",
+    max_attempts: int = MODEL_RETRY_ATTEMPTS,
+    timeout_seconds: float | None = MODEL_REQUEST_TIMEOUT_SECONDS,
+):
+    """Version synchrone de invoke_async_with_retry (POST /api/chat).
+
+    Le graph contient des nodes async → .ainvoke() nécessite une event
+    loop, créée ici pour le mode synchrone."""
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(
+            invoke_async_with_retry(
+                coro_fn,
+                user_id=user_id,
+                thread_id=thread_id,
+                label=label,
+                max_attempts=max_attempts,
+                timeout_seconds=timeout_seconds,
+            )
+        )
+    finally:
+        loop.close()
+
+
 __all__ = [
     "is_transient_error",
     "invoke_llm_with_retry",
     "invoke_llm_with_retry_sync",
+    "invoke_async_with_retry",
+    "invoke_async_with_retry_sync",
 ]

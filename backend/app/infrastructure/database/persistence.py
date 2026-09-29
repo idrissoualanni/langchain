@@ -125,6 +125,102 @@ def init_persistence() -> None:
         _initialized = True
 
 
+# ----------------------------------------------------------------------
+# Wrappers async-compatibles.
+#
+# Le Main Graph contient des nodes async ( retrieve_context, agenda,
+# coding, document — MCP + ainvoke de sous-agents ) : LangGraph exige
+# alors .ainvoke(), qui appelle checkpointer.aget_tuple/aput/aput_writes
+# et store.aget/aput/asearch. Les implémentations PostgresSaver /
+# PostgresStore du paquet sont SYNC-ONLY ( les méthodes async de la
+# classe de base lèvent NotImplementedError ).
+#
+# Au lieu de tout migrer en async ( AsyncPostgresSaver exige un pool
+# async ET casserait les ~10 appels synchrones agent.get_state() du
+# codebase ), on SOUS-CLASSE les implémentations sync et on délègue les
+# méthodes async aux méthodes sync via asyncio.to_thread : le pool
+# psycopg est thread-safe, chaque méthode prend sa propre connexion.
+# L'héritage est OBLIGATOIRE — LangGraph fait isinstance(...,
+# BaseCheckpointSaver) / isinstance(..., BaseStore) à l'invoke.
+# Les deux API ( sync ET async ) fonctionnent sur le MÊME singleton.
+# ----------------------------------------------------------------------
+import asyncio
+
+from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.store.postgres import PostgresStore
+
+
+class AsyncCompatPostgresSaver(PostgresSaver):
+    """PostgresSaver + API async — double usage sync/async.
+
+    L'API sync est HÉRITÉE inchangée ( agent.get_state() continue de
+    marcher ). Seules les méthodes async sont surchargées pour
+    déléguer aux sync via executor."""
+
+    async def aget_tuple(self, config):
+        return await asyncio.to_thread(self.get_tuple, config)
+
+    async def aget(self, config):
+        return await asyncio.to_thread(self.get, config)
+
+    async def aput(self, config, checkpoint, metadata, new_config):
+        return await asyncio.to_thread(
+            self.put, config, checkpoint, metadata, new_config
+        )
+
+    async def aput_writes(self, config, writes, task_id, task_path=None):
+        return await asyncio.to_thread(
+            self.put_writes, config, writes, task_id, task_path
+        )
+
+    async def alist(self, config, *, filter=None, before=None, limit=None):
+        # list() est un GENERATOR synchrone — on matérialise dans le
+        # thread ( impossible de yield depuis to_thread ).
+        def _collect():
+            return list(
+                self.list(config, filter=filter, before=before, limit=limit)
+            )
+
+        return await asyncio.to_thread(_collect)
+
+
+class AsyncCompatPostgresStore(PostgresStore):
+    """PostgresStore + API async — double usage sync/async."""
+
+    async def aget(self, namespace, key):
+        return await asyncio.to_thread(self.get, namespace, key)
+
+    async def aput(self, namespace, key, value, index=None):
+        await asyncio.to_thread(self.put, namespace, key, value, index)
+
+    async def adelete(self, namespace, key):
+        await asyncio.to_thread(self.delete, namespace, key)
+
+    async def asearch(self, namespace_prefix, *, filter=None, limit=10, offset=0):
+        return await asyncio.to_thread(
+            self.search,
+            namespace_prefix,
+            filter=filter,
+            limit=limit,
+            offset=offset,
+        )
+
+    async def abatch(self, ops):
+        return await asyncio.to_thread(self.batch, ops)
+
+    async def alist_namespaces(
+        self, *, prefix=None, suffix=None, max_depth=None, limit=100, offset=0
+    ):
+        return await asyncio.to_thread(
+            self.list_namespaces,
+            prefix=prefix,
+            suffix=suffix,
+            max_depth=max_depth,
+            limit=limit,
+            offset=offset,
+        )
+
+
 def get_checkpointer():
     """Checkpointer LangGraph ( singleton ) — PostgresSaver.
 
@@ -160,7 +256,9 @@ def get_checkpointer():
             # open() avant setup() : le pool doit pouvoir servir une
             # connexion pour creer les tables.
             _checkpoint_pool.open()
-            _checkpointer = PostgresSaver(_checkpoint_pool)
+            # Sous-classe de PostgresSaver : API sync héritée + méthodes
+            # async ajoutées ( voir AsyncCompatPostgresSaver ).
+            _checkpointer = AsyncCompatPostgresSaver(_checkpoint_pool)
             # setup() = creation idempotente des tables
             # checkpoints / checkpoint_blobs / checkpoint_writes.
             _checkpointer.setup()
@@ -184,7 +282,6 @@ def get_persistent_store():
             # le passe au constructeur : from_conn_string est un context
             # manager, et hors d'un `with` la connexion est fermee.
             # setup() = creation idempotente de store_postgres.
-            from langgraph.store.postgres import PostgresStore
             from psycopg_pool import ConnectionPool
 
             # ⚠️ psycopg décode jsonb → objets Python par défaut ;
@@ -211,7 +308,7 @@ def get_persistent_store():
                 configure=_configure_conn,
             )
             _store_pool.open()
-            _store = PostgresStore(_store_pool)
+            _store = AsyncCompatPostgresStore(_store_pool)
             _store.setup()
     return _store
 
