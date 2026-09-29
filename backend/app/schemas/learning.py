@@ -132,7 +132,7 @@ class LearningObservation(BaseModel):
 class LearningProfile(BaseModel):
     """Profil d'apprentissage persistant d'un étudiant (§7).
 
-    Stocké dans le SqliteStore sous namespace ("users", "learning",
+    Stocké dans le PostgresStore ( Neon ) sous namespace ("users", "learning",
     user_id), clé "profile" — cross-thread (§4), jamais de messages
     (§34 : les messages restent dans le Checkpointer).
     """

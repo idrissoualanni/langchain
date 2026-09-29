@@ -5,7 +5,7 @@ from app.schemas import HealthResponse
 from app.config import (
     MODEL_NAME,
     check_ollama_health,
-    check_sqlite_health,
+    check_database_health,
     langsmith_settings,
 )
 from app.auth.resolver import auth_mode, jwks_reachable
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/health", tags=["health"])
 
 @router.get("", response_model=HealthResponse)
 def api_health() -> HealthResponse:
-    """Statut des composants : Ollama, LangGraph, SQLite."""
+    """Statut des composants : Ollama, LangGraph, base Neon."""
     # Vérification légère sans importer le graph complet
     langgraph_ok = True  # On suppose OK si l'app démarre
     
@@ -25,7 +25,7 @@ def api_health() -> HealthResponse:
         status="ok" if langgraph_ok else "degraded",
         ollama=check_ollama_health(),
         langgraph=langgraph_ok,
-        sqlite=check_sqlite_health(),
+        database=check_database_health(),
         model=MODEL_NAME,
     )
 
@@ -36,15 +36,15 @@ def health_ready(response: Response) -> dict:
 
     §62 : un readiness qui répond 200 même non-prêt est un anti-pattern
     (le scheduler/orchestrateur ne détecte jamais l'indisponibilité) →
-    HTTP 503 tant qu'un composant critique (Ollama/SQLite) est KO.
+    HTTP 503 tant qu'un composant critique (Ollama/base Neon) est KO.
     """
     ollama_ok = check_ollama_health()
-    sqlite_ok = check_sqlite_health()
+    database_ok = check_database_health()
     
     # Vérification légère sans importer le graph complet
     agent_ok = True
     
-    ready = ollama_ok and sqlite_ok and agent_ok
+    ready = ollama_ok and database_ok and agent_ok
     if not ready:
         response.status_code = 503
     
@@ -52,7 +52,7 @@ def health_ready(response: Response) -> dict:
         "ready": ready,
         "checks": {
             "ollama": ollama_ok,
-            "sqlite": sqlite_ok,
+            "database": database_ok,
             "agent": agent_ok,
         },
     }

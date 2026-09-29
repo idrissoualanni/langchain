@@ -39,10 +39,13 @@ FROM python:3.11-slim
 # vidéo (MP4…) via libav/ffmpeg. Sans ffmpeg dans le PATH, toute
 # ingestion vidéo lève "tuple index out of range" ( decode ) au lieu de
 # transcrire — d'où la transcription désactivée de fait en production.
+# curl : requis par le HEALTHCHECK ci-dessous ( absent de python:3.11-slim
+# par défaut → le healthcheck échouait silencieusement en production ).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 \
     ca-certificates \
     ffmpeg \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -85,7 +88,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 #   - sinon → serveur web FastAPI ( port $PORT ).
 # Le shell form permet l'expansion de $RUN_AS_WORKER et $PORT.
 CMD if [ "$RUN_AS_WORKER" = "1" ]; then \
-        exec python -m app.infrastructure.livekit.agent start; \
+        exec python -m app.infrastructure.livekit.worker_main; \
     else \
         exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}; \
     fi

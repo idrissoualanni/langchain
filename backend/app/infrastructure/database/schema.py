@@ -247,6 +247,34 @@ _TABLES = [
     "ON knowledge_access_rules(knowledge_base_id, scope, target_id)",
     "CREATE INDEX IF NOT EXISTS idx_knowledge_access_rules_kb "
     "ON knowledge_access_rules(knowledge_base_id)",
+
+    # ---------------------------------------------------------------
+    # MONITORING ADMIN — tous les événements de l'agent persistés
+    # ( log_event écrivait en stdout/agent.log : perdu au redémarrage,
+    # invisible du dashboard ). L'admin interroge ici runs, routages,
+    # fallbacks, décisions learning, erreurs, accès knowledge…
+    # ---------------------------------------------------------------
+    """
+    CREATE TABLE IF NOT EXISTS agent_events (
+        id        BIGSERIAL PRIMARY KEY,
+        ts        TIMESTAMPTZ NOT NULL DEFAULT now(),
+        level     TEXT NOT NULL,
+        event     TEXT NOT NULL,
+        user_id   TEXT NOT NULL DEFAULT '',
+        thread_id TEXT NOT NULL DEFAULT '',
+        tool_name TEXT NOT NULL DEFAULT '',
+        message   TEXT NOT NULL DEFAULT '',
+        extra     JSONB NOT NULL DEFAULT '{}'
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_agent_events_ts "
+    "ON agent_events(ts DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_agent_events_user "
+    "ON agent_events(user_id) WHERE user_id <> ''",
+    "CREATE INDEX IF NOT EXISTS idx_agent_events_thread "
+    "ON agent_events(thread_id) WHERE thread_id <> ''",
+    "CREATE INDEX IF NOT EXISTS idx_agent_events_level "
+    "ON agent_events(level)",
 ]
 
 

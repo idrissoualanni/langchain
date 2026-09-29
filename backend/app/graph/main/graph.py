@@ -44,7 +44,6 @@ from app.schemas.context import AgentContext
 from app.logging.events import log_event
 from app.services.models.retry import is_transient_error
 
-_conn: object | None = None  # legacy SQLite — conservé pour compat import
 _agent = None
 
 # Mission Assistant UI (ModelSelector) : cache d'agents par modele.
@@ -125,7 +124,7 @@ def compile_main_graph(subgraph_agent, checkpointer, store):
     subgraph_agent : sous-graphe agentique (create_agent) — le
     sous-graphe conversationnel (§5) hérite checkpointer/store du
     graphe parent (POC-3).
-    checkpointer   : persistance du thread state (SqliteSaver).
+    checkpointer   : persistance du thread state (PostgresSaver Neon).
     store          : mémoire longue durée cross-thread.
 
     Limites (mission §3, lues depuis app/config.py — jamais de

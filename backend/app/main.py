@@ -28,6 +28,7 @@ from app.api.admin import (
     models_router as admin_models_router,
     knowledge_router as admin_knowledge_router,
     subjects_router as admin_subjects_router,
+    monitoring_router as admin_monitoring_router,
     observability_router as admin_observability_router,
     dashboard_router as admin_dashboard_router,
 )
@@ -48,13 +49,19 @@ async def lifespan(app: FastAPI):
     """Startup : logging + DB + agent warm-up + loop registration."""
     setup_logging()
     init_db()
-    # Checkpointer + store LangGraph : tables créées sur Neon (PostgreSQL)
-    # si DATABASE_URL est définie, sinon SQLite locale. AVANT l'agent —
-    # le graphe demande son checkpointer à l'initialisation.
+    # Checkpointer + store LangGraph sur Neon (PostgreSQL) — SQLite
+    # retiré. AVANT l'agent : le graphe demande son checkpointer à
+    # l'initialisation.
     init_persistence()
     # Tables applicatives Neon : binaires (BYTEA), vidéos, MCP, knowledge.
     # Idempotent — ne touche jamais aux données existantes.
     init_schema()
+
+    # Monitoring admin : thread écrivain qui persiste log_event dans
+    # agent_events ( Neon ) — file bornée, jamais bloquant.
+    from app.logging.events import start_event_persistence
+
+    start_event_persistence()
 
     # Corpus knowledge : il vit DÉSORMAIS dans Neon ( knowledge_sections,
     # vectorisé ) — plus aucun fichier Markdown dans le dépôt, donc
@@ -130,6 +137,7 @@ app.include_router(transcription_router)
 app.include_router(admin_models_router, tags=["admin-models"])
 app.include_router(admin_knowledge_router, tags=["admin-knowledge"])
 app.include_router(admin_subjects_router, tags=["admin-subjects"])
+app.include_router(admin_monitoring_router, tags=["admin-monitoring"])
 app.include_router(admin_observability_router, prefix="/api/admin", tags=["admin-observability"])
 app.include_router(admin_dashboard_router, prefix="/api/admin", tags=["admin-dashboard"])
 

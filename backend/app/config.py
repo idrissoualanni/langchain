@@ -26,7 +26,7 @@ LOG_DIR.mkdir(exist_ok=True)
 
 APP_DB_PATH = DATABASE_DIR / "app.db"
 CHECKPOINTS_DB_PATH = DATABASE_DIR / "checkpoints.db"
-# Mémoire longue durée LangGraph ( SqliteStore en mode local ; la MÊME
+# Mémoire longue durée LangGraph ( PostgresStore sur Neon ; la MÊME
 # base que le reste en PostgreSQL — voir persistence.py ).
 LONG_TERM_DB_PATH = DATABASE_DIR / "long_term_memory.db"
 # RAG documents + vecteurs ( SQLite local ; pgvector côté Neon ).
@@ -361,8 +361,11 @@ def check_ollama_health() -> bool:
         return False
 
 
-def check_sqlite_health() -> bool:
-    """Vérifie l'accès à la base de données (SQLite local ou PostgreSQL via DATABASE_URL)."""
+def check_database_health() -> bool:
+    """Vérifie l'accès à Neon ( PostgreSQL via DATABASE_URL ).
+
+    SQLite retiré — Neon est la seule base de l'application."""
+
     try:
         from sqlalchemy import text
 

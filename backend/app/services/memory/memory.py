@@ -1,11 +1,10 @@
 import re
-import sqlite3
 import threading
 import uuid
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 
-from langgraph.store.sqlite import SqliteStore
+from langgraph.store.postgres import PostgresStore
 
 from app.config import DATABASE_DIR, log_safe
 from app.infrastructure.cache.ttl import TTLCache
@@ -35,7 +34,7 @@ NAMESPACE_LABEL = "users/profile"
 # Seuil de similarité pour la déduplication (0..1)
 DEDUP_THRESHOLD = 0.72
 
-_store: SqliteStore | None = None
+_store: PostgresStore | None = None
 _store_lock = threading.RLock()
 
 # Cache de la mémoire longue durée : le profil et les faits d'un
@@ -212,9 +211,8 @@ def _semantic_relevance(
 def get_store():
     """Singleton store mémoire longue durée — thread-safe.
 
-    Délègue au pivot ( app/infrastructure/database/persistence ) :
-    PostgresStore sur Neon si DATABASE_URL, sinon SqliteStore local.
-    La signature ( get/put ) est IDENTIQUE — aucun appelant à changer.
+    Délègue au pivot ( app/infrastructure/database/persistence ) —
+    PostgresStore sur Neon UNIQUEMENT ( SQLite retiré ).
     """
     global _store
     if _store is not None:

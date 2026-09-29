@@ -1,6 +1,6 @@
 # Learning Profile V6 — persistance + Profile Updater (§14).
 #
-# Stockage : SqliteStore EXISTANT (aucune nouvelle technologie,
+# Stockage : PostgresStore Neon EXISTANT (aucune nouvelle technologie,
 # §5 Option A) sous namespace distinct de User Memory (§6) :
 #
 #   User Memory       ("users", "profile", user_id) clés facts/profile

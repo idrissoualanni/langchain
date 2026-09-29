@@ -6,7 +6,8 @@ class HealthResponse(BaseModel):
     status: str
     ollama: bool
     langgraph: bool
-    sqlite: bool
+    # SQLite retiré — Neon ( PostgreSQL ) est la seule persistance.
+    database: bool
     model: str
 
 
