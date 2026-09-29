@@ -75,7 +75,7 @@ export interface HealthInfo {
   status: string;
   ollama: boolean;
   langgraph: boolean;
-  sqlite: boolean;
+  database: boolean;
   model: string;
 }
 

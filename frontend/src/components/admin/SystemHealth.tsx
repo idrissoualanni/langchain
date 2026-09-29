@@ -26,7 +26,7 @@ interface HealthResponse {
   status: string;
   ollama: boolean;
   langgraph: boolean;
-  sqlite: boolean;
+  database: boolean;
   model: string;
 }
 
@@ -45,7 +45,7 @@ export function SystemHealth() {
   useEffect(() => {
     async function fetchHealth() {
       try {
-        // Santé principale (SQLite, Ollama, LangGraph).
+        // Santé principale (Neon, Ollama, LangGraph).
         const res = await apiRequest("/api/health");
         const data = (await res.json()) as HealthResponse;
 
@@ -68,7 +68,7 @@ export function SystemHealth() {
         }
 
         setHealth({
-          database: data.sqlite ? "healthy" : "down",
+          database: data.database ? "healthy" : "down",
           langgraph: data.langgraph ? "healthy" : "down",
           livekit: "unknown", // Aucun endpoint de santé LiveKit : "non monitoré" (honnête)
           langsmith,

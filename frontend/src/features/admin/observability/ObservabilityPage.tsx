@@ -66,7 +66,7 @@ interface HealthResponse {
   status: string;
   ollama: boolean;
   langgraph: boolean;
-  sqlite: boolean;
+  database: boolean;
   model: string;
 }
 
@@ -458,7 +458,7 @@ export function ObservabilityPage() {
               return (
                 <>
                   {gatewayRow}
-                  {boolRow("Base de données", systemHealth?.sqlite)}
+                  {boolRow("Base de données", systemHealth?.database)}
                   {boolRow("LangGraph", systemHealth?.langgraph)}
                   {langsmithRow}
                 </>

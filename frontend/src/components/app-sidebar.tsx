@@ -189,7 +189,7 @@ export function AppSidebar() {
         <div className="space-y-1.5 px-1">
           <StatusBadge label="ollama" ok={health ? health.ollama : null} />
           <StatusBadge label="langgraph" ok={health ? health.langgraph : null} />
-          <StatusBadge label="sqlite" ok={health ? health.sqlite : null} />
+          <StatusBadge label="neon" ok={health ? health.database : null} />
         </div>
 
         {/* Profil + réglages */}

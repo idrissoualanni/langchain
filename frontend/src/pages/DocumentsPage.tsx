@@ -322,7 +322,7 @@ export function DocumentsPage() {
             Documents
           </h1>
           <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-            rag · sqlite · embeddings · {documents.length} document(s)
+            rag · postgres · embeddings · {documents.length} document(s)
           </p>
         </div>
       </div>
