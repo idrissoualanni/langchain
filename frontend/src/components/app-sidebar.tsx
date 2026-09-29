@@ -1,5 +1,5 @@
 // AppSidebar — rail de navigation unique (Assistant / Learning / Profile
-// / Settings), conversations et indicateurs de service.
+// / Settings) et conversations.
 // Le menu Admin est un groupe SÉPARÉ, réservé aux administrateurs.
 import { NavLink, useLocation } from 'react-router-dom';
 import {
@@ -20,7 +20,6 @@ import {
   Mic,
 } from 'lucide-react';
 import { NeonUserMenu } from '../auth/NeonUserMenu';
-import { useHealth } from '@/hooks/useHealth';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import { useTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/utils';
@@ -38,7 +37,6 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { ThreadList } from '@/components/assistant-ui/elements/thread-list.aui';
-import { StatusBadge } from '@/components/layout/StatusBadge';
 
 interface NavItem {
   to: string;
@@ -85,7 +83,6 @@ function NavEntry({ item }: { item: NavItem }) {
 }
 
 export function AppSidebar() {
-  const { health } = useHealth();
   const { internal, devMode, devLogout, isAdmin } = useCurrentUser();
   const { resolvedTheme, toggle } = useTheme();
 
@@ -184,13 +181,6 @@ export function AppSidebar() {
         <SidebarMenu>
           <NavEntry item={SETTINGS_NAV} />
         </SidebarMenu>
-
-        {/* Services — indicateurs discrets */}
-        <div className="space-y-1.5 px-1">
-          <StatusBadge label="ollama" ok={health ? health.ollama : null} />
-          <StatusBadge label="langgraph" ok={health ? health.langgraph : null} />
-          <StatusBadge label="neon" ok={health ? health.database : null} />
-        </div>
 
         {/* Profil + réglages */}
         <div className="flex items-center gap-2 px-1">
