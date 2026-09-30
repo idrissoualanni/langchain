@@ -21,7 +21,9 @@ langsmith
 # --- Langfuse observabilité (traces agent, auto-hébergé v4) ---
 # Épinglé : le CallbackHandler LangChain du SDK v4 n'accepte plus
 # d'arguments et lit le client global — compat garantie avec 4.16.0.
-langfuse==4.16.0
+# langfuse 4.15.6 : dernière version v4 compatible avec livekit-agents
+# (livekit-agents <1.8.x exige opentelemetry-api<1.45 ; langfuse>=4.16.0 exige >=1.45.0 → conflit pip)
+langfuse==4.15.6
 
 # Providers & Search
 ollama
