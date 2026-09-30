@@ -370,3 +370,17 @@ Statuts possibles : `validé` · `supersédé par ADR-XXX` · `proposé` · `rej
 - **Décision** : le jeton ne transite que par `Authorization: Bearer`. `sse.py` rejette 401 sans header ; le fallback `?auth=`, le dossier `app/ws/`, l'import et le montage dans `main.py`, et `wsUrl` de `base.ts` sont supprimés.
 - **Conséquences** : plus aucune exposition du jeton par les journaux d'accès ni l'historique navigateur ; `GET /api/events` exige un header (compatible avec le client réel). Toute future connexion navigateur temps réel (SSE ou WebSocket) devra passer par `fetch` (SSE) ou un client qui sait poser l'en-tête — jamais l'URL.
 - **Revu si** : un vrai besoin client impose `EventSource` natif ou un WebSocket navigateur — auquel cas il faudra un jeton à durée de vie très courte à usage unique échangé par un endpoint authentifié, pas une requête directe avec jeton en URL.
+---
+
+## ADR-025 — Changement de rôle : route admin explicite `PUT /api/admin/users/{user_id}/role`
+
+- **Date** : 2026-09-30
+- **Statut** : validé
+- **Contexte** : l'ADR-023 a retiré l'auto-persistance d'écart du résolveur et posé `users.role` comme autorité unique au runtime, avec comme conséquence assumée « la promotion d'un développeur passe par un `UPDATE` SQL (ou une future page admin) ». Il manquait le canal d'écriture explicite côté API : sans lui, la seule voie est un accès SQL direct, non auditable côté applicatif, et aucune page d'admin frontend future ne peut s'appuyer sur un contrat stable.
+- **Options** :
+  1. **`PATCH /api/users/{user_id}/role` propriétaire** — rejetée : l'ownership autorise un user à modifier ses propres données ; un user pourrait se promouvoir admin sur sa propre ligne. Le rôle est une donnée d'autorisation : seuls les admins peuvent l'écrire.
+  2. **`PUT /api/admin/users/{user_id}/role` admin uniquement** — retenue : route sous le préfixe admin existant, protégée par le même `require_admin` que toutes les routes d'administration ; body `{role: "admin"|"user"}` clos par un `Literal` (422 sur toute autre valeur) ; anti-lockout : un admin ne peut pas modifier son propre rôle.
+  3. **Page SQL managée côté frontend** — écartée : la page admin n'existe pas encore ; l'ADR-023 dit « future page admin », la route API est le prérequis que cette page consommera.
+- **Décision** : nouvelle route `PUT /api/admin/users/{user_id}/role` dans `backend/app/api/admin/users.py`, montée sans préfixe supplémentaire (préfixe interne `/api/admin/users`), `Depends(require_admin)`, 404 si cible inconnue, 422 si auto-modification, log `USER_ROLE_SET` existant réutilisé via `users_db.set_user_role`.
+- **Conséquences** : la promotion/rétrogradation devient auditable (log événement), testable (Postman UR1), et consommable par une future page admin sans réouvrir le resolver. L'ADR-023 reste inchangé côté runtime : le rôle lu en base est le rôle appliqué.
+- **Revu si** : un mécanisme multi-rôles plus riche (ROLE, RBAC par ressource) remplace un jour le couple `admin`/`user`.

@@ -298,6 +298,14 @@ Les modifications invalident le registre des matières (`registry.invalidate()`)
 | GET | `/metrics` |
 | GET | `/activity-stats` |
 
+### Utilisateurs — `api/admin/users.py`, monté sous `/api/admin/users`
+
+| Méthode | Route | Rôle |
+|---|---|---|
+| PUT | `/{user_id}/role` | changer le rôle (body `{role: "admin"\|"user"}`) |
+
+Canal d'écriture explicite du rôle (ADR-023) : `users.role` en base est l'autorité unique au runtime ; cette route remplace l'auto-persistance d'écart retirée du resolver. **Anti-lockout** : un admin ne peut pas modifier son propre rôle (422) — la modification doit venir d'un autre admin ou d'un UPDATE SQL.
+
 ---
 
 ## Points à ne pas oublier en intégration

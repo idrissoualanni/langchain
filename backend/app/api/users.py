@@ -143,9 +143,23 @@ def api_get_profile(
     user_id: str,
     current: CurrentUser = Depends(get_current_user),
 ) -> ProfileOut:
-    """Lire le profil longue durée (ownership vérifié)."""
+    """Lire le profil longue durée (ownership vérifié).
+
+    Enrichi des infos du compte (public.users) : le profil applicatif
+    (name/description) vit dans le store mémoire, l'identité du compte
+    (rôle, date de création, sub externe) dans la table users. Les deux
+    sont regroupés pour que la page de profil n'ait qu'un seul appel.
+    """
     _require_owner_or_admin(user_id, current)
-    return ProfileOut(**read_profile_for_api(user_id))
+    profile = read_profile_for_api(user_id)
+    account = get_user(user_id)
+    return ProfileOut(
+        **profile,
+        account_name=account["name"] if account else None,
+        role=account["role"] if account else None,
+        created_at=account["created_at"] if account else None,
+        external_user_id=account["external_user_id"] if account else None,
+    )
 
 
 @router.put("/{user_id}/profile", response_model=ProfileOut)
@@ -169,11 +183,18 @@ def api_update_profile(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
+    # Après écriture, on relit le compte pour renvoyer le même contrat
+    # enrichi que le GET (cohérence GET/PUT).
+    account = get_user(user_id)
     return ProfileOut(
         user_id=user_id,
         name=profile["name"],
         description=profile["description"],
         exists=True,
+        account_name=account["name"] if account else None,
+        role=account["role"] if account else None,
+        created_at=account["created_at"] if account else None,
+        external_user_id=account["external_user_id"] if account else None,
     )
 
 

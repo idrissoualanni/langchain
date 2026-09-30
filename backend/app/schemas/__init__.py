@@ -151,6 +151,7 @@ from app.schemas.thread import (
 from app.schemas.user import (
     ProfileOut,
     ProfileUpdate,
+    RoleUpdate,
     UserCreate,
     UserOut,
 )
@@ -256,6 +257,7 @@ __all__ = [
     "ResearchResult",
     "ResolvedTools",
     "RigorScore",
+    "RoleUpdate",
     "RoutingResult",
     "SearchResponse",
     "SearchResult",

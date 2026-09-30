@@ -34,9 +34,9 @@ logs/
 .zcode/
 .zcodeignore
 
-# Collection API Bruno (requêtes + environnements : contient des variables
+# Collection API Postman (requêtes + environnements : contient des variables
 # locales email/password/jwt — ne se committe jamais)
-bruno/
-# Collections Bruno (client API local — lutilisateur les garde hors du dépôt)
-bruno/
-**/bruno/
+postman/
+# Collections API (client local — lutilisateur les garde hors du dépôt)
+postman/
+**/postman/

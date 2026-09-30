@@ -31,6 +31,7 @@ from app.api.admin import (
     monitoring_router as admin_monitoring_router,
     observability_router as admin_observability_router,
     dashboard_router as admin_dashboard_router,
+    users_router as admin_users_router,
 )
 from app.infrastructure.database.connections import init_db
 from app.infrastructure.database.persistence import (
@@ -142,6 +143,7 @@ app.include_router(admin_subjects_router, tags=["admin-subjects"])
 app.include_router(admin_monitoring_router, tags=["admin-monitoring"])
 app.include_router(admin_observability_router, prefix="/api/admin", tags=["admin-observability"])
 app.include_router(admin_dashboard_router, prefix="/api/admin", tags=["admin-dashboard"])
+app.include_router(admin_users_router, tags=["admin-users"])
 
 # SSE — événements agent temps réel
 app.add_api_route(

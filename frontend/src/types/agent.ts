@@ -119,6 +119,12 @@ export interface UserProfile {
   name: string | null;
   description: string | null;
   exists: boolean;
+  // Infos du compte (public.users) — regroupées avec le profil depuis
+  // la correction de la route : la page de profil n'a qu'un seul appel.
+  account_name?: string | null;
+  role?: string | null;
+  created_at?: string | null;
+  external_user_id?: string | null;
 }
 
 // ---- MemoryFacts v3 ----

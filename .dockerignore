@@ -7,8 +7,8 @@ svc_raw.json
 backend/authcfg.json
 backend/create.json
 
-# Collection API Bruno (requêtes + environnements : variables email/password/jwt)
-bruno/
+# Collection API Postman (requêtes + environnements : variables email/password/jwt)
+postman/
 
 # Dépendances et caches
 node_modules/
