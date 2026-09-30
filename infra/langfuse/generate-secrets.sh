@@ -14,8 +14,10 @@
 set -euo pipefail
 
 # Garde-fou : ne jamais écraser un .env existant par erreur.
-if [ -f .env ]; then
-  printf 'ERREUR : .env existe déjà. Bouge-le d'abord (mv .env .env.bak).\n' >&2
+# NB : -s (non vide) car la redirection `> .env` crée déjà un fichier vide avant
+# l'exécution du script ; -f déclencherait une fausse erreur à chaque fois.
+if [ -s .env ]; then
+  printf "ERREUR : .env existe deja. Bouge-le d'abord (mv .env .env.bak).\n" >&2
   exit 1
 fi
 
