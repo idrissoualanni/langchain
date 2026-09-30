@@ -1,0 +1,1 @@
+"""Observing package — Langfuse observability (module unique)."""

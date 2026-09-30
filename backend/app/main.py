@@ -95,6 +95,9 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    from app.observability.langfuse import shutdown_langfuse
+
+    shutdown_langfuse()  # vide la file d'export Langfuse (jamais levant)
     log_event("SERVER_STOP", message="Backend shutting down")
 
 

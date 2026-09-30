@@ -26,6 +26,7 @@ from app.services.models.retry import (
     invoke_async_with_retry,
     invoke_async_with_retry_sync,
 )
+from app.observability.langfuse import invoke_config
 
 
 def _config_for(thread_id: str, user_id: str = "") -> dict:
@@ -499,7 +500,9 @@ async def run_agent_stream(
         # "No synchronous function provided to retrieve_context".
         result = await invoke_async_with_retry(
             lambda: agent.ainvoke(
-                input_state, config=config, context=context
+                input_state,
+                config=invoke_config(config, user_id, thread_id),
+                context=context,
             ),
             user_id=user_id,
             thread_id=thread_id,
@@ -626,7 +629,11 @@ def run_agent(
     # politique que le mode async (app/models/retry.py).
     # .ainvoke() : nodes async dans le graph ( voir run_agent_stream ).
     result = invoke_async_with_retry_sync(
-        lambda: agent.ainvoke(input_state, config=config, context=context),
+        lambda: agent.ainvoke(
+            input_state,
+            config=invoke_config(config, user_id, thread_id),
+            context=context,
+        ),
         user_id=user_id,
         thread_id=thread_id,
         label=f"run_agent_sync:{thread_id}",

@@ -242,6 +242,33 @@ def langsmith_settings() -> LangSmithSettings:
     )
 
 
+# ------------------------------------------------------------------
+# Langfuse — observabilité des traces de l'agent (auto-hébergé, v4)
+# ------------------------------------------------------------------
+# Activé uniquement si LANGFUSE_ENABLED=true ET que les clés + l'URL sont
+# renseignées (le module app.observability.langfuse se désactive tout seul
+# sinon). LANGFUSE_BASE_URL est le nom canonique du SDK Python ; l'ancien
+# alias LANGFUSE_HOST est encore lu en fallback.
+@dataclass(frozen=True)
+class LangfuseSettings:
+    enabled: bool
+    public_key: str
+    secret_key: str
+    base_url: str
+
+
+def langfuse_settings() -> LangfuseSettings:
+    """Config Langfuse — lecture fraîche à chaque appel (testable)."""
+    return LangfuseSettings(
+        enabled=os.getenv("LANGFUSE_ENABLED", "false").strip().lower() == "true",
+        public_key=os.getenv("LANGFUSE_PUBLIC_KEY", "").strip(),
+        secret_key=os.getenv("LANGFUSE_SECRET_KEY", "").strip(),
+        base_url=_env_or_default(
+            "LANGFUSE_BASE_URL", _env_or_default("LANGFUSE_HOST", "")
+        ),
+    )
+
+
 def _env_or_default(name: str, default: str) -> str:
     """Valeur d'env non vide, sinon le défaut.
 
