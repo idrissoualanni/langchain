@@ -1,0 +1,214 @@
+# Docker Compose — agent-tutor, développement local.
+#
+# POURQUOI CE FICHIER EXISTE
+# Le repli SQLite a été retiré le 2026-09-29 ( ADR-002 : Neon est la
+# seule base ). Conséquence immédiate : le développeur local n'avait
+# plus AUCUNE base de données — il fallait un accès Neon depuis sa
+# machine, avec le risque d'écrire sur les données de production. Ce
+# fichier rend le dev local autonome, sur le MÊME SGBD que la prod.
+#
+# CE QUE LA PROD A, ET QUE CE FICHIER REPRODUIT
+#   - Postgres + pgvector ......... service `db`
+#   - 1 API HTTP + 1 worker vocal . services `api` et `worker`
+#   - UNE seule image, deux rôles . `RUN_AS_WORKER` ( cf. render.yaml )
+#     → la même image Docker, donc le même code et les mêmes deps.
+#
+# CE QUE LA PROD A, ET QUE CE FICHIER NE REPRODUIT PAS
+#   - Neon managé ................ Postgres local : même SQL, mêmes
+#                                 colonnes `vector(N)`, même index HNSW.
+#                                 Ce qui ne se teste PAS en local : le
+#                                 pooler, l'autoscaling CU, le scale-to-zero.
+#   - Render free ( 512 Mo, sleep ). Aucune limite mémoire ici → une
+#                                 fuite mémoire ne se voit pas en local.
+#   - Neon Auth ( JWT + JWKS )... `AUTH_MODE=dev` : `Bearer dev:<nom>`.
+#                                 Le code de vérification JWKS n'est donc
+#                                 PAS exercé en local.
+#
+# ⚠️ LE WORKER NE SE LANCE PAS PAR DÉFAUT.
+#    Il s'inscrit auprès de LiveKit CLOUD. Sans credentials il échoue ;
+#    avec de vraies credentials il peut réclamer de VRAIS dispatchs et
+#    ouvrir une session vocale payante. D'où le profile `voice`.
+#
+# ⚠️ REDIS N'EST PAS ENCORE UTILISÉ ( ADR-006bis ). Il est déclaré mais
+#    sous profile `cache` : l'ajouter au service `api` tant que le
+#    contrat de cache n'est pas implémenté ( lot D de ROADMAP.md ).
+#
+# ---------------------------------------------------------------------------
+# Usage
+# ---------------------------------------------------------------------------
+#   docker compose up -d                    # db + api      (le minimum)
+#   docker compose --profile cache  up -d    # + redis
+#   docker compose --profile full   up -d    # + front Vite
+#   docker compose --profile voice  up -d    # + worker LiveKit
+#   docker compose logs -f api
+#   docker compose exec db psql -U agent_tutor -d agent_tutor
+#   docker compose down                     # garde les données
+#   docker compose down -v                  # ⚠️ SUPPRIME la base locale
+# ---------------------------------------------------------------------------
+
+services:
+  # -------------------------------------------------------------------------
+  # db — Postgres + pgvector.
+  # Même moteur que Neon, y compris l'extension vectorielle du RAG.
+  # -------------------------------------------------------------------------
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: agent-tutor-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agent_tutor
+      POSTGRES_PASSWORD: agent_tutor
+      POSTGRES_DB: agent_tutor
+      # Langue + collation FR : les données pédagogiques sont en français,
+      # et le tri des Topics par nom doit être stable et lisible.
+      POSTGRES_INITDB_ARGS: "--locale=fr_FR.UTF-8 --encoding=UTF8"
+    ports:
+      # Exposé pour pouvoir ouvrir psql / DBeaver depuis la machine.
+      # Le port n'est PAS publié en prod — ici c'est du confort de dev.
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `pg_isready` ne suffit pas : il répond OK avant que le cluster
+      # n'accepte les connexions applicatives. On teste un SELECT.
+      test: ["CMD-SHELL", "pg_isready -U agent_tutor -d agent_tutor && psql -U agent_tutor -d agent_tutor -c 'SELECT 1' >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # -------------------------------------------------------------------------
+  # api — rôle API ( uvicorn ). C'est le rôle par défaut de l'image.
+  # -------------------------------------------------------------------------
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: agent-tutor-api
+    restart: unless-stopped
+    env_file:
+      # Les secrets locaux ( LiveKit, Tavily, Neon Auth… ) restent dans
+      # backend/.env, gitignoré, JAMAIS dans ce fichier.
+      - path: ./backend/.env
+        required: false
+    environment:
+      # Ces 4 variables ÉCRASENT backend/.env : sans ça, le conteneur
+      # pointerait sur la base Neon de production depuis ta machine.
+      DATABASE_URL: postgresql+psycopg://agent_tutor:agent_tutor@db:5432/agent_tutor
+      AUTH_MODE: dev
+      # Origine REÇUE par le navigateur, pas l'URL interne du conteneur :
+      # le CORS compare l'en-tête Origin du navigateur à cette valeur.
+      ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      RUN_AS_WORKER: ""
+      PORT: "8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      # Secrets OAuth MCP + fichiers du sandbox. Volume nommé et NON
+      # versionné : sans lui, le consentement Google est perdu à chaque
+      # `down` puis `up`.
+      - mcpdata:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+    # Reconstruire à chaque `up` : le tag `latest` est ambigu sinon.
+    # `docker compose up --build -d` si le Dockerfile a changé.
+    pull_policy: build
+
+  # -------------------------------------------------------------------------
+  # worker — rôle vocal ( LiveKit AgentServer ). MÊME image que `api`.
+  # D'où `command:` explicite plutôt qu'un `dockerCommand:`.
+  # -------------------------------------------------------------------------
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: agent-tutor-worker
+    profiles: ["voice"]
+    restart: unless-stopped
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://agent_tutor:agent_tutor@db:5432/agent_tutor
+      AUTH_MODE: dev
+      # `RUN_AS_WORKER=1` est ce que le CMD du Dockerfile teste pour
+      # choisir son rôle. Sans lui, ce service lancerait un DEUXIÈME
+      # uvicorn au lieu du worker.
+      RUN_AS_WORKER: "1"
+      PORT: "8000"
+    command: ["python", "-m", "app.infrastructure.livekit.worker_main"]
+    ports:
+      # 8001 → 8000 : le worker expose son /healthz sur le même port que
+      # l'API. Sans port écouté, un orchestrator le juge inactif.
+      - "8001:8000"
+    volumes:
+      - mcpdata:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # -------------------------------------------------------------------------
+  # redis — cache partagé ( ADR-006bis ). PAS ENCORE CÂBLÉ ( lot D ).
+  # L'API l'ignore tant que REDIS_URL n'est pas lu par le code.
+  # -------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: agent-tutor-redis
+    profiles: ["cache"]
+    restart: unless-stopped
+    command:
+      - redis-server
+      # appendonly : le cache est reconstructible, donc pas de RDB…
+      # mais un maxmemoryPolicy allkeys-lru borne la mémoire, sinon un
+      # cache qui grossit fait tomber la machine ( 512 Mo sur Render ).
+      - "--maxmemory"
+      - "128mb"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+      - "--appendonly"
+      - "no"
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # -------------------------------------------------------------------------
+  # front — Vite en dev, sur le réseau Compose.
+  # `npm ci` et non `npm install` : le lock est la seule source de
+  # versions reproductibles ( cf. ROADMAP.md lot B5 ).
+  # -------------------------------------------------------------------------
+  front:
+    image: node:20-alpine
+    container_name: agent-tutor-front
+    profiles: ["full"]
+    working_dir: /app
+    environment:
+      # Vide = Requêtes relatives → le proxy Vite ( vite.config.ts )
+      # relaie vers le service `api`. C'est la même mécanique que la
+      # prod quand VITE_API_URL est vide, donc un seul comportement à
+      # raisonner. Si tu mets une URL ici, ce sera cross-ORIGINE et le
+      # CORS du backend s'appliquera.
+      VITE_API_URL: ""
+      # Cible du proxy Vite. `localhost` désignerait le conteneur lui-même :
+      # d'où le nom du service. Cf. la lecture de cette variable dans
+      # frontend/vite.config.ts.
+      VITE_DEV_API_TARGET: "http://api:8000"
+      VITE_AUTH_MODE: dev
+    volumes:
+      - ./frontend:/app
+      # Volume anonyme : sinon le node_modules de la machine (Windows,
+      # avec ses binaires natifs) masquerait celui du conteneur Linux.
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+
+volumes:
+  pgdata:
+  mcpdata:
