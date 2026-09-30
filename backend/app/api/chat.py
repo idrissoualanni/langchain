@@ -72,6 +72,11 @@ def api_chat(
             model=payload.model,
             workflow=payload.workflow,
             payload=payload.payload,
+            # current.is_admin est DÉJÀ validé par get_current_user() :
+            # le transmettre évite que le pipeline redérive un rôle en
+            # comparant des identifiants (cf. l'ancien
+            # user_id in ADMIN_CLERK_IDS, toujours faux).
+            is_admin=current.is_admin,
         )
     except Exception:  # noqa: BLE001 — 500 contrôlé (jamais stack leak)
         log_event(
@@ -164,6 +169,10 @@ async def api_chat_stream(
                 model=payload_obj.model,
                 workflow=payload_obj.workflow,
                 payload=payload_obj.payload,
+                # Même rôle résolu que le chemin JSON — l'UI Assistant
+                # utilise le stream, c'est donc LE chemin qui compte
+                # réellement pour le contournement admin du RAG.
+                is_admin=current.is_admin,
             ):
                 # Format SSE textuel : event: X\ndata: {...}\n\n
                 yield (

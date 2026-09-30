@@ -93,15 +93,15 @@ SCHEMA_STATEMENTS = [
 ]
 
 # Mission Identité — migrations ADDITIVES idempotentes (§6/§7) :
-#   + users.clerk_user_id TEXT UNIQUE  (liaison identité externe)
-#   + users.role TEXT DEFAULT 'user'    (rôles user/admin)
+#   + users.external_user_id TEXT UNIQUE  (liaison identité externe)
+#   + users.role TEXT DEFAULT 'user'       (rôles user/admin)
 # AUCUNE donnée existante n'est modifiée ou supprimée : les users
-# actuels gardent clerk_user_id NULL (jamais rattachés arbitrairement)
-# et role NULL → résolu en 'user' par le resolver.
+# actuels gardent external_user_id NULL (jamais rattachés
+# arbitrairement) et role NULL → résolu en 'user' par le resolver.
 MIGRATIONS = [
     (
-        "ALTER TABLE users ADD COLUMN clerk_user_id TEXT",
-        "clerk_user_id",
+        "ALTER TABLE users ADD COLUMN external_user_id TEXT",
+        "external_user_id",
     ),
     (
         "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'",
@@ -109,11 +109,44 @@ MIGRATIONS = [
     ),
 ]
 
-# Index unique PARTIEL sur clerk_user_id : syntaxe WHERE acceptée par
+# ----------------------------------------------------------------------
+# Migration de RENOMMAGE — clerk_user_id → external_user_id
+# ----------------------------------------------------------------------
+# Clerk a été retiré au profit de Neon Auth ( commit 37c022b ). La
+# colonne a gardé son nom historique, alors qu'elle ne stocke plus un
+# identifiant Clerk mais le claim `sub` du fournisseur courant. Renommer
+# un identifiant de fournisseur dans le nom d'une colonne est exactement
+# le genre de piège qui coûte des heures : `WHERE clerk_user_id = ...`
+# continue de fonctionner, de sorte que rien ne signale l'anachronisme.
+#
+# RENAME COLUMN est supporté par PostgreSQL ET SQLite. Le format
+# (sql, old, new) est analogue à MIGRATIONS, mais avec deux colonnes de
+# garde au lieu d'une : appliquée SI l'ancienne existe ET que la
+# nouvelle est absente. Les DEUX conditions sont nécessaires — sans la
+# seconde, une base déjà migrée ( cas du redéploiement ) verifierait
+# l'idempotence et lèverait "column already exists" au démarrage.
+RENAME_MIGRATIONS = [
+    (
+        "ALTER TABLE users RENAME COLUMN "
+        "clerk_user_id TO external_user_id",
+        "clerk_user_id",
+        "external_user_id",
+    ),
+]
+
+# L'index suit la colonne : PostgreSQL le suivrait automatiquement,
+# SQLite NON ( il ne sait pas renommer un index et continuerait de
+# pointer l'ancien nom ). On le supprime donc explicitement — après le
+# renommage de la colonne, un index nommé clerk_user_id sur
+# external_user_id n'existe plus et IF NOT EXISTS le rend inoffensif
+# sur une base déjà migrée.
+DROP_STALE_INDEXES = ["DROP INDEX IF EXISTS idx_users_clerk;"]
+
+# Index unique PARTIEL sur external_user_id : syntaxe WHERE acceptée par
 # SQLite ET PostgreSQL ; multiples NULL autorisés (users non reliés).
 UNIQUE_INDEX = """
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_clerk
-ON users(clerk_user_id) WHERE clerk_user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_external_id
+ON users(external_user_id) WHERE external_user_id IS NOT NULL;
 """
 
 
@@ -418,12 +451,33 @@ def init_db() -> None:
         for stmt in SCHEMA_STATEMENTS:
             conn.execute(stmt)
         conn.commit()
-        # Migrations additives — idempotentes et non destructives
+
         cols = _existing_columns(engine)
+
+        # Renommages AVANT les migrations additives — l'ordre n'est pas
+        # cosmétique. MIGRATIONS teste `col not in cols` sur un jeu de
+        # colonnes figé par l'introspection : si le renommage passait
+        # après, `external_user_id` serait encore absent de `cols` au
+        # moment du test et l'ADD COLUMN viendrait échouer sur une
+        # colonne que le renommage vient de créer. On met donc `cols` à
+        # jour en même temps que la base.
+        for stmt, old, new in RENAME_MIGRATIONS:
+            if old in cols and new not in cols:
+                conn.execute(stmt)
+                conn.commit()
+                cols.discard(old)
+                cols.add(new)
+
+        # Migrations additives — idempotentes et non destructives
         for stmt, col in MIGRATIONS:
             if col not in cols:
                 conn.execute(stmt)
                 conn.commit()
+                cols.add(col)
+
+        for stmt in DROP_STALE_INDEXES:
+            conn.execute(stmt)
+        conn.commit()
         conn.execute(UNIQUE_INDEX)
         conn.commit()
         _initialized = True
@@ -432,6 +486,8 @@ def init_db() -> None:
 __all__ = [
     "SCHEMA_STATEMENTS",
     "MIGRATIONS",
+    "RENAME_MIGRATIONS",
+    "DROP_STALE_INDEXES",
     "UNIQUE_INDEX",
     "get_engine",
     "get_checkpoint_engine",

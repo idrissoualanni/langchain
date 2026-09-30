@@ -5,7 +5,7 @@ import { Mic, MicOff, Copy, Send, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTranscription } from "./useTranscription";
-import { ApiError } from "@/api/base";
+import { apiFetchRaw } from "@/api/base";
 
 import { useAui } from "@assistant-ui/react";
 import { useNavigate } from "react-router-dom";
@@ -81,25 +81,43 @@ export function TranscriptionPanel({
         const formData = new FormData();
         formData.append("file", file);
 
-        // Appel à l'API backend pour transcription Deepgram
-        const response = await fetch("/api/transcription/transcribe", {
+        // Appel à l'API backend pour transcription Deepgram.
+        //
+        // Auth : on passe par la couche centrale ( apiFetchRaw ). Avant,
+        // l'en-tête était construit à la main avec
+        // `Bearer ${window.__neonGetToken?.() || ""}` — or
+        // __neonGetToken est une PROMISE : l'interpolation produisait
+        // littéralement "Bearer [object Promise]", un header que le
+        // backend rejette → 401 sur chaque upload. apiFetchRaw attend
+        // le vrai jeton, et rejoue l'appel après un refresh si le 401
+        // venait d'un JWT simplement expiré.
+        const response = await apiFetchRaw("/api/transcription/transcribe", {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${window.__neonGetToken?.() || ""}`,
-          },
           body: formData,
         });
 
+        // apiFetchRaw renvoie une Response et ne lève PAS ( contrairement
+        // à apiFetch ) : c'est à l'appelant de tester `ok`. On ne se
+        // contente donc pas d'un « Erreur HTTP: 401 » — un refus de
+        // session affiché comme une panne de transcription envoie
+        // l'utilisateur jouer avec son micro alors que le problème est
+        // son authentification.
         if (!response.ok) {
-          throw new Error(`Erreur HTTP: ${response.status}`);
+          if (response.status === 401 || response.status === 403) {
+            throw new Error(
+              "Session refusée par le serveur (erreur " + response.status + "). Reconnecte-toi puis réessaie."
+            );
+          }
+          throw new Error(
+            "Transcription refusée par le serveur (erreur " + response.status + ")."
+          );
         }
 
         // Le résultat sera affiché dans le transcript via le hook
         await response.json();
       } catch (e) {
-        const apiError = e instanceof ApiError ? e : null;
         setUploadError(
-          apiError?.message || (e instanceof Error ? e.message : "Erreur inconnue")
+          e instanceof Error ? e.message : "Erreur inconnue"
         );
       } finally {
         setIsUploading(false);

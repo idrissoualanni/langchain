@@ -10,7 +10,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
-import { authClient } from '../../lib/neon';
+import { authClient, hasAuthCode } from '../../lib/neon';
 import { refreshNeonSession } from '../../auth/NeonTokenBridge';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -38,21 +38,36 @@ export function SignInPage() {
       await refreshNeonSession();
       navigate('/assistant', { replace: true });
     } catch (ex) {
-      // Neon renvoie des codes explicites qu'on traduit en actions.
-      // Cas critiques à ne JAMAIS confondre :
-      //   EMAIL_NOT_VERIFIED → identifiants BONS mais email non vérifié.
-      //     Dire "mot de passe incorrect" enfermerait l'utilisateur.
-      //   INVALID_PASSWORD / INVALID_EMAIL → identifiants faux.
-      const msg = ex instanceof Error ? ex.message : '';
-      if (/EMAIL_NOT_VERIFIED/i.test(msg)) {
-        setErr(
-          'Email non vérifié. Ouvre l\'email de confirmation reçu à l\'inscription, ou renvoie un code.'
-        );
-      } else if (/invalid|incorrect|credentials|INVALID_PASSWORD|INVALID_EMAIL/i.test(msg)) {
-        setErr('Email ou mot de passe incorrect.');
-      } else {
-        setErr(msg || 'Connexion impossible. Réessaie dans un instant.');
+      // Neon distingue deux causes qu'il ne faut JAMAIS confondre :
+      //   EMAIL_NOT_VERIFIED        → identifiants BONS, email non vérifié.
+      //     Dire "mot de passe incorrect" enfermerait l'utilisateur, qui
+      //     retaperait un mot de passe correct un nombre infini de fois.
+      //   INVALID_EMAIL_OR_PASSWORD → identifiants réellement faux.
+      //
+      // On lit le `code` machine, plus le `message` : Better Auth place
+      // EMAIL_NOT_VERIFIED dans `code`, jamais dans `message`, donc le
+      // test sur le texte ne pouvait pas aboutir et tombait toujours
+      // dans la branche "mot de passe incorrect".
+      if (hasAuthCode(ex, 'EMAIL_NOT_VERIFIED')) {
+        // Redirection et pas un bandeau : la page de saisie du code
+        // existe déjà ( /verify-email ) et sait renvoyer l'email.
+        // Rester ici avec un message ne donnait aucune issue à un
+        // utilisateur bloqué dont le mot de passe est pourtant valide.
+        navigate(`/verify-email?email=${encodeURIComponent(email.trim())}`, {
+          replace: true,
+        });
+        return;
       }
+
+      const msg = ex instanceof Error ? ex.message : '';
+      setErr(
+        hasAuthCode(ex, 'INVALID_EMAIL_OR_PASSWORD') ||
+          hasAuthCode(ex, 'INVALID_EMAIL') ||
+          hasAuthCode(ex, 'INVALID_PASSWORD') ||
+          /invalid|incorrect|credentials/i.test(msg)
+          ? 'Email ou mot de passe incorrect.'
+          : msg || 'Connexion impossible. Réessaie dans un instant.'
+      );
     } finally {
       setBusy(false);
     }

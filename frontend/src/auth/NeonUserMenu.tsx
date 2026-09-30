@@ -1,6 +1,6 @@
 // Mission Identité — menu utilisateur Neon Auth ( production ).
 //
-// Remplace le UserButton Clerk : avatar + nom + déconnexion via le
+// Menu utilisateur : avatar + nom + déconnexion via le
 // client Neon ( Better Auth managé ). L'identité affichée vient du
 // user interne résolu backend ( /api/users/me ).
 'use client';
@@ -8,10 +8,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authClient } from '../lib/neon';
+import { clearNeonSession } from './NeonTokenBridge';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 
 export function NeonUserMenu() {
   const [open, setOpen] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   const { internal } = useCurrentUser();
   const navigate = useNavigate();
 
@@ -24,11 +26,40 @@ export function NeonUserMenu() {
     .toUpperCase();
 
   const handleSignOut = async () => {
+    setSignOutError(null);
     try {
       await authClient.signOut();
-    } catch {
-      /* session déjà expirée */
+    } catch (err) {
+      // ÉCHEC → on ne purge PAS l'état local. Vider l'UI ici ferait
+      // croire à une déconnexion alors que le cookie de session Neon
+      // est peut-être toujours valide : l'utilisateur verrait son
+      // nom et ses droits disparaître, reviendrait sur /sign-in et
+      // se retrouverait « connecté » sans comprendre. On le PRÉVIENT
+      // et il peut réessayer.
+      setSignOutError(
+        err instanceof Error
+          ? err.message
+          : 'Déconnexion impossible — réessaie dans un instant.'
+      );
+      return;
     }
+    // RÉUSSITE → on réaligne l'état global, sinon le header affiche
+    // encore l'utilisateur connecté après le logout ( EF-10 ).
+    //
+    // clearNeonSession() fait les DEUX moitiés indispensables, et
+    // SYNSCHRONEMENT : purge du jeton ( window.__neonGetToken + cache
+    // JWT — sans quoi le backend continuerait d'accepter l'ancien
+    // Bearer jusqu'à son expiration, donc la déconnexion ne serait
+    // pas effective) ET publication de l'état vide
+    // ( notifyNeonUser(EMPTY) ), qui fait basculer sur-le-champ les
+    // gardes Protected / RequireAnonymous.
+    //
+    // On n'appelle PAS refreshNeonSession() ici : il faudrait attendre
+    // un GET /get-session, laissant l'UI « connectée » pendant ce
+    // round-trip, et l'ancien Bearer encore attaché à toute requête
+    // partie entre-temps.
+    clearNeonSession();
+    setOpen(false);
     navigate('/sign-in', { replace: true });
   };
 
@@ -64,6 +95,14 @@ export function NeonUserMenu() {
           >
             Déconnexion
           </button>
+          {/* Une déconnexion ratée doit être VISIBLE : sans ce
+              message, le clic semble n'avoir rien fait et
+              l'utilisateur réessaie en boucle. */}
+          {signOutError && (
+            <p className="px-3 py-1.5 text-[11px] leading-snug text-red-300">
+              {signOutError}
+            </p>
+          )}
         </div>
       )}
     </div>

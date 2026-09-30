@@ -13,6 +13,7 @@ import {
   SidebarTrigger,
 } from './components/ui/sidebar';
 import { LoadingState } from './components/ui/loading-state';
+import { Button } from './components/ui/button';
 import { CommandPalette } from './components/layout/command-palette';
 import { AssistantPage } from './pages/AssistantPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -60,6 +61,16 @@ const SettingsNotificationsPage = lazy(() => import('./pages/settings/SettingsNo
 const SettingsSessionsPage = lazy(() => import('./pages/settings/SettingsSessionsPage').then((m) => ({ default: m.SettingsSessionsPage })));
 const SettingsDataPage = lazy(() => import('./pages/settings/SettingsDataPage').then((m) => ({ default: m.SettingsDataPage })));
 
+/** Écran d'attente commun aux gardes : ni contenu connecté, ni
+ *  redirection tant qu'une réponse est en suspens. */
+function SessionPending() {
+  return (
+    <div className="flex h-full items-center justify-center">
+      <LoadingState label="Résolution de la session…" />
+    </div>
+  );
+}
+
 /** Route protégée : session requise ( mode dev → page dev login ).
  *
  * En production l'auth vient de Neon ( Better Auth managé ) ; en mode
@@ -70,20 +81,42 @@ const SettingsDataPage = lazy(() => import('./pages/settings/SettingsDataPage').
  * frame sans personnalisation ( pas de userId pour le runtime, pas de
  * données ) avant de se repeupler — un flash de contenu vide. */
 function Protected({ children }: { children: React.ReactNode }) {
-  const { signedIn, devMode, loading } = useCurrentUser();
+  const { signedIn, devMode, loading, sessionPending, error, reload } =
+    useCurrentUser();
+
+  // EF-11 : la session Neon est EN COURS de résolution. `signedIn`
+  // vaut encore `false` — ce qui est NORMAL, pas une déconnexion.
+  // Rediriger ici produisait l'aller-retour /app → /sign-in → /app
+  // à chaque cold start. On attend, sans rien afficher de définitif.
+  if (sessionPending) {
+    return <SessionPending />;
+  }
 
   // Pas de session → page de connexion ( Neon en prod, dev-login en dev ).
   if (!signedIn) {
     return <Navigate to={devMode ? '/dev-login' : '/sign-in'} replace />;
   }
 
-  // Session OK mais user interne en cours de résolution : on attend.
-  if (loading) {
+  // EF-15 : la session est réelle mais le backend n'a pas confirmé
+  // l'utilisateur ( délai dépassé, réseau coupé, 5xx ). On ne rend
+  // PAS l'app : sans `internal`, le runtime n'a pas d'userId et
+  // toutes les requêtes partiraient avec un userId nul — un écran
+  // à moitié mort, presented comme si tout allait bien. On nomme
+  // l'échec et on propose de réessayer.
+  if (error) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <LoadingState label="Résolution de la session…" />
+      <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+        <p className="text-sm text-foreground">{error}</p>
+        <Button type="button" variant="outline" size="sm" onClick={reload}>
+          Réessayer
+        </Button>
       </div>
     );
+  }
+
+  // Session OK mais user interne en cours de résolution : on attend.
+  if (loading) {
+    return <SessionPending />;
   }
 
   return <>{children}</>;
@@ -97,7 +130,15 @@ function Protected({ children }: { children: React.ReactNode }) {
  *  sur le formulaire.
  */
 function RequireAnonymous({ children }: { children: React.ReactNode }) {
-  const { signedIn } = useCurrentUser();
+  const { signedIn, sessionPending } = useCurrentUser();
+
+  // EF-11 : même raison que dans Protected. Sans cette attente, un
+  // utilisateur connecté qui ouvre /sign-in pendant la résolution voit
+  // brièvement le FORMULAIRE de connexion (signedIn encore false),
+  // qui le renvoie ensuite sur l'app : double redirection à froid.
+  if (sessionPending) {
+    return <SessionPending />;
+  }
 
   if (signedIn) {
     return <Navigate to="/assistant" replace />;

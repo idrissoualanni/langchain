@@ -8,7 +8,7 @@ from app.logging.events import log_event
 from app.infrastructure.database.connections import get_conn
 
 _SELECT_USER = (
-    "SELECT user_id, name, created_at, clerk_user_id, role "
+    "SELECT user_id, name, created_at, external_user_id, role "
     "FROM users "
 )
 
@@ -18,24 +18,28 @@ def _now_iso() -> str:
 
 
 def create_user(
-    name: str, clerk_user_id: str | None = None, role: str = "user"
+    name: str,
+    external_user_id: str | None = None,
+    role: str = "user",
 ) -> dict:
     """Crée un utilisateur : UUID backend, retourne le user complet.
 
-    Mission Identité : clerk_user_id optionnel (provisioning au
-    premier login Clerk) ; role user/admin ('user' par défaut).
+    Mission Identité : external_user_id optionnel (provisioning au
+    premier login via le fournisseur d'identité) ; role user/admin
+    ('user' par défaut).
     """
     user_id = str(uuid.uuid4())
     created_at = _now_iso()
     conn = get_conn()
     conn.execute(
-        "INSERT INTO users (user_id, name, created_at, clerk_user_id, role) "
-        "VALUES (:user_id, :name, :created_at, :clerk_user_id, :role)",
+        "INSERT INTO users "
+        "(user_id, name, created_at, external_user_id, role) "
+        "VALUES (:user_id, :name, :created_at, :external_user_id, :role)",
         {
             "user_id": user_id,
             "name": name,
             "created_at": created_at,
-            "clerk_user_id": clerk_user_id,
+            "external_user_id": external_user_id,
             "role": role,
         },
     )
@@ -51,7 +55,7 @@ def create_user(
         "user_id": user_id,
         "name": name,
         "created_at": created_at,
-        "clerk_user_id": clerk_user_id,
+        "external_user_id": external_user_id,
         "role": role,
     }
 
@@ -73,14 +77,38 @@ def get_user(user_id: str) -> dict | None:
     return dict(row) if row else None
 
 
-def get_user_by_clerk_id(clerk_user_id: str) -> dict | None:
-    """Mission Identité — lookup par identité externe Clerk.
+def get_user_by_external_id(external_user_id: str) -> dict | None:
+    """Mission Identité — lookup par identité externe ( claim `sub` ).
 
     Retrouve TOUJOURS le même user interne à la reconnexion ( la
-    clé clerk_user_id est UNIQUE en base ).
+    clé external_user_id est UNIQUE en base ).
     """
     row = get_conn().execute(
-        _SELECT_USER + "WHERE clerk_user_id = :clerk_user_id",
-        {"clerk_user_id": clerk_user_id},
+        _SELECT_USER + "WHERE external_user_id = :external_user_id",
+        {"external_user_id": external_user_id},
     ).fetchone()
     return dict(row) if row else None
+
+
+def set_user_role(user_id: str, role: str) -> None:
+    """Persiste le rôle d'un user existant ( promotion / rétrogradation ).
+
+    Pourquoi cette fonction existe : le resolver calcule le rôle à
+    chaque requête, mais GET /api/users/me — LA route d'identité du
+    frontend, qui pilote AdminGate — relit la LIGNE en base. Sans
+    écriture ici, un rôle accordé par variable d'environnement
+    resterait invisible côté UI : l'utilisateur verrait un 403 alors
+    que le backend le reconnaît admin. Une seule écriture suffit,
+    l'état converge dès la première requête qui suit.
+    """
+    conn = get_conn()
+    conn.execute(
+        "UPDATE users SET role = :role WHERE user_id = :user_id",
+        {"role": role, "user_id": user_id},
+    )
+    conn.commit()
+    log_event(
+        "USER_ROLE_SET",
+        message=f"Role set to {role}",
+        user_id=user_id,
+    )

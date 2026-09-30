@@ -22,8 +22,9 @@ from app.infrastructure.database.threads import (
 from app.infrastructure.database.users import (
     create_user,
     get_user,
-    get_user_by_clerk_id,
+    get_user_by_external_id,
     list_users,
+    set_user_role,
 )
 
 __all__ = [
@@ -40,6 +41,7 @@ __all__ = [
     "thread_belongs_to_user",
     "create_user",
     "get_user",
-    "get_user_by_clerk_id",
+    "get_user_by_external_id",
     "list_users",
+    "set_user_role",
 ]

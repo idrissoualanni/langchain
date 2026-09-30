@@ -40,7 +40,6 @@ from app.infrastructure.database.persistence import (
 from app.infrastructure.database.schema import init_schema
 from app.logging.events import log_event, setup_logging
 from app.logging.sse import sse_events
-from app.ws.logs import router as ws_router
 from app.config import ALLOWED_ORIGINS
 
 
@@ -147,9 +146,6 @@ app.add_api_route(
     sse_events,
     methods=["GET"],
 )
-
-# WebSocket — alternative logs temps réel
-app.include_router(ws_router)
 
 
 # ----------------------------------------------------------------------

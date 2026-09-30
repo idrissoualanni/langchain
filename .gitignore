@@ -33,3 +33,10 @@ logs/
 # Sessions agent
 .zcode/
 .zcodeignore
+
+# Collection API Bruno (requêtes + environnements : contient des variables
+# locales email/password/jwt — ne se committe jamais)
+bruno/
+# Collections Bruno (client API local — lutilisateur les garde hors du dépôt)
+bruno/
+**/bruno/

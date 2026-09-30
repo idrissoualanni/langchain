@@ -1,1 +1,1 @@
-# Mission Identité — couche auth (Clerk + resolver)
+# Mission Identité — couche auth (Neon Auth + resolver)

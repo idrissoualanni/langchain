@@ -86,6 +86,66 @@ MODEL_NAME = os.getenv("MODEL_OLLAMA", "qwen2.5")
 # CurrentUserResolver et les mêmes règles d'ownership.
 AUTH_MODE = os.getenv("AUTH_MODE", "neon").strip().lower()
 
+
+# ----------------------------------------------------------------------
+# Garde-fou : le mode dev NE DOIT PAS écrire dans une base partagée
+# ----------------------------------------------------------------------
+# Constat ( 2026-09-29 ) : la table users de la base Neon de
+# production contenait une ligne avec external_user_id NULL, dont
+# l'email était un compte réel. Origine : api_create_user_dev, qui
+# crée un utilisateur SANS identifiant externe. Le mode dev a donc
+# pollué la base de production, sans rien signaler.
+#
+# Pourquoi une garde et pas un avertissement : le symptôme est
+# invisible jusqu'au jour où quelqu'un nettoie la table, et le
+# nettoyage destructif des données de rattachement d'un utilisateur
+# réel est irréversible. Le coût du模式下 dev — un message d'erreur
+# au démarrage — est nul ; le coût de l'absence de garde est une
+# base de production corrompue, découverte des mois plus tard.
+#
+# On refuse au DEMARRAGE (import de config) et non au premier appel :
+# un garde au point d'usage laisse démarrer un service qui échoue
+# plus tard, au milieu d'une requête. Le coût du mode dev — un
+# message d'erreur au démarrage — est nul ; le coût de l'absence de
+# garde est une base de production corrompue.
+def _is_remote_postgres(url: str) -> bool:
+    """True si `url` pointe un PostgreSQL qui n'est pas local.
+
+    "Local" = hôte absent, localhost, 127.0.0.1, ::1, ou un nom
+    d'hôte sans point (socket Unix / résolution locale). Tout le
+    reste est considéré comme partagé et interdit au mode dev.
+    """
+    if not url:
+        return False
+    try:
+        from urllib.parse import urlparse
+
+        host = (urlparse(url).hostname or "").lower()
+    except Exception:
+        return False
+    if not host:
+        return False
+    if host in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+        return False
+    return "." in host or ":" in host
+
+
+if AUTH_MODE == "dev" and _is_remote_postgres(DATABASE_URL):
+    raise RuntimeError(
+        "REFUS DE DÉMARRAGE : AUTH_MODE=dev alors que DATABASE_URL "
+        f"pointe une base PostgreSQL distante ({DATABASE_URL.split('@')[-1]}).\n"
+        "\n"
+        "Le mode dev crée des utilisateurs sans identifiant externe et "
+        "écrit dans la base cible : il a déjà pollué la base de "
+        "production (ligne users.external_user_id NULL).\n"
+        "\n"
+        "Deux corrections possibles, selon ce que vous voulez faire :\n"
+        "  - développer en local  → décommenter DATABASE_URL dans .env\n"
+        "    (l'app bascule alors sur SQLite) et le laisser vide ici ;\n"
+        "  - tester le mode dev   → viser une base PostgreSQL locale,\n"
+        "    ou une branche de développement jetable, jamais la prod.\n"
+    )
+
 # Tolérance d'horloge ( secondes ) pour la validation JWT.
 # Les postes peuvent dériver ( horloge en retard ) : sans leeway, un
 # token fraîchement émis a un "iat" perçu comme futur → 401
@@ -96,17 +156,32 @@ try:
 except ValueError:
     JWT_LEEWAY = 60
 
-# Rôles admin — liste des identités EXTERNES ( sub du fournisseur
-# d'identité ) autorisées admin ; séparés par virgules. Le rôle par
-# défaut est "user".
+# Rôles admin — liste des identités EXTERNES ( claim `sub` émis par le
+# fournisseur d'identité, Neon Auth en mode neon ) autorisées admin ;
+# séparés par virgules. Le rôle par défaut est "user".
 #
-# NB : le nom historique ADMIN_CLERK_IDS est conservé volontairement.
-# Le renommer casserait SILENCIEUSEMENT les rôles admin — l'env var
-# dupliquée serait ignorée sans la moindre erreur. À migrer en
-# ADMIN_EXTERNAL_IDS avec mise à jour de l'env var, jamais seul.
-ADMIN_CLERK_IDS = [
+# ⚠️ DOUBLE LECTURE VOLONTAIRE ET TEMPORAIRE.
+# ADMIN_CLERK_IDS est l'ancien nom, conservé en repli pendant la
+# migration. Renommer une variable d'env d'un coup est un piège
+# silencieux : la nouvelle est ignorée, l'ancienne reste lue ou
+# l'inverse, et AUCUNE erreur n'est émise — les rôles admin
+# disparaissent sans trace. Le `or` rend la bascule sûre dans les
+# deux sens : la nouvelle gagne si elle est présente ET non vide,
+# sinon on retombe sur l'ancienne.
+#
+#   - env var mis à jour AVANT le déploiement  → nouvelle lue
+#   - code déployé AVANT l'env var             → ancienne lue
+#   → aucun scénario ne peut retirer un admin.
+#
+# Une fois ADMIN_EXTERNAL_IDS présente sur TOUS les environnements
+# ( local, Render ), ADMIN_CLERK_IDS et ce repli peuvent être
+# supprimés. Ne pas le faire avant — c'est le seul garde-fou.
+ADMIN_EXTERNAL_IDS = [
     a.strip()
-    for a in os.getenv("ADMIN_CLERK_IDS", "").split(",")
+    for a in (
+        os.getenv("ADMIN_EXTERNAL_IDS")
+        or os.getenv("ADMIN_CLERK_IDS", "")
+    ).split(",")
     if a.strip()
 ]
 
@@ -116,7 +191,7 @@ ADMIN_CLERK_IDS = [
 # ------------------------------------------------------------------
 # Neon Auth émet ses propres JWT ( Better Auth ) signés avec les clés
 # publiques exposées au well-known endpoint du projet. Le backend les
-# vérifie via PyJWKClient — même mécanisme que Clerk, JWKS différent.
+# vérifie via PyJWKClient ( JWKS réel, jamais verify_signature=False ).
 # L'URL JWKS est PUBLIQUE ( well-known ) : aucun secret ici.
 NEON_AUTH_JWKS_URL = os.getenv("NEON_AUTH_JWKS_URL", "").strip()
 

@@ -31,7 +31,7 @@ from app.schemas import (
     UserOut,
 )
 from app.auth.resolver import CurrentUser, get_current_user
-from app.config import ADMIN_CLERK_IDS, AUTH_MODE
+from app.config import ADMIN_EXTERNAL_IDS, AUTH_MODE
 from app.infrastructure.database import users as users_db
 from app.infrastructure.database.connections import init_db
 from app.infrastructure.database.users import get_user, list_users
@@ -65,7 +65,7 @@ def _require_owner_or_admin(
 
 @router.get("/me", response_model=UserOut)
 def api_me(current: CurrentUser = Depends(get_current_user)) -> UserOut:
-    """Utilisateur COURANT résolu depuis la session (Clerk).
+    """Utilisateur COURANT résolu depuis la session (Neon Auth).
 
     C'est LA route d'identité du frontend : remplace UserSelector.
     """
@@ -78,11 +78,12 @@ def api_me(current: CurrentUser = Depends(get_current_user)) -> UserOut:
 # ------------------------------------------------------------------
 # Provisioning de TEST — MODE DEV UNIQUEMENT
 # ------------------------------------------------------------------
-# En mode dev ( AUTH_MODE=dev , développement local sans clés
-# Clerk ) les suites de régression historiques créent leurs users
-# de test via POST /api/users. Ce endpoint n'existe PLUS en mode
-# clerk : l'inscription passe par Clerk ( SignUp ) puis le
-# resolver provisionne l'utilisateur interne au premier login.
+# En mode dev ( AUTH_MODE=dev , développement local sans fournisseur
+# d'identité externe ) les suites de régression historiques créent
+# leurs users de test via POST /api/users. Ce endpoint n'existe PAS
+# en mode neon : l'inscription passe par le fournisseur d'identité
+# ( Neon Auth ) puis le resolver provisionne l'utilisateur interne
+# au premier login.
 # Le user_id du body N'EST JAMAIS une source d'identité — le
 # token dev:devuuid sert de session simulée pour les tests.
 if AUTH_MODE == "dev":
@@ -91,9 +92,10 @@ if AUTH_MODE == "dev":
     def api_create_user_dev(payload: UserCreate) -> UserOut:
         """[DEV SEULEMENT] Créer un user de test + son token dev."""
         init_db()
-        # Test admin en dev : un nom présent dans ADMIN_CLERK_IDS
-        # (ex: "dev-admin") est provisionné avec le rôle admin.
-        role = "admin" if payload.name in ADMIN_CLERK_IDS else "user"
+        # Test admin en dev : un nom présent dans
+        # ADMIN_EXTERNAL_IDS (ex: "dev-admin") est provisionné avec
+        # le rôle admin.
+        role = "admin" if payload.name in ADMIN_EXTERNAL_IDS else "user"
         user = users_db.create_user(payload.name, role=role)
         log_event(
             "AUTH_DEV_USER",

@@ -141,9 +141,3 @@ export async function apiFetchRaw(
 
   return res;
 }
-
-export function wsUrl(path: string): string {
-  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  const host = BASE ? BASE.replace(/^https?:\/\//, '') : window.location.host;
-  return `${proto}://${host}${path}`;
-}

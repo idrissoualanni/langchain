@@ -43,10 +43,18 @@ def _config_for(thread_id: str, user_id: str = "") -> dict:
     }
 
 
-def _runtime_context(user_id: str, thread_id: str) -> AgentContext:
+def _runtime_context(
+    user_id: str, thread_id: str, is_admin: bool = False
+) -> AgentContext:
     """Runtime Context natif LangGraph (§4) — DI pour middleware
-    et tools (request.runtime.context.user_id)."""
-    return AgentContext(user_id=user_id, thread_id=thread_id)
+    et tools (request.runtime.context.user_id).
+
+    `is_admin` est résolu par la couche auth et transporté ICI,
+    volontairement pas dans le state du graphe : le state survit au
+    thread, un rôle ne doit pas (voir AgentContext)."""
+    return AgentContext(
+        user_id=user_id, thread_id=thread_id, is_admin=is_admin
+    )
 
 
 def _message_to_dict(message) -> dict:
@@ -399,6 +407,7 @@ async def run_agent_stream(
     model: str | None = None,
     workflow: str | None = None,
     payload: dict | None = None,
+    is_admin: bool = False,
 ) -> AsyncIterator[dict]:
     """Exécute un run complet en streamant les événements du pipeline.
 
@@ -410,11 +419,16 @@ async def run_agent_stream(
     Mission Assistant UI : "model" optionnel (ModelSelector) —
     sélectionne l'instance d'agent correspondante (graph.get_agent).
     workflow/payload : hint + entrée structurée du composer (§8).
+
+    is_admin : rôle RÉSOLU par la couche auth sur CETTE requête, pas
+    une déclaration du client ni une valeur rejouée depuis le state du
+    thread. Défaut False (fail-closed) pour qu'un appelant oublié ne
+    fasse jamais barge en admin.
     """
     from app.graph.main import get_agent  # lazy (anti-cycle)
     agent = get_agent(model or None)
     config = _config_for(thread_id, user_id)
-    context = _runtime_context(user_id, thread_id)
+    context = _runtime_context(user_id, thread_id, is_admin)
 
     log_event(
         "RUN_START",
@@ -562,16 +576,20 @@ def run_agent(
     model: str | None = None,
     workflow: str | None = None,
     payload: dict | None = None,
+    is_admin: bool = False,
 ) -> dict:
     """Mode synchrone (POST /api/chat) — même pipeline, sans stream.
 
     Mission Assistant UI : "model" optionnel (ModelSelector).
     workflow/payload : hint + entrée structurée du composer (§8).
+
+    is_admin : rôle RÉSOLU par la couche auth sur CETTE requête (voir
+    run_agent_stream). Défaut False (fail-closed).
     """
     from app.graph.main import get_agent  # lazy (anti-cycle)
     agent = get_agent(model or None)
     config = _config_for(thread_id, user_id)
-    context = _runtime_context(user_id, thread_id)
+    context = _runtime_context(user_id, thread_id, is_admin)
 
     log_event(
         "RUN_START",

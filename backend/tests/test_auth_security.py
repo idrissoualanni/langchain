@@ -264,7 +264,7 @@ check(
     status(r) == 403,
 )
 
-# admin via ADMIN_CLERK_IDS=dev-admin
+# admin via ADMIN_EXTERNAL_IDS=admin
 r = api("/api/logs?limit=5", token="dev:admin")
 check(
     "ADM3: admin → /api/logs → 200",

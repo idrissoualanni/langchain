@@ -118,6 +118,11 @@ def build_context_preview(
         thread_id=payload.thread_id or "",
         query=payload.query,
         subject=payload.subject,
+        # Rôle déjà résolu ET déjà utilisé pour l'ownership juste
+        # au-dessus (ligne 99) : le transmettre évite que le
+        # contournement admin du RAG diffère du contrôle d'accès de
+        # cet endpoint. None → False (fail-closed).
+        is_admin=bool(current is not None and current.is_admin),
     )
     ctx = context.model_dump()
     prompt = build_system_prompt(

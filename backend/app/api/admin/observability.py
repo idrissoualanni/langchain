@@ -5,7 +5,7 @@ Endpoints sécurisés pour accéder aux métriques, traces et évaluations LangS
 Tous les endpoints nécessitent une authentification admin valide.
 
 Sécurité :
-- Vérification ADMIN_CLERK_IDS obligatoire
+- Vérification ADMIN_EXTERNAL_IDS obligatoire
 - Aucun secret LangSmith exposé au frontend
 - Filtrage des données sensibles dans les traces
 - CORS restreint aux origines autorisées
@@ -38,7 +38,7 @@ def verify_admin_auth(
     """
     Vérifie que l'utilisateur est un admin autorisé.
 
-    Défère à require_admin (auth réelle Clerk/dev + ADMIN_CLERK_IDS).
+    Défère à require_admin (auth réelle Neon/dev + ADMIN_EXTERNAL_IDS).
     """
     return current_user
 

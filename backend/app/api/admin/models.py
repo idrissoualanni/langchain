@@ -6,7 +6,7 @@
 # DELETE /api/admin/models/{id}     → supprime un modèle
 # POST   /api/admin/models/{id}/test → teste une configuration
 #
-# Sécurité : réservé aux admins (vérification ADMIN_CLERK_IDS)
+# Sécurité : réservé aux admins (vérification ADMIN_EXTERNAL_IDS)
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status

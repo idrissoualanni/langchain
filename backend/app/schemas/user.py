@@ -18,11 +18,13 @@ class UserOut(BaseModel):
     name: str
     created_at: str
     # Mission Identité — infos session (optionnelles)
-    clerk_user_id: str | None = None
+    # Claim `sub` du fournisseur d'identité (Neon Auth en mode neon).
+    # Conservé pour tracer la session vers son origine externe.
+    external_user_id: str | None = None
     role: str = "user"
     # MODE DEV UNIQUEMENT : token de session simulée pour les
     # suites de régression ("dev:<internal_user_id>"). Jamais
-    # renseigné en mode clerk.
+    # renseigné en mode neon.
     dev_token: str | None = None
 
 

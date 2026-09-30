@@ -61,6 +61,29 @@ def _user_id(state) -> str:
     return state.get("user_id") or ""
 
 
+def _is_admin() -> bool:
+    """Rôle admin via le Runtime Context de l'exécution courante.
+
+    Même source que le middleware (AgentContext, recréé à chaque run
+    par le runner) — PAS le state, qui est persisté par le
+    checkpointer et garderait un rôle figé pendant toute la vie du
+    thread. Un admin rétrogradé le resterait donc indéfiniment.
+
+    get_runtime() lève hors exécution de graphe (appels directs en
+    test) : on retourne False, ce qui est fail-closed — sans rôle
+    vérifié, aucun contournement.
+    """
+    try:
+        from langgraph.runtime import get_runtime
+
+        ctx = getattr(get_runtime(), "context", None)
+        if ctx is None:
+            return False
+        return bool(getattr(ctx, "is_admin", False))
+    except Exception:
+        return False
+
+
 def _last_user_query(state) -> str:
     """Dernier message humain du state (sélection contextuelle)."""
     from langchain_core.messages import HumanMessage
@@ -138,6 +161,7 @@ def retrieval_node(state, config=None) -> dict:
         query=query,
         routing=routing,
         cfg=cfg,
+        is_admin=_is_admin(),
     )
     return {
         "knowledge": knowledge.model_dump(),

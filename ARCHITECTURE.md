@@ -21,14 +21,23 @@ graph TB
     LKUI["@livekit/components-react<br/>WebRTC voix"]
   end
 
-  subgraph BE["Backend — Render · FastAPI · 2 services, 1 image"]
+  subgraph BE["Services métier — Render · FastAPI · 2 services, 1 image"]
     API["api/ · ~90 routes<br/>CORS middleware · AppError"]
-    AUTH["auth/resolver.py<br/>Neon Auth JWT (JWKS) · fail-closed"]
+    CORE["auth-core · bibliothèque partagée<br/>verify_token · get_current_user · require_admin<br/>vérification locale, aucun appel réseau"]
     ORCH["graph/main/ · StateGraph<br/>17 nodes · 5 sous-graphes"]
     AG["services/agent/<br/>runner + gateway LLM"]
     T["tools/ · 6 familles · all_tools"]
     INF["infrastructure/<br/>database · livekit · mcp · sandbox · cache"]
     W["worker · livekit/worker_main.py<br/>AgentServer — session vocale"]
+  end
+
+  subgraph AUTH["Service d'authentification — Render · autonome (cible multiservice)"]
+    AUTHSVC["api auth/<br/>sign-in · sign-up · verify-email · /users/me<br/>session · provisioning · rôle"]
+    PROJ["projection public.users<br/>external_user_id ↔ user_id"]
+  end
+
+  subgraph IDP["Fournisseur d'identité — Neon Auth managé"]
+    NA["Better Auth · neon_auth.* (10 tables)<br/>comptes · sessions · OTP · JWT EdDSA"]
   end
 
   subgraph DATA["Données — Neon (Postgres)"]
@@ -50,10 +59,16 @@ graph TB
     LS["LangSmith · observabilité"]
   end
 
-  UI -->|"fetch /api/* (proxy Vercel)"| API
+  UI -->|"fetch VITE_API_URL (absolu, cross-origin)<br/>un seul chemin réseau (EX-4)"| API
+  UI -->|"auth pages : /sign-in /sign-up /verify-email"| AUTHSVC
+  AUTHSVC <-->|"REST Better Auth"| NA
+  AUTHSVC -->|"provision · rôle"| PROJ
+  PROJ --> NEO
+  API -.->|"import"| CORE
+  ORCH -.->|"import"| CORE
+  W -.->|"import"| CORE
   UI <-->|"WebRTC"| LKC
   LKUI -.->|"token via /api/livekit/token"| API
-  API --> AUTH
   API --> ORCH --> AG
   ORCH -.->|"dispatch conditionnel"| SG["subgraphs<br/>coding·document·problem<br/>research·video"]
   AG --> T
@@ -199,7 +214,7 @@ Décision prise le 2026-09-29, consignée dans `DECISIONS.md` ADR-002.
 
 | Table | Contenu | Accès |
 |---|---|---|
-| `users` | Identité interne + `clerk_user_id` (identité externe Neon) | `infrastructure/database/users.py` |
+| `users` | Identité interne + `external_user_id` (claim `sub` du fournisseur d'identité) + `role` | `infrastructure/database/users.py` |
 | `threads` | Conversations | `infrastructure/database/threads.py` |
 | `agent_events` | Journal d'événements (observabilité, SSE) | `logging/events.py` |
 | `knowledge_files` / `knowledge_sections` | Bases de connaissances, sections vectorisées | `services/knowledge/store.py` |
@@ -257,32 +272,172 @@ Ce défaut est **invisible en développement local** (un seul process), donc il 
 
 ## 7. Sécurité
 
-### 7.1 Authentification
+### 7.1 Service d'authentification
 
-`auth/resolver.py` est le **seul** point d'entrée.
+Le service d'authentification est **la brique à extraire en premier** dans une
+architecture multiservice. Son périmètre, sa stack et son flux sont décrits ici.
+Le référentiel d'exigences détaillé est dans [`AUTH_REQUIREMENTS.md`](AUTH_REQUIREMENTS.md).
+
+#### 7.1.1 La décision qui structure le reste — Auth N + Auth Z
+
+Il faut séparer deux opérations qui n'ont rien en commun, et les traiter
+différemment :
+
+| Opération | Nature | Où elle doit vivre |
+|---|---|---|
+| **Vérifier** un jeton (signature, `exp`, `sub`, `aud`) | cryptographie **locale et pure** | **dans chaque service**, en bibliothèque |
+| **Émettre**, **gérer la session**, **projeter l'utilisateur**, **attribuer le rôle** | état, écriture, cohérence | **dans le service d'authentification**, centralisé |
+
+C'est le motif *Auth N + Auth Z* : N fois la vérification, Z fois l'autorité.
+
+**Pourquoi la vérification ne peut pas être un appel réseau.** Chaque requête vers
+*chaque* service porterait un aller-retour vers le service d'authentification
+avant de pouvoir être traitée. On ajouterait de la latence à 100 % du trafic,
+une dépendance dure sur le chemin critique, et surtout **un nouveau mode de
+panne** : le service d'authentification indisponible = toute l'application
+indisponible, alors qu'une vérification de signature n'a besoin que du JWKS, qui
+est une URL publique et se met en cache.
+
+Ce qu'on **gagnerait** en déportant la vérification — une source unique de règle —
+est déjà obtenu aujourd'hui : il n'y a qu'un seul résolveur
+(`auth/resolver.py`, ADR-020). Il suffit de le transformer en **bibliothèque
+partagée** au lieu d'un appel distant.
+
+> **Conséquence directe :** en multiservice, `auth/resolver.py` ne devient pas un
+> service HTTP. Il devient une **librairie** (`auth-core`) importée par tous les
+> services, qui expose `CurrentUser`, `get_current_user`, `require_admin` et
+> `verify_token`. C'est ce qui garantit qu'une règle d'autorisation ne peut pas
+> diverger d'un service à l'autre.
+
+#### 7.1.2 Frontière du service
+
+| Dans le service d'authentification (autorité) | Dans `auth-core` (bibliothèque) | Hors service |
+|---|---|---|
+| Inscription, connexion, déconnexion, vérification d'email, récupération d'accès | Vérification de signature et claims | Logique métier, agents, outils, RAG |
+| Cycle de vie des sessions | `CurrentUser` (sub → user_id → rôle) | Fournisseur d'identité (Neon Auth) — service externe, non réécrit |
+| Projection utilisateur (`public.users`) | `get_current_user`, `require_admin` | Rendu, mise en page, état d'interface |
+| Attribution du rôle | Garde `AUTH_MODE` fail-closed | Cache, stockage de données métier |
+
+**Le service ne détient aucun secret que le frontend puisse exploiter** : l'URL du
+fournisseur d'identité est publique (`VITE_NEON_AUTH_URL`), le frontend ne détient
+aucun secret (vérifié : `frontend/.env.production` ne contient que `VITE_AUTH_MODE`,
+`VITE_NEON_AUTH_URL`, `VITE_API_URL`).
+
+#### 7.1.3 Stack
+
+| Couche | Choix | Pourquoi |
+|---|---|---|
+| Fournisseur d'identité | **Neon Auth managé** (Better Auth 1.6.23) | Gère comptes, sessions, OTP, mots de passe. **Non réécrit** — Clerk a été retiré précisément parce qu'il exigeait un domaine personnel, impossible sur `*.vercel.app` |
+| Base du fournisseur | `neon_auth.*` (PostgreSQL) | Mêmes 10 tables, schéma géré par Neon — **ne pas y toucher** |
+| Base applicative | `public.users` dans le même PostgreSQL | Projection interne : `user_id` (UUID), `role`, `external_user_id` |
+| Signature des jetons | **EdDSA / Ed25519**, exposée en `/.well-known/jwks.json` | Algorithme forcé côté vérification : un jeton `alg: none` ou en HS256 est rejeté |
+| Vérification | `PyJWKClient` — `resolver.py:87-121` | `require: ["exp","iat","sub"]`, `leeway` 60 s, `audience` validée si l'URL de base est connue |
+| Client navigateur | **REST maison** en `fetch` — `frontend/src/lib/neon.ts` | Le SDK `@neondatabase/auth` est abandonné : imports circulaires, 33 erreurs rolldown |
+| Portage du jeton | `Authorization: Bearer` partout (REST **et** SSE) | ES-5 : la query string `?auth=` a été supprimée (exposition dans les journaux d'accès et l'historique du navigateur) ; le WebSocket `/ws/logs` était mort, il a été retiré |
+| Stockage du jeton | **Mémoire du module uniquement** (`NeonTokenBridge.tsx:49-50`) | Jamais `localStorage` : une XSS ne trouve rien à lire |
+
+#### 7.1.4 Flux — connexion complète
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as Navigateur
+  participant FE as Frontend<br/>(neon.ts)
+  participant IDP as Neon Auth<br/>(Better Auth)
+  participant AS as Service Auth<br/>(à extraire)
+  participant LIB as auth-core<br/>(résolveur)
+  participant DB as PostgreSQL<br/>public.users
+
+  U->>FE: email + mot de passe
+  FE->>IDP: POST /sign-in/email
+  IDP-->>FE: cookie de session (HttpOnly)
+  FE->>FE: refreshNeonSession() → pose window.__neonGetToken
+  FE->>IDP: GET /token
+  IDP-->>FE: JWT EdDSA (sub, exp, aud)
+  FE->>AS: GET /me  +  Authorization: Bearer
+  AS->>LIB: verify_token(jeton)
+  LIB->>LIB: PyJWKClient → signature + exp + aud
+  LIB->>DB: get_user_by_external_id(sub)
+  alt compte inconnu
+    LIB->>DB: INSERT (provisionnement au 1er login)
+    LIB-->>AS: CurrentUser(user_id, role)
+  else compte connu
+    LIB->>DB: SELECT role ; si rôle admin et absent<br/>→ UPDATE (persistance de l'écart)
+    LIB-->>AS: CurrentUser(user_id, role)
+  end
+  AS-->>FE: 200 { user_id, name, role, external_user_id }
+  Note over FE: role ?? 'user' — un échec réseau<br/>dégrade SILENCIEUSEMENT en non-admin<br/>(EF-15, à corriger)
+  FE->>AS: toute requête métier + Bearer
+  AS->>LIB: get_current_user (local, sans appel réseau)
+  LIB-->>AS: CurrentUser
+  AS-->>FE: 200
+```
+
+**Renouvellement invisible** (décision actée) : un `401` déclenche **une seule**
+tentative de `GET /token` puis un rejeu de la requête originale — implémenté dans
+`api/base.ts:94-103`. Deux manques connus : aucune déduplication des appels
+concurrents, et un `500` du fournisseur est traité comme une absence de session
+(`lib/neon.ts:108`). Voir EF-8.
+
+#### 7.1.5 Rôles — deux mécanismes qui se superposent aujourd'hui
+
+| Mécanisme | Rôle | Authority |
+|---|---|---|
+| `ADMIN_EXTERNAL_IDS` (variable d'environnement) | **prime** sur le rôle en base | configurée à la main, hors du dépôt |
+| `users.role` (colonne) | miroir, mis à jour par le résolveur | persisté |
+
+Le rôle effectif est donc lisible à deux endroits, et la variable est
+l'autoritaire : **un retrait de variable ne rétrograde personne** tant que la
+persistance d'écart n'a pas été rejouée. C'est l'écart EF-14, et c'est la première
+question à trancher quand le service d'authentification devient autonome — parce
+que c'est la seule raison de l'exister en propre.
+
+#### 7.1.6 modes et comportement fail-closed
 
 | Mode | Comportement |
 |---|---|
-| `AUTH_MODE=neon` (prod) | Bearer JWT → `PyJWKClient` (JWKS) → claim `sub` → `users.clerk_user_id` → `user_id` interne. `verify_neon_token` l.87, `resolve_internal_user` l.129 avec provisionnement automatique au premier login (l.140-172) |
-| `AUTH_MODE=dev` | `Bearer dev:<name>` (l.202) |
-| **Autre** | **HTTP 503 — jamais `None`** (l.269-282) |
+| `AUTH_MODE=neon` (prod) | Bearer JWT → `PyJWKClient` (JWKS) → claim `sub` → `users.external_user_id` → `user_id` interne. `verify_neon_token` l.87-121, `resolve_internal_user` l.128-188 avec provisionnement automatique au premier login |
+| `AUTH_MODE=dev` | `Bearer dev:<nom>` (l.214-241). **Refus de démarrer si `DATABASE_URL` est distante** (`config.py`, helper `_is_remote_postgres`) — le mode dev a déjà pollué la base de production |
+| **Autre** | **HTTP 503 — jamais `None`** (l.283-297) |
 
-Le fail-closed est la bonne décision : un `AUTH_MODE` mal configuré casse l'API visiblement au lieu d'ouvrir un accès.
+Le fail-closed est la bonne décision : un `AUTH_MODE` mal configuré casse l'API
+visiblement au lieu d'ouvrir un accès.
 
-`get_current_user` (l.286) · `require_admin` (l.294) · rôle admin via `clerk_user_id ∈ ADMIN_CLERK_IDS`.
+`get_current_user` (l.300) · `require_admin` (l.308) · `optional_current_user`
+(l.320, avale les exceptions — voir ES-6).
 
 ### 7.2 Surface d'attaque connue
 
 | Point | État | Renvoi |
 |---|---|---|
-| CORS `/api/*` dans `vercel.json` | `Access-Control-Allow-Origin: *` — court-circuite `ALLOWED_ORIGINS` du backend | `ROADMAP.md` lot B1 |
+| CORS et rewrite `/api/*` dans `vercel.json` | **Rewrite supprimé (EX-4)** : tout passe par l'URL absolue `VITE_API_URL` ; le reste des headers same-origin est sans effet réel et à retirer à la prochaine passe | `AUTH_REQUIREMENTS.md` EX-4 ✅ |
+| Jeton en query string (SSE, WebSocket) | **Résolu (ES-5 ✅)** : SSE passe en header Bearer uniquement, `?auth=` supprimé ; le WebSocket `/ws/logs` était inutilisé et a été retiré | `AUTH_REQUIREMENTS.md` ES-5 ✅ |
+| Jeton falsifié indétectable | `optional_current_user` avale les exceptions, aucun journal ne distingue « pas de jeton » de « jeton invalide » | `AUTH_REQUIREMENTS.md` ES-6 |
+| Course sur le premier login | SELECT puis INSERT sans transaction : deux connexions simultanées du même compte → `500` | `AUTH_REQUIREMENTS.md` ES-7 |
+| Pas de limitation de débit | Ni sign-in, ni inscription, ni renvoi de code. Le cooldown de 60 s est purement client, donc contournable | `AUTH_REQUIREMENTS.md` ES-8 |
 | `ALLOWED_ORIGINS` en prod | `render.yaml` le documente obligatoire mais la valeur reste `http://localhost:5173` | `ROADMAP.md` lot B2 |
 | Rate limiting | Aucun sur `/api/chat` (coût LLM) ni `/api/livekit/token` | `ROADMAP.md` lot B4 |
 | Fichiers non commités | `proj-neon.json`, `svc_raw.json` (dumps d'API) | `ROADMAP.md` lot B3 |
 
 ## 8. Frontend
 
-Vercel (région `fra1`), build Vite, sortie `frontend/dist`. Le proxy `/api/:path*` → `agent-tutor-api.onrender.com` fait que le navigateur ne voit jamais le backend directement.
+Vercel (région `fra1`), build Vite, sortie `frontend/dist`.
+
+> **[F] Un seul chemin réseau — dualisme résolu (EX-4).** Une version antérieure
+> de ce document affirmait que le rewrite `/api/:path*` faisait que « le navigateur
+> ne voit jamais le backend directement » ; c'était faux (ADR-015 l'a corrigé),
+> et les deux formes coexistaient effectivement jusqu'à l'implémentation du lot EX-4 :
+>
+> | Forme | Qui l'utilisait | Chemin réel |
+> |---|---|---|
+> | **Absolue** — `VITE_API_URL=https://agent-tutor-api.onrender.com` | `apiFetch` / `apiFetchRaw`, tout `src/api/*.ts` et le stream du chat | cross-origin direct vers Render (soumis à `ALLOWED_ORIGINS`) |
+> | **Relative** — `/api/...` | les 4 `fetch` bruts corrigés en lot 1 : `events.ts:12`, `TranscriptionPanel.tsx:88`, `ActivityMonitor.tsx:23`, `ActiveSessionsTable.tsx:21` | same-origin → rewrite Vercel → Render (CORS contourné) |
+>
+> **Résolution (EX-4)** : les 4 appels relatifs passent désormais par
+> `apiFetch`/`apiFetchRaw` (lot 1), et le rewrite `/api/:path*` a été **supprimé**
+> de `vercel.json`. Il ne reste qu'UNE forme d'URL : l'absolue `VITE_API_URL`.
+> Conséquence opérationnelle : la variable `VITE_API_URL` doit être posée dans le
+> dashboard Vercel (sinon le front échoue en prod — échec visible, voulu).
 
 ### Points d'attention
 
@@ -295,7 +450,7 @@ Vercel (région `fra1`), build Vite, sortie `frontend/dist`. Le proxy `/api/:pat
 
 | Cible | Rôle |
 |---|---|
-| Vercel | Front statique + proxy `/api` |
+| Vercel | Front statique — rewrite `/api` supprimé (EX-4), tout passe par l'URL absolue `VITE_API_URL` |
 | Render `agent-tutor-api` | API HTTP, healthcheck `/api/health` |
 | Render `agent-tutor-worker` | Worker vocal, healthcheck `/healthz` (200 seulement si enregistré auprès de LiveKit) |
 

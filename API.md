@@ -69,12 +69,6 @@ Toutes les erreurs — métier, de validation ou inattendue — ont la même for
 | Exception non gérée | **500**, `code: "unhandled_error"`, **jamais de stack trace** | `app/main.py` `@app.exception_handler(Exception)` |
 | Ressource qui n'appartient pas à l'utilisateur | **403** | contrôle d'ownership dans la route |
 
-## WebSocket
-
-| Route | Description |
-|---|---|
-| `WS /ws/logs` | flux d'événements d'activité (`app/ws/logs.py:17`) |
-
 ## CORS
 
 `app/main.py:109` installe un `CORSMiddleware` paramétré par `ALLOWED_ORIGINS`.

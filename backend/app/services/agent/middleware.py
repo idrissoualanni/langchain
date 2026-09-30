@@ -83,6 +83,26 @@ def _ids_from_runtime(runtime) -> tuple[str, str]:
         return "", ""
 
 
+def _is_admin_from_runtime(runtime) -> bool:
+    """Rôle admin depuis le MÊME AgentContext que _ids_from_runtime.
+
+    Helper jumeau plutôt qu'un 3-tuple étendu : _ids_from_runtime a
+    quatre appelants qui déballent `user_id, thread_id = ...` et
+    agrandir sa sortie les aurait tous cassés pour un seul champ.
+
+    Fail-closed : toute exception, tout contexte absent, tout
+    attribut manquant → False. Une permission ne s'obtient jamais par
+    l'échec d'une lecture.
+    """
+    try:
+        ctx = getattr(runtime, "context", None)
+        if ctx is None:
+            return False
+        return bool(getattr(ctx, "is_admin", False))
+    except Exception:
+        return False
+
+
 def _last_user_query(request: ModelRequest) -> str:
     """Dernier message humain de la requête (pour la sélection)."""
     try:
@@ -218,9 +238,17 @@ def _build_prompt_from_context(
 
 
 def _build_context_prompt(
-    core_prompt: str, user_id: str, thread_id: str, query: str
+    core_prompt: str,
+    user_id: str,
+    thread_id: str,
+    query: str,
+    is_admin: bool = False,
 ) -> str:
-    """Chemin HISTORIQUE (non-orchestré) : reconstruction complète."""
+    """Chemin HISTORIQUE (non-orchestré) : reconstruction complète.
+
+    is_admin : rôle déjà résolu en amont (Runtime Context), jamais
+    re-déduit ici — cf. _is_admin_from_runtime.
+    """
     try:
         from app.services.context import build_context
 
@@ -228,6 +256,7 @@ def _build_context_prompt(
             user_id=user_id,
             thread_id=thread_id,
             query=query,
+            is_admin=is_admin,
         )
         if thread_id:
             _register_context(thread_id, context)
@@ -359,7 +388,11 @@ def tutor_dynamic_prompt(request: ModelRequest) -> str:
         return CORE_PROMPT
 
     return _build_context_prompt(
-        CORE_PROMPT, user_id, thread_id, query
+        CORE_PROMPT,
+        user_id,
+        thread_id,
+        query,
+        is_admin=_is_admin_from_runtime(request.runtime),
     )
 
 

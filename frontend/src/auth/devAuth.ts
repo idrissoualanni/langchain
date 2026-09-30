@@ -1,4 +1,4 @@
-// Mission Identité — mode dev local ( sans clés Clerk ).
+// Mission Identité — mode dev local ( sans fournisseur d'identité ).
 //
 // En développement ( VITE_AUTH_MODE=dev ) le backend accepte
 // "dev:<internal_user_id>" comme session simulée ( cf

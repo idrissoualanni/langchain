@@ -306,3 +306,58 @@ Statuts possibles : `validé` · `supersédé par ADR-XXX` · `proposé` · `rej
 - **Revu si** : le CI passe en conteneurs (le compose devient la base du job d'intégration — à ce moment il doit être testé, pas relu) ; ou si le disque machine ne permet pas de construire l'image (torch + ffmpeg pèsent plusieurs Go, cf. l'alerte disque de 100 %).
 
 ---
+
+## ADR-022 — Architecture multiservice : le service d'authentification est extrait, la vérification reste locale
+
+- **Date** : 2026-09-30
+- **Statut** : validé (décision produit de l'équipe : migration vers une architecture multiservice)
+- **Contexte** : le projet passe d'un monolithe modulaire à deux niveaux (ADR-001) à une **architecture multiservice**. Le premier service extrait est l'authentification, qui n'est pas un simple composant : c'est le chemin de 100 % du trafic. La question structurante n'est pas « quel framework » mais « où passe la frontière entre ce qui est centralisé et ce qui doit rester local ».
+- **Options** :
+  1. **Service d'auth HTTP qui vérifie les JWT à distance (appel réseau par requête)** — rejeté : la vérification est une crypto locale pure (clé publique JWKS). La centraliser par réseau ajoute une latence sur 100 % du trafic, une dépendance dure (le métier tombe si l'auth tombe), et un nouveau mode de panne pour zéro gain de sécurité — la confiance vient de la signature, pas de l'endroit où on la vérifie.
+  2. **Vérification en bibliothèque partagée `auth-core`, émission/session/projection/rôle centralisés dans le service d'auth (Auth N + Auth Z)** — retenu. Chaque service vérifie le JWT localement via `auth-core` ; le service d'auth reste l'unique autorité pour créer les comptes, gérer les sessions, projeter `public.users` et attribuer le rôle.
+  3. **Tout laisser dans le monolithe** — écarté : contredit la décision produit.
+- **Décision** :
+  1. `auth/resolver.py` ne devient **pas** un service HTTP : il devient la bibliothèque `auth-core` (vérification JWKS, `CurrentUser`, `get_current_user`, `require_admin`, `optional_current_user`), importée par chaque service. Une règle d'autorisation ne peut pas diverger d'un service à l'autre : il n'en existe qu'une copie.
+  2. Le **service d'authentification** (déployable autonome) détient : délé ation au fournisseur d'identité (Neon Auth managé), vie de session, projection `public.users`, attribuer le rôle, endpoints `/sign-in`, `/sign-up`, `/verify-email`, `/users/me`.
+  3. Le fournisseur d'identité reste **Neon Auth managé** (Better Auth 1.6.23) : le service d'auth ne réimplémente pas la vérification de mot de passe ni l'émission de JWT — il orchestre et projette.
+  4. **Supersède ADR-001** pour ce qui concerne la topologie de déploiement (la structure modulaire du code reste, elle est simplement déployée en plusieurs services).
+  5. **Corrige ADR-015** : l'affirmation « tout le trafic passe par le proxy Vercel » est fausse — deux chemins coexistent aujourd'hui (`apiFetch` en absolu cross-origin via `VITE_API_URL`, et 4 fetch bruts en relatif via le rewrite `vercel.json:27-31`). En multiservice, une seule forme d'URL doit survivre (voir EX-4 d'`AUTH_REQUIREMENTS.md`).
+- **Conséquences** :
+  - Le service d'auth et les services métier partagent `public.users` (même Postgres) : la frontière de service est logique, pas physique, au moins dans un premier temps. La séparation physique (base dédiée par service) est un chantier ultérieur, non décidé ici.
+  - `ADMIN_EXTERNAL_IDS` (variable d'env) + `users.role` (miroir) : c'est **la** première question à trancher quand le service devient autonome — l'écart EF-14 d'`AUTH_REQUIREMENTS.md` est la seule raison d'exister du service en propre.
+  - Aucun secret d'auth ne doit transiter vers le frontend ; le service d'auth reste le seul à parler au fournisseur d'identité.
+  - Le référentiel d'exigences détaillé (EF/ES/EO/EX, écarts numérotés) est dans `AUTH_REQUIREMENTS.md`.
+- **Revu si** : un second service est extrait — auquel cas la frontière « bibliothèque partagée vs appel réseau » doit être re-tranchée pour ce service précis, et la décision de séparation physique des bases doit être prise explicitement.
+
+---
+
+## ADR-023 — Rôle administrateur : `users.role` est l'unique autorité au runtime, la variable d'environnement n'est qu'un bootstrap
+
+- **Date** : 2026-09-30
+- **Statut** : validé
+- **Contexte** : c'est l'écart EF-14 d'`AUTH_REQUIREMENTS.md`, désigné par ADR-022 comme la première décision à rendre. Deux mécanismes se superposent : `ADMIN_EXTERNAL_IDS` (variable d'env, liste de `sub` externes) **prime** sur `users.role` — le résolveur force `role="admin"` quel que soit le contenu de la base, et **persiste l'écart** via `set_user_role` (`resolver.py:149-156`) pour que l'UI affiche le même rôle que l'autorisation. Conséquence : la variable prime et la base est un miroir — un retrait de variable ne rétrograde personne.
+- **Options** :
+  1. **Variable d'env seule** — rejetée : en multiservice, la liste devrait être dupliquée dans **chaque** service qui importe `auth-core`, or `auth-core` est une bibliothèque, pas un service — elle ne peut pas centraliser une configuration serveur. Rétrogradation impossible sans déploiement, aucune gestion par l'UI, changement invisible et non auditable. Une variable vide et un identifiant faux ont le même effet : zéro admin, sans avertissement.
+  2. **`users.role` seule (base), avec bootstrap par variable d'env** — retenue : un seul endroit où le rôle vit, lu par chaque service via la projection `public.users`. Rétrogradation immédiate (`UPDATE`), ouvrable à une future page d'administration, auditable.
+  3. **`users.role` seule, sans bootstrap** — écartée : personne ne peut promouvoir le premier admin sans UI ni outil.
+- **Décision** :
+  1. `users.role` est **l'unique autorité au runtime**. `ADMIN_EXTERNAL_IDS` ne sert qu'au **bootstrapping initial** : promouvoir les premiers administrateurs au moment du premier déploiement, puis elle est retirée des services.
+  2. **Suppression de la persistance d'écart automatique** (`set_user_role` appelé depuis le résolveur) : un écart entre variable et base doit devenir **visible** (journalisé), jamais auto-réparé — sinon c'est une écriture magique qui réplique la config dans les données.
+  3. Le repli legacy `ADMIN_CLERK_IDS` est retiré une fois `ADMIN_EXTERNAL_IDS` posée sur **tous** les environnements (Render compris) — il ne disparaît pas avant.
+- **Conséquences** : le rôle lu par `GET /api/users/me` devient le rôle effectivement appliqué (ferme les écarts EF-15/EF-16 : plus de downgrade silencieux possible par lecture divergente). La promotion d'un développeur passe par un `UPDATE` SQL (ou une future page admin), pas par un redémarrage. Le résolveur final garde `require_admin` fail-closed : rôle absent → utilisateur ordinaire.
+- **Revu si** : le fournisseur d'identité expose des claims de groupe (OIDC) — la base redeviendrait une projection du fournisseur, comme `external_user_id`.
+
+---
+
+## ADR-024 — Transport du jeton : jamais en query string (ES-5)
+
+- **Date** : 2026-09-30
+- **Statut** : validé
+- **Contexte** : l'écart ES-5 d'`AUTH_REQUIREMENTS.md` — `logging/sse.py:36` et `ws/logs.py:24` lisaient le jeton dans `query_params`. Le jeton atterrissait donc dans les journaux d'accès Render, les journaux de proxy et l'historique du navigateur. Le fallback `?auth=` existait parce que l'`EventSource` natif ne porte pas d'en-tête ; mais le frontend réel était déjà passé en `fetch` + `ReadableStream` avec header Bearer (lot 1, EF-18) — le fallback ne servait plus à aucun client vivant. Le WebSocket `/ws/logs` n'avait aucun client (0 `new WebSocket` actif côté frontend) et aucun test.
+- **Options** :
+  1. **Garder `?auth=` en fallback** — rejetée : le jeton continue d'être exposé dans les journaux et l'historique, pour un client qui n'existe plus.
+  2. **Supprimer tout transport par query string, retirer l'endpoint mort** — retenue : SSE = header Bearer uniquement (le seul client réel le fait déjà) ; `/ws/logs` et `wsUrl` supprimés.
+  3. **Réécrire `/ws/logs` en header** — écartée : sans client, réécrire un endpoint mort est de la sur-ingénierie ; on le supprime, on le reconstruira avec un vrai client si le besoin revient.
+- **Décision** : le jeton ne transite que par `Authorization: Bearer`. `sse.py` rejette 401 sans header ; le fallback `?auth=`, le dossier `app/ws/`, l'import et le montage dans `main.py`, et `wsUrl` de `base.ts` sont supprimés.
+- **Conséquences** : plus aucune exposition du jeton par les journaux d'accès ni l'historique navigateur ; `GET /api/events` exige un header (compatible avec le client réel). Toute future connexion navigateur temps réel (SSE ou WebSocket) devra passer par `fetch` (SSE) ou un client qui sait poser l'en-tête — jamais l'URL.
+- **Revu si** : un vrai besoin client impose `EventSource` natif ou un WebSocket navigateur — auquel cas il faudra un jeton à durée de vie très courte à usage unique échangé par un endpoint authentifié, pas une requête directe avec jeton en URL.

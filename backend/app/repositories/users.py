@@ -5,11 +5,13 @@ from app.infrastructure.database import users as _users_db
 
 
 def create_user(
-    name: str, clerk_user_id: str | None = None, role: str = "user"
+    name: str,
+    external_user_id: str | None = None,
+    role: str = "user",
 ) -> dict:
     """Crée un utilisateur et retourne son enregistrement complet."""
     return _users_db.create_user(
-        name, clerk_user_id=clerk_user_id, role=role
+        name, external_user_id=external_user_id, role=role
     )
 
 
@@ -23,14 +25,20 @@ def get_user(user_id: str) -> dict | None:
     return _users_db.get_user(user_id)
 
 
-def get_user_by_clerk_id(clerk_user_id: str) -> dict | None:
-    """Retrouve un utilisateur par son identifiant externe Clerk."""
-    return _users_db.get_user_by_clerk_id(clerk_user_id)
+def get_user_by_external_id(external_user_id: str) -> dict | None:
+    """Retrouve un utilisateur par son identifiant externe."""
+    return _users_db.get_user_by_external_id(external_user_id)
+
+
+def set_user_role(user_id: str, role: str) -> None:
+    """Persiste le rôle d'un utilisateur (voir users.set_user_role)."""
+    _users_db.set_user_role(user_id, role)
 
 
 __all__ = [
     "create_user",
     "list_users",
     "get_user",
-    "get_user_by_clerk_id",
+    "get_user_by_external_id",
+    "set_user_role",
 ]

@@ -40,10 +40,22 @@ class AgentContext:
     thread_id : conversation courante (redondant avec le
                 configurable du checkpointer, mais disponible pour
                 les outils/middleware sans get_config()).
+    is_admin  : rôle admin RÉSOLU par la couche auth au moment de la
+                requête. Volontairement ici et PAS dans le state
+                LangGraph : le state est persisté par le checkpointer
+                d'un bout à l'autre du thread, un rôle posé à la
+                première requête y resterait figé et deviendrait faux
+                dès qu'un admin est rétrogradé (ou l'inverse). Le
+                Runtime Context, lui, est reconstruit à chaque run —
+                c'est le seul scope où une permission peut être
+                évaluée sans być rejouée depuis l'historique.
+                Défaut False : fail-closed, aucun appelant existant
+                ne peut se retrouver admin par inadvertance.
     """
 
     user_id: str = ""
     thread_id: str = ""
+    is_admin: bool = False
 
 
 # ------------------------------------------------------------------

@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { CheckCircle2, Eye, EyeOff, Loader2, MailCheck, X } from 'lucide-react';
 
-import { authClient } from '../../lib/neon';
+import { authClient, hasAuthCode } from '../../lib/neon';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
@@ -93,7 +93,14 @@ export function SignUpPage() {
     } catch (ex) {
       const msg = ex instanceof Error ? ex.message : '';
       setErr(
-        /already|exists/i.test(msg)
+        // `code` d'abord : Better Auth place USER_ALREADY_EXISTS dans
+        // le champ machine, pas forcément dans `message` — même défaut
+        // que sur le sign-in, où tester le texte rendait la branche
+        // EMAIL_NOT_VERIFIED inatteignable. Le regex ne sert plus que de
+        // repli quand le service renvoie un message sans code.
+        hasAuthCode(ex, 'USER_ALREADY_EXISTS') ||
+          hasAuthCode(ex, 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL') ||
+          /already|exists/i.test(msg)
           ? 'Un compte existe déjà avec cet email. Connecte-toi.'
           : msg || 'Inscription impossible. Réessaie dans un instant.'
       );

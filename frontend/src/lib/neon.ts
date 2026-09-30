@@ -30,6 +30,41 @@ export interface NeonSession {
   token?: string | null;
 }
 
+/** Erreur renvoyée par l'API Better Auth de Neon.
+ *
+ *  Le corps d'erreur porte DEUX champs : `code` (machine — distingue
+ *  EMAIL_NOT_VERIFIED de INVALID_EMAIL_OR_PASSWORD) et `message` (humain,
+ *  traduit, variable selon la locale et la version du service).
+ *
+ *  Seul `code` est fiable. Matcher le `message` revient à deviner : les
+ *  expressions régulières sur du texte naturel attrapent des cas
+ *  voisins ("Incorrect email or password" matche /incorrect/) et
+ *  laissent passer le cas visé, dont Better Auth ne met jamais le code
+ *  dans `message`. D'où le `code` conservé ici.
+ */
+export class NeonAuthError extends Error {
+  /** Code machine Better Auth, ex. 'EMAIL_NOT_VERIFIED'. null si absent. */
+  readonly code: string | null;
+  readonly status: number;
+
+  constructor(message: string, code: string | null, status: number) {
+    super(message);
+    this.name = 'NeonAuthError';
+    this.code = code;
+    this.status = status;
+  }
+}
+
+/** Vrai si `err` est une erreur Neon portant le `code` demandé.
+ *
+ *  Comparaison en majuscules : les codes Better Auth sont en
+ *  SCREAMING_SNAKE_CASE mais leur casse a déjà varié entre versions. */
+export function hasAuthCode(err: unknown, code: string): boolean {
+  return (
+    err instanceof NeonAuthError && err.code?.toUpperCase() === code.toUpperCase()
+  );
+}
+
 async function postJson(path: string, body: Record<string, unknown>) {
   const res = await fetch(`${AUTH_URL}${path}`, {
     method: 'POST',
@@ -49,9 +84,18 @@ async function postJson(path: string, body: Record<string, unknown>) {
     /* réponse vide */
   }
   if (!res.ok) {
-    const msg =
-      (data as { message?: string })?.message ?? `Erreur ${res.status}`;
-    throw new Error(msg);
+    const { code, message } = (data ?? {}) as {
+      code?: string;
+      message?: string;
+    };
+    // On ne jette plus le `code` : sans lui l'appelant ne peut plus
+    // distinguer un email non vérifié d'un mot de passe faux, et
+    // affiche le même message dans les deux cas.
+    throw new NeonAuthError(
+      message ?? `Erreur ${res.status}`,
+      code ?? null,
+      res.status
+    );
   }
   return data as NeonSession;
 }
@@ -81,11 +125,16 @@ export const authClient = {
   /** Session courante ( null si déconnecté ). */
   getSession: () => getJson<NeonSession>('/get-session'),
 
-  /** Déconnexion. */
-  signOut: () =>
-    postJson('/sign-out', {}).catch(() => {
-      /* session déjà expirée */
-    }),
+  /** Déconnexion.
+   *
+   *  Laisse PROPAGER l'erreur. Avant, un `.catch()` vide rendait une
+   *  déconnexion ratée (réseau coupé, session déjà morte côté Neon)
+   *  indiscernable d'une réussite : l'appelant vidait l'UI en
+   *  annonçant une déconnexion qui n'avait pas eu lieu, alors que le
+   *  cookie de session restait en place. Signaler l'échec est la seule
+   *  façon pour l'appelant de ne pas mentir à l'utilisateur.
+   */
+  signOut: () => postJson('/sign-out', {}),
 
   /** JWT signé ( Ed25519 ) pour le backend.
    *

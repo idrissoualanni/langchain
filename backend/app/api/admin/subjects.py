@@ -10,7 +10,7 @@
 # PUT    /api/admin/subjects/{id}/definition → remplace le YAML ( validé )
 # DELETE /api/admin/subjects/{id}/definition → retire la matière
 #
-# Sécurité : réservé aux admins ( vérification ADMIN_CLERK_IDS ).
+# Sécurité : réservé aux admins ( vérification ADMIN_EXTERNAL_IDS ).
 from __future__ import annotations
 
 import hashlib

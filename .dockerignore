@@ -1,0 +1,29 @@
+# Secrets et fichiers locaux — jamais dans le contexte de build
+.env
+.env.local
+*.env
+proj-neon.json
+svc_raw.json
+backend/authcfg.json
+backend/create.json
+
+# Collection API Bruno (requêtes + environnements : variables email/password/jwt)
+bruno/
+
+# Dépendances et caches
+node_modules/
+__pycache__/
+*.pyc
+.git/
+
+# Logs et artefacts locaux
+logs/
+*.log
+backend/.langgraph_api/
+backend/database/
+*.db
+*.sqlite
+*.sqlite3
+
+# Sessions agent
+.zcode/

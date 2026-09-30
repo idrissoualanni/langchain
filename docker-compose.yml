@@ -29,15 +29,16 @@
 #    avec de vraies credentials il peut réclamer de VRAIS dispatchs et
 #    ouvrir une session vocale payante. D'où le profile `voice`.
 #
-# ⚠️ REDIS N'EST PAS ENCORE UTILISÉ ( ADR-006bis ). Il est déclaré mais
-#    sous profile `cache` : l'ajouter au service `api` tant que le
-#    contrat de cache n'est pas implémenté ( lot D de ROADMAP.md ).
+# REDIS EST CÂBLÉ ( lot D de ROADMAP.md, ADR-006bis ) : `api` et
+# `worker` lisent REDIS_URL et partagent le même cache. Si le service
+# est absent ou injoignable, le code retombe sur le cache mémoire
+# ( TTLCache ) — le cache n'est pas une source de vérité.
 #
 # ---------------------------------------------------------------------------
 # Usage
 # ---------------------------------------------------------------------------
-#   docker compose up -d                    # db + api      (le minimum)
-#   docker compose --profile cache  up -d    # + redis
+#   docker compose up -d                    # db + api + redis (le minimum)
+#   docker compose --profile cache up -d    # + interface Redis Insight (localhost:5540)
 #   docker compose --profile full   up -d    # + front Vite
 #   docker compose --profile voice  up -d    # + worker LiveKit
 #   docker compose logs -f api
@@ -95,6 +96,9 @@ services:
       # Ces 4 variables ÉCRASENT backend/.env : sans ça, le conteneur
       # pointerait sur la base Neon de production depuis ta machine.
       DATABASE_URL: postgresql+psycopg://agent_tutor:agent_tutor@db:5432/agent_tutor
+      # Cache partagé API ↔ worker ( lot D ). Le service `redis` est
+      # dans le réseau Compose — cette URL est interne et ne fuit pas.
+      REDIS_URL: redis://redis:6379/0
       AUTH_MODE: dev
       # Origine REÇUE par le navigateur, pas l'URL interne du conteneur :
       # le CORS compare l'en-tête Origin du navigateur à cette valeur.
@@ -110,6 +114,8 @@ services:
       - mcpdata:/app/data
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     # Reconstruire à chaque `up` : le tag `latest` est ambigu sinon.
     # `docker compose up --build -d` si le Dockerfile a changé.
@@ -131,6 +137,9 @@ services:
         required: false
     environment:
       DATABASE_URL: postgresql+psycopg://agent_tutor:agent_tutor@db:5432/agent_tutor
+      # MÊME cache que l'API : c'est le point du lot D ( l'invalidation
+      # côté API doit être vue par le worker vocal ).
+      REDIS_URL: redis://redis:6379/0
       AUTH_MODE: dev
       # `RUN_AS_WORKER=1` est ce que le CMD du Dockerfile teste pour
       # choisir son rôle. Sans lui, ce service lancerait un DEUXIÈME
@@ -147,15 +156,19 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
 
   # -------------------------------------------------------------------------
-  # redis — cache partagé ( ADR-006bis ). PAS ENCORE CÂBLÉ ( lot D ).
-  # L'API l'ignore tant que REDIS_URL n'est pas lu par le code.
+  # redis — cache partagé API ↔ worker ( ADR-006bis, lot D ).
+  # En service par défaut : les deux rôles en dépendent via depends_on.
+  # Si le service tombe, le code retombe sur le cache mémoire ( base.py :
+  # « le cache n'est PAS une source de vérité » ) — l'app ne casse pas,
+  # elle perd seulement la cohérence inter-processus jusqu'à reconnexion.
   # -------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: agent-tutor-redis
-    profiles: ["cache"]
     restart: unless-stopped
     command:
       - redis-server
@@ -175,6 +188,37 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+
+  # -------------------------------------------------------------------------
+  # redis-insight — interface graphique officielle de Redis (Redis Insight).
+  # Sous profile `cache` : outil de DEV, jamais levé en prod. Elle partage
+  # le réseau Compose avec le service `redis` (levé par défaut depuis le
+  # lot D) — hostname `redis`, port 6379, à saisir dans l'UI comme
+  # nouvelle connexion ; aucun port publié supplémentaire n'est nécessaire.
+  # Image officielle vérifiée : redis.io/docs — port 5540, données dans /data,
+  # healthcheck HTTP sur /api/health/.
+  # -------------------------------------------------------------------------
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: agent-tutor-redis-insight
+    profiles: ["cache"]
+    restart: unless-stopped
+    ports:
+      - "5540:5540"
+    volumes:
+      # Persistance des connexions/settings de l'UI (volume nommé, non
+      # versionné — cf. `pgdata`). L'image tourne sous l'utilisateur 1000 ;
+      # un volume frais est créé avec les bons droits par Docker.
+      - redisinsight:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5540/api/health/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # -------------------------------------------------------------------------
   # front — Vite en dev, sur le réseau Compose.
@@ -198,6 +242,13 @@ services:
       # frontend/vite.config.ts.
       VITE_DEV_API_TARGET: "http://api:8000"
       VITE_AUTH_MODE: dev
+      # Pour tester le VRAI flux Neon Auth depuis Docker (au lieu du mode
+      # simulé dev:), passe VITE_AUTH_MODE=neon et renseigne l'endpoint
+      # public du projet Neon Auth (PAS un secret — cf. frontend/.env) :
+      #   VITE_NEON_AUTH_URL: https://ep-delicate-breeze-b2tutfpz.neonauth.c-6.eu-central-1.aws.neon.tech/neondb/auth
+      # Sans cette variable en mode neon, le client auth (lib/neon.ts)
+      # échoue : AUTH_URL serait `undefined` et tout fetch de session
+      # partirait sur une URL invalide.
     volumes:
       - ./frontend:/app
       # Volume anonyme : sinon le node_modules de la machine (Windows,
@@ -212,3 +263,4 @@ services:
 volumes:
   pgdata:
   mcpdata:
+  redisinsight:

@@ -28,7 +28,6 @@ from app.services.context.fallback import (
     decide_fallback,
     fallback_note_for_prompt,
 )
-from app.config import ADMIN_CLERK_IDS
 from app.services.context.knowledge_retriever import search_knowledge
 from app.schemas.model_capabilities import (
     get_model_capabilities,
@@ -183,6 +182,7 @@ def retrieve_sources(
     max_knowledge: int = 3,
     knowledge: "KnowledgeSearchResult | None" = None,
     web: "SearchResponse | None" = None,
+    is_admin: bool = False,
 ) -> tuple["KnowledgeSearchResult", "SearchResponse"]:
     """Pipeline KNOWLEDGE + WEB (V6.5 §24-§26) — SOURCE DE VÉRITÉ UNIQUE.
 
@@ -197,6 +197,15 @@ def retrieve_sources(
     V7 ORCHESTRATION : knowledge/web pré-calculés optionnels. Quand
     ils sont fournis, ils sont réutilisés tel quels (le RETRIEVAL
     node a déjà exécuté ce pipeline) ; sinon ils sont calculés ici.
+
+    is_admin : rôle DÉJÀ RÉSOLU par la couche auth sur la requête en
+    cours, transporté via AgentContext. Il était ici re-déduit par
+    `user_id in ADMIN_CLERK_IDS`, ce qui comparait un UUID INTERNE
+    à une liste d'identifiants EXTERNES — toujours faux, donc le
+    contournement admin du RAG n'a jamais fonctionné, sans lever la
+    moindre erreur. Recevoir le rôle résolu supprime la classe de
+    bug : plus personne ne compare deux identifiants de nature
+    différente pour décider d'une permission.
     """
     if knowledge is not None:
         knowledge_result = knowledge
@@ -209,7 +218,7 @@ def retrieve_sources(
                 query=query,
                 limit=max_knowledge,
                 user_id=user_id,
-                is_admin=user_id in ADMIN_CLERK_IDS,
+                is_admin=is_admin,
             )
             knowledge_result = KnowledgeSearchResult(
                 status=raw["status"],
@@ -378,6 +387,7 @@ def build_context(
     knowledge: "KnowledgeSearchResult | None" = None,
     web: "SearchResponse | None" = None,
     fallback: "FallbackDecision | None" = None,
+    is_admin: bool = False,
 ) -> BuiltContext:
     """Construit le contexte complet d'un appel LLM (V5 structuré).
 
@@ -466,6 +476,7 @@ def build_context(
         max_knowledge=max_knowledge,
         knowledge=knowledge,
         web=web,
+        is_admin=is_admin,
     )
 
     # --- 3c. FALLBACK DECISION (V6.6 §6) — matrice pure ---
