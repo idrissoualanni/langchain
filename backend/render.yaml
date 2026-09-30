@@ -32,11 +32,23 @@ services:
         value: neon
       - key: DATABASE_URL
         sync: false
-      # ⚠️ OBLIGATOIRE en prod : sans ça, CORS rejette le frontend Vercel
-      #    et apiFetch échoue silencieusement. Remplacer par le domaine
-      #    Vercel définitif ( + localhost pour le dev ).
+      # ⚠️ OBLIGATOIRE en prod : le navigateur appelle Render DIRECTEMENT
+      #    ( cross-origin ), pas via le proxy Vercel — voir ADR-015.
+      #    Sans cette variable, CORSMiddleware n'émet aucun en-tête et
+      #    TOUTE l'application est bloquée côté navigateur.
+      #
+      #    ⚠️ VALEUR VÉRIFIÉE EN PRODUCTION le 2026-09-29 ( curl avec
+      #    en-tête Origin ). Le dashboard Render fait foi ; ce fichier
+      #    DOIT refléter exactement la même liste, sinon le prochain
+      #    `render blueprint apply` casse la prod. La valeur ci-dessous
+      #    est celle qui répond en 200 aujourd'hui.
+      #
+      #    Les déploiements de PRÉVISUALISATION Vercel ( domaines
+      #    `frontend-<hash>.vercel.app` ) ne sont PAS acceptés :
+      #    Starlette ne gère pas les jokers. Tester une branche en
+      #    preview suppose d'ajouter son domaine explicitement.
       - key: ALLOWED_ORIGINS
-        value: http://localhost:5173
+        value: https://frontend-sigma-lilac-62.vercel.app,http://localhost:5173,http://127.0.0.1:5173
       # Modèles LiveKit Inference ( noms valides vérifiés en 1.8.2 ).
       - key: LIVEKIT_AGENT_STT_MODEL
         value: deepgram/nova-3

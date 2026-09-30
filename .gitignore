@@ -5,3 +5,31 @@ __pycache__/
 # Environment variables
 .env
 .env.local
+
+# Dumps d'API exporters en local (Render / Neon). Contiennent des IDs
+# d'infrastructure et des URLs d'orga. Ne se committent jamais.
+proj-neon.json
+svc_raw.json
+backend/authcfg.json
+backend/create.json
+
+# Secrets OAuth MCP (Google Calendar)
+backend/data/mcp/google/
+backend/authcfg.json
+
+# Artefacts LangGraph locaux (checkpoints + store pickles : conversations)
+backend/.langgraph_api/
+
+# Base SQLite locale (abandonnée en prod, cf. ADR-002)
+backend/database/
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# Sessions agent
+.zcode/
+.zcodeignore
