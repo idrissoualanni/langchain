@@ -1,0 +1,220 @@
+# Langfuse v4 — docker compose (basé sur le compose officiel, versions épinglées)
+#
+#   Version épinglée      : 4.48.0  (langfuse-web + langfuse-worker)
+#   MàJ de version        : cf. README.md (section « Mettre à jour »)
+#
+#   Sécurité réseau       : seuls langfuse-web (3000) et minio (9090) sont
+#                           exposés ; tout le reste est lié à 127.0.0.1.
+#                           MinIO (9090) est PUBLIC car Langfuse renvoie des
+#                           URLs média presignées aux navigateurs/SDK (la
+#                           doc officielle le recommande). Les requêtes sont
+#                           quand même signées (access key + secret).
+#
+#   Secrets               : TOUS proviennent du fichier .env (jamais committé).
+#                           Générer ce fichier avec ./generate-secrets.sh
+#                           puis renseigner l'email admin dans .env.
+#
+#   Déploiement préféré   : Blueprint Render officiel (render-examples/
+#                           langfuse4-template) — voir README.md.
+#   Ce compose sert pour  : tester localement, et comme référence de
+#                           configuration.
+
+name: langfuse
+
+services:
+  # ------------------------------------------------------------------
+  # langfuse-worker : file d'ingestion (async)
+  # Port 3030 lié à 127.0.0.1 (pas d'exposition publique).
+  # ------------------------------------------------------------------
+  langfuse-worker:
+    image: docker.langfuse.com/langfuse/langfuse-worker:4.48.0
+    restart: unless-stopped
+    depends_on: &langfuse-depends-on
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - 127.0.0.1:3030:3030
+    environment: &langfuse-env
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-false}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL manquant (postgresql://...)}
+      SALT: ${SALT:?SALT manquant (generate-secrets.sh)}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY manquant (generate-secrets.sh)}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-http://clickhouse:8123}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD manquant (generate-secrets.sh)}
+      CLICKHOUSE_MIGRATION_URL: ${CLICKHOUSE_MIGRATION_URL:-clickhouse://clickhouse:9000}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_AUTH: ${REDIS_AUTH:?REDIS_AUTH manquant (generate-secrets.sh)}
+      REDIS_TLS_ENABLED: "false"
+      # --- Stockage objet S3/MinIO (événements + médias) ---
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: ${LANGFUSE_S3_EVENT_UPLOAD_REGION:-auto}
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD manquant}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: ${LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT:-http://minio:9000}
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: ${LANGFUSE_S3_MEDIA_UPLOAD_BUCKET:-langfuse}
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: ${LANGFUSE_S3_MEDIA_UPLOAD_REGION:-auto}
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD manquant}
+      # Endpoint INTERNE (worker → minio) ; le web le surcharge avec l'URL publique.
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: ${LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT:-http://minio:9000}
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+    # Pas de route de santé HTTP documentée sur le worker : on vérifie que
+    # le processus est vivant (le port 3030 reste réservé au worker).
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f langfuse-worker >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # ------------------------------------------------------------------
+  # langfuse-web : interface + API d'ingestion (SEUL point d'entrée public)
+  # ------------------------------------------------------------------
+  langfuse-web:
+    image: docker.langfuse.com/langfuse/langfuse:4.48.0
+    restart: unless-stopped
+    depends_on: *langfuse-depends-on
+    ports:
+      - 3000:3000
+    environment:
+      <<: *langfuse-env
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET manquant (generate-secrets.sh)}
+      # --- Auth : inscription ouverte DÉSACTIVÉE ---
+      # Seuls les comptes créés (init headless ou UI) peuvent se connecter.
+      AUTH_DISABLE_SIGNUP: ${AUTH_DISABLE_SIGNUP:-true}
+      # Emails autorisés à créer des organisations (séparés par des virgules).
+      LANGFUSE_ALLOWED_ORGANIZATION_CREATORS: ${LANGFUSE_ALLOWED_ORGANIZATION_CREATORS:-}
+      # --- Initialisation automatique (headless) : org + projet + clés + user
+      # Lu au démarrage si les ressources n'existent pas encore.
+      # ATTENTION (issue langfuse #3398) : ne PAS quoter ces valeurs.
+      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-}
+      LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME:-}
+      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-}
+      LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME:-}
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-}
+      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:?LANGFUSE_INIT_USER_PASSWORD manquant (generate-secrets.sh)}
+      # MinIO : le web fournit des URLs publiques (presignées) au client.
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: ${LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT:-http://localhost:9090}
+      LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: ${LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT:-http://minio:9000}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --no-verbose --tries=1 --spider http://localhost:3000/api/public/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # ------------------------------------------------------------------
+  # ClickHouse : stockage des traces (OBSERVATIONS-FIRST, obligatoire en v4)
+  # ------------------------------------------------------------------
+  clickhouse:
+    image: docker.io/clickhouse/clickhouse-server:25.12
+    restart: unless-stopped
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD manquant (generate-secrets.sh)}
+    volumes:
+      - langfuse_clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    ports:
+      - 127.0.0.1:8123:8123
+      - 127.0.0.1:9000:9000
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 1s
+
+  # ------------------------------------------------------------------
+  # MinIO : stockage objet S3 (buckets events/ + media/)
+  # ------------------------------------------------------------------
+  minio:
+    # Épinglé par digest (image chainguard, sans tag de version stable) :
+    # digest de l'index multi-arch vérifié le 2026-09-30.
+    image: cgr.dev/chainguard/minio@sha256:4692462f35d97d7e82c30371d82f057703c5d9489bcae726010594c812f2d285
+    restart: unless-stopped
+    entrypoint: sh
+    # Crée le bucket 'langfuse' avant de démarrer le serveur.
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD manquant (generate-secrets.sh)}
+    ports:
+      - 9090:9000            # PUBLIC (URLs presignées navigateurs/SDK)
+      - 127.0.0.1:9091:9001  # console d'admin : local uniquement
+    volumes:
+      - langfuse_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 1s
+      timeout: 5s
+      retries: 5
+      start_period: 1s
+
+  # ------------------------------------------------------------------
+  # Redis : files BullMQ (ingestion) + cache
+  # ------------------------------------------------------------------
+  redis:
+    image: docker.io/redis:7.4-alpine
+    restart: unless-stopped
+    command: >
+      --requirepass ${REDIS_AUTH:?REDIS_AUTH manquant (generate-secrets.sh)}
+      --maxmemory-policy noeviction
+    ports:
+      - 127.0.0.1:6379:6379
+    volumes:
+      - langfuse_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+
+  # ------------------------------------------------------------------
+  # PostgreSQL : métadonnées applicatives Langfuse
+  # ------------------------------------------------------------------
+  postgres:
+    image: docker.io/postgres:17-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant (generate-secrets.sh)}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - 127.0.0.1:5432:5432
+    volumes:
+      - langfuse_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  langfuse_postgres_data:
+    driver: local
+  langfuse_clickhouse_data:
+    driver: local
+  langfuse_clickhouse_logs:
+    driver: local
+  langfuse_minio_data:
+    driver: local
+  langfuse_redis_data:
+    driver: local
