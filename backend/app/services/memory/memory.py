@@ -7,7 +7,7 @@ from difflib import SequenceMatcher
 from langgraph.store.postgres import PostgresStore
 
 from app.config import DATABASE_DIR, log_safe
-from app.infrastructure.cache.ttl import TTLCache
+from app.infrastructure.cache.factory import get_cache
 from app.logging.events import log_event
 
 # Fichier store séparé du checkpointer — jamais partagé
@@ -47,7 +47,9 @@ _store_lock = threading.RLock()
 #
 # ⚠ Ne JAMAIS cacher des résultats LLM ( pédagogie adaptative ) ni les
 # states de thread ( le checkpointer est la source de vérité ).
-_memory_cache = TTLCache(ttl_seconds=300)
+# Redis ( REDIS_URL ) partage ce cache entre l'API et le worker vocal
+# ( ADR-006bis ) ; sans REDIS_URL, repli mémoire TTLCache ( ADR-019 ).
+_memory_cache = get_cache(ttl_seconds=300)
 
 
 def _cache_key_profile(user_id: str) -> str:

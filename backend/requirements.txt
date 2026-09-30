@@ -70,3 +70,9 @@ faster-whisper>=1.0,<2
 # Extraction de frames pour l'analyse visuelle ( app/graph/subgraphs/
 # video/frames.py ) : headless = sans dependances GUI serveur ( Render ).
 opencv-python-headless>=4.8
+
+# Cache partage API <-> worker vocal ( ADR-006bis ). Redis via la
+# variable REDIS_URL ( compose, Upstash, Layerbase... ). Le package est
+# requis en dur : sans lui, factory.get_cache retombe en cache mémoire
+# ( loggué, pas bloquant ). Client officiel, >=5.0 requiert Python 3.8+.
+redis>=5.0

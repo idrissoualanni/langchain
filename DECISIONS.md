@@ -94,15 +94,24 @@ Statuts possibles : `validé` · `supersédé par ADR-XXX` · `proposé` · `rej
 
 ### ADR-006bis — Cache partagé entre l'API et le worker vocal
 
-- **Date** : 2026-09-29
-- **Statut** : proposé
+- **Date** : 2026-09-29 / **implémenté** 2026-09-30
+- **Statut** : **validé · implémenté (lot D)**
 - **Contexte** : le défaut décrit ci-dessus est structurel, pas un bug d'implémentation. Le corriger sans store partagé reviendrait à supprimer le cache.
 - **Options** :
   1. Supprimer le cache — rejeté : le coût des lectures répétées sur la mémoire longue durée est réel, et le TTL reste une sécurité utile contre les invalidations oubliées.
   2. **Store partagé** — retenu.
-  3. Court-circuiter le cache depuis le worker (lecture directe) — rejeté : contourne le problème, Complexité gagnée nulle, et le worker perd la protection du TTL.
+  3. Court-circuiter le cache depuis le worker (lecture directe) — rejeté : contourne le problème sans rien gagner en complexité, et le worker perd la protection du TTL.
 - **Décision** : introduire un store partagé accessible aux deux services. Fournisseur retenu : **Upstash** — offre gratuite 256 MB / 500 K commandes par mois / 10 000 commandes par seconde, sans carte bancaire, API REST compatible `@upstash/redis`. Le code ne doit dépendre que de l'API Redis, jamais du SDK d'un fournisseur.
-- **Conséquences** : chaque appel LLM et chaque écrit en base generates une commande, donc un coût. L'offre gratuite est confortable à l'échelle actuelle mais devient fragile enibb : **si le volume de commandes devient un coût, le palier suivant est Layerbase Solo (5 $/mois, prix fixe, commandes non facturées, API REST identique — la migration se réduit à changer l'URL)**. Upstash Fixed 250 MB à 10 $/mois est le repli classique si l'API REST devient une contrainte.
+- **Implémentation (2026-09-30)** :
+  - `infrastructure/cache/base.py` : contrat `CacheBackend` (`get` / `set` / `invalidate` / `clear_prefix`) ; valeur `None` jamais stockée ; valeurs JSON-sérialisables ; un backend qui échoue retourne `None` et n'écrit rien — « le cache n'est pas une source de vérité ».
+  - `infrastructure/cache/ttl.py` : `TTLCache` devient une implémentation mémoire du contrat (le bug `get_or` est supprimé, voir ADR-019).
+  - `infrastructure/cache/redis_backend.py` : implémentation Redis via **redis-py** (client officiel ; mêmes URL `redis://` / `rediss://` pour compose, Upstash ou Layerbase). Import paresseux : sans le package, le backend ne peut pas exister — la fabrique retombe en mémoire, loggé.
+  - `infrastructure/cache/factory.py` : `get_cache()` — `REDIS_URL` définie ET package présent → `RedisBackend`, sinon `TTLCache`. Repli silencieux MAIS loggé (une erreur par type toutes les 60 s côté Redis).
+  - `services/memory/memory.py` : le cache de la mémoire longue durée passe par la fabrique (clés `mem:{user_id}:profile` / `mem:{user_id}:facts` inchangées).
+  - `render.yaml` : `REDIS_URL` ( `sync: false` ) déclarée sur **l'API ET le worker** — c'est le cas d'usage exact : l'API invalide à l'écriture, le worker lit.
+  - `docker-compose.yml` : service `redis` par défaut, `REDIS_URL` câblée sur `api` et `worker`.
+  - `requirements.txt` : `redis>=5.0`.
+- **Conséquences** : chaque appel LLM et chaque écrit en base génère une commande, donc un coût. L'offre gratuite est confortable à l'échelle actuelle mais devient fragile : **si le volume de commandes devient un coût, le palier suivant est Layerbase Solo (5 $/mois, prix fixe, commandes non facturées, API REST identique — la migration se réduit à changer l'URL)**. Upstash Fixed 250 MB à 10 $/mois est le repli classique si l'API REST devient une contrainte.
 - **Ce qui ne sera jamais mis en cache** : les résultats LLM et les états de thread. Le checkpointer Postgres est la seule source de vérité (déclaration existante à conserver, `services/memory/memory.py:48-49`).
 - **Revu si** : le plan Render devient payant et peut héberger un Redis en TCP natif — l'implémentation change, pas la décision. Ou si le volume de commandes dépasse durablement 500 K/mois sans budget.
 
@@ -262,18 +271,18 @@ Statuts possibles : `validé` · `supersédé par ADR-XXX` · `proposé` · `rej
 - **Piège à connaître** : `ADMIN_EXTERNAL_IDS` compare des **noms** en mode `dev` (`api/users.py:98` : `"dev-admin"`) et des **identifiants externes** en mode `neon` (`resolver.py:145`). Une même variable, deux types de valeur selon le mode. C'est source de confusion et mérite un commentaire.
 - **Revu si** : `ADMIN_EXTERNAL_IDS` est confirmée sur tous les environnements — le repli peut alors être retiré, et cette entrée est close.
 
-## ADR-019 — L'interface `TTLCache` est le contrat d'un cache futur
+## ADR-019 — Le contrat de cache : `CacheBackend`, implémenté par mémoire et Redis
 
-- **Date** : 2026-09-2X
-- **Statut** : validé, avec réserves
+- **Date** : 2026-09-2X / **réserves levées** 2026-09-30
+- **Statut** : validé
 - **Contexte** : le cache a été conçu pour être remplaçable par Redis sans changer les appelants.
-- **Décision** : l'interface `get` / `set` / `invalidate` est conservée telle quelle par ADR-006bis.
-- **Réserves** : deux défauts de l'interface doivent être corrigés avant toute substitution.
-  1. `get_or()` (`ttl.py:71-73`) est un **bug** : `return self.get(key) if self.get(key) is not None else default` appelle `get()` **deux fois** — double verrou, et une fenêtre d'expiration entre le test et le retour. Cela ne distingue pas « absent » d'un `None` légitime, ce que la docstring de `get()` (l.56) signale pourtant. Il n'a **aucun appelant** : à supprimer.
-  2. `clear_prefix()` (l.91-103) n'a **aucun appelant** et **n'a pas d'équivalent Redis** (`SCAN` + `DEL` est nettement plus coûteux qu'un `DEL` sur un motif). Une implémentation Redis ne doit pas promettre ce contrat.
-  3. L'éviction est **FIFO** (l.80-84), pas LRU. Documenté et assumé, mais à savoir.
-  4. Aucune **métrique hit/miss**. `log_event("MEMORY_READ", extra={"cached": True})` existe dans `services/memory/memory.py:446-458` mais n'est agrégé nulle part — il faut savoir si le cache sert avant d'en payer.
-- **Revu si** : un besoin d'invalidation par motif apparaît réellement — auquel cas il faut concevoir ce contrat explicitement, et non le supposer.
+- **Décision** : le contrat est désormais formel : `infrastructure/cache/base.py` définit `CacheBackend` ( `get` / `set` / `invalidate` / `clear_prefix` ), implémenté par `TTLCache` ( mémoire, in-process ) et `RedisBackend` ( redis-py, partagé — ADR-006bis ). La sélection se fait dans `factory.get_cache()` ; les services ( ex. `services/memory/memory.py` ) ne manipulent jamais une classe concrète. Règles du contrat : **`None` n'est jamais stocké**, les valeurs sont **JSON-sérialisables**, un backend qui échoue retourne `None` et n'écrit rien.
+- **Réserves de l'audit initial, résolues ou assumées** :
+  1. `get_or()` était un **bug** ( `ttl.py:71-73` : deux appels à `get()`, double verrou, fenêtre d'expiration ) — **supprimé** : il n'avait aucun appelant.
+  2. `clear_prefix()` est **conservé** : `RedisBackend` l'implémente par `SCAN` + `DEL` ( coût réel mais borné par les TTL ; retourne le nombre de clés supprimées ), `TTLCache` par parcours du dict. L'interface retourne `int` ( compte supprimé ; `-1` côté Redis si injoignable ).
+  3. L'éviction de `TTLCache` est **FIFO** ( pas LRU ) — documenté et assumé.
+  4. **Métriques hit/miss** : toujours à faire ( hors lot D ) — savoir si le cache sert avant d'en payer le coût. `log_event("MEMORY_READ", extra={"cached": True})` existe dans `services/memory/memory.py` mais n'est agrégé nulle part.
+- **Revu si** : un besoin d'invalidation par motif apparaît à grande échelle ( des dizaines de clés par préfixe, à chaque appel ) — dans ce cas, `clear_prefix` côté Redis doit être repensé ( index dédié, `unlink`, ou renoncement au motif ).
 
 ## ADR-020 — Une seule image, un seul registre d'outils, un seul point d'entrée d'authentification
 

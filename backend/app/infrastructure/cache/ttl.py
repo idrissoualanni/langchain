@@ -1,17 +1,21 @@
 # Cache TTL in-process — invalidation manuelle par clé.
 #
-# POURQUOI : ce projet ( plan Render free, un seul process, pas de
-# Redis ) a des lectures SQL synchrones répétées sur des données qui
-# changent RAREMENT — typiquement la mémoire longue durée de
-# l'utilisateur, relue à chaque entrée de session vocale
+# C'est le backend MÉMOIRE du contrat CacheBackend ( ADR-019 ). Il est
+# utilisé quand aucune URL Redis n'est configurée ( REDIS_URL absente
+# ou package `redis` absent — voir factory.get_cache ).
+#
+# POURQUOI : ce projet a des lectures SQL synchrones répétées sur des
+# données qui changent RAREMENT — typiquement la mémoire longue durée
+# de l'utilisateur, relue à chaque entrée de session vocale
 # ( app.infrastructure.livekit.agent._build_instructions_async ).
 # Un cache in-process supprime ces aller-retours sans ajouter de
 # dépendance.
 #
-# POURQUOI PAS Redis : aucun gain tant qu'il n'y a qu'un process ; et
-# le plan free ne le justifie pas. L'interface get/set/invalidate est
-# COMPATIBLE avec un backend Redis futur — la migration sera un
-# changement d'implémentation, pas d'API.
+# LIMITE STRUCTURELLE ( à l'origine du passage Redis, ADR-006bis ) :
+# ce cache est PRIVÉ à un process. Or render.yaml déploie DEUX
+# services depuis la même image ( API + worker vocal ) : une
+# invalidation côté API ne touche pas le worker, qui sert un profil
+# périmé jusqu'à la TTL. Redis ( backend partagé ) corrige ça.
 #
 # COHÉRENCE : ce cache n'est PAS un cache de résultats calculés. Il ne
 # s'applique qu'à des données lues via UNE fonction, et écrites via des
@@ -23,8 +27,10 @@ import threading
 import time
 from typing import Any
 
+from app.infrastructure.cache.base import CacheBackend
 
-class TTLCache:
+
+class TTLCache(CacheBackend):
     """Cache clé → valeur avec expiration par clé.
 
     Thread-safe ( verrou global ) : FastAPI dispatche les handlers
@@ -54,8 +60,8 @@ class TTLCache:
     def get(self, key: str) -> Any | None:
         """Retourne la valeur si présente et non expirée, sinon None.
 
-        ⚠ None EST aussi une valeur légitime possible : distinguer
-        « absent » de « None caché » via get_or() si nécessaire.
+        La valeur None n'est jamais stockée ( contrat CacheBackend ) :
+        « absent » et « None » sont indiscernables par design.
         """
         with self._lock:
             entry = self._store.get(key)
@@ -68,12 +74,15 @@ class TTLCache:
                 return None
             return value
 
-    def get_or(self, key: str, default: Any = None) -> Any:
-        """Comme get, mais `default` si absent/expiré."""
-        return self.get(key) if self.get(key) is not None else default
+    def set(self, key: str, value: Any, ttl_seconds: int | None = None) -> None:
+        """Écrit une entrée avec la TTL du cache.
 
-    def set(self, key: str, value: Any) -> None:
-        """Écrit une entrée avec la TTL du cache."""
+        `ttl_seconds` ( optionnel ) remplace la TTL par défaut pour
+        CETTE entrée. None est ignoré — jamais mis en cache.
+        """
+        if value is None:
+            return
+        ttl = ttl_seconds if ttl_seconds is not None else self._ttl
         with self._lock:
             if len(self._store) >= self._max_entries and key not in self._store:
                 # Éviction : la plus ancienne entrée ( insertion order du
@@ -81,7 +90,7 @@ class TTLCache:
                 oldest = next(iter(self._store), None)
                 if oldest is not None:
                     del self._store[oldest]
-            self._store[key] = (time.monotonic() + self._ttl, value)
+            self._store[key] = (time.monotonic() + ttl, value)
 
     def invalidate(self, key: str) -> None:
         """Invalide UNE clé. Inexistant = no-op silencieux."""

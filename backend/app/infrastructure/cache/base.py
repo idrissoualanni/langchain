@@ -38,8 +38,12 @@ class CacheBackend(abc.ABC):
         """Retirer `key` du cache."""
 
     @abc.abstractmethod
-    def clear_prefix(self, prefix: str) -> None:
-        """Retirer toutes les clés commençant par `prefix`."""
+    def clear_prefix(self, prefix: str) -> int:
+        """Retirer toutes les clés commençant par `prefix`.
+
+        Retourne le nombre de clés supprimées ( 0 si absent ).
+        Retourner un compte est utile aux appels qui veulent logguer
+        l'invalidation ( ex. purge d'un utilisateur )."""
 
 
 __all__ = ["CacheBackend"]

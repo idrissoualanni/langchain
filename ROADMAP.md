@@ -258,28 +258,30 @@ Le dépôt est committé en **B**, mais `ALLOWED_ORIGINS` sur Render est en A-va
 
 **Objectif** : que l'API et le worker vocal voient la même donnée au même moment.
 
-**Fait** : ADR-006bis. La séquence du défaut est décrite dans `ARCHITECTURE.md` §6.2. En une phrase : l'API invalide le cache, le worker garde l'ancien profil **5 minutes**, sans log et sans erreur — et **invisible en développement local**.
+**Fait (2026-09-30) — implémentation complète** : contrat `CacheBackend` (`base.py`), backends mémoire `TTLCache` + Redis (`redis_backend.py`), `factory.get_cache` branché sur la mémoire utilisateur, `REDIS_URL` câblée (compose + Render, jamais commitée), `redis>=5.0` dans `requirements.txt`. ADR-006bis et ADR-019 mis à jour dans `DECISIONS.md` ; ARCHITECTURE.md §6 reflète l'état implémenté. D4 (métriques hit/miss), D5 (bascule fournisseur) et D6 (rate limiting, dépend de B4) restent ouverts.
 
-### D1 — Définir le contrat, pas le fournisseur
+La séquence du défaut corrigé est décrite dans `ARCHITECTURE.md` §6.2. En une phrase : l'API invalide le cache, le worker garde l'ancien profil **5 minutes**, sans log et sans erreur — et **invisible en développement local**.
+
+### D1 — Définir le contrat, pas le fournisseur ✅ fait (2026-09-30)
 
 **Périmètre** : l'interface `TTLCache` reste le contrat. Corriger d'abord les deux défauts qui la rendent inexploitable en Redis (ADR-019) :
-- `get_or()` — bug de double appel, aucun appelant → **supprimer**.
-- `clear_prefix()` — aucun appelant, et **pas d'équivalent Redis** (`SCAN` + `DEL` est nettement plus cher qu'un `DEL` sur motif) → ne pas promettre ce contrat.
+- `get_or()` — bug de double appel, aucun appelant → **supprimé**.
+- `clear_prefix()` — conservé et défini explicitement pour Redis : `SCAN` + `DEL` par lots (count=100), retourne `int` (`-1` si Redis injoignable) pour distinguer échec et absence de clés ; le backend mémoire retourne le même type.
 
-Le code ne doit dépendre que de l'API Redis, jamais du SDK d'un fournisseur. C'est ce qui rend le changement de fournisseur gratuit.
+Le code ne dépend que de l'API Redis, jamais du SDK d'un fournisseur. C'est ce qui rend le changement de fournisseur gratuit.
 
-### D2 — Remplacer l'implémentation in-process
+### D2 — Remplacer l'implémentation in-process ✅ fait (2026-09-30)
 
-**Périmètre** : implémentation Redis derrière la même interface. Fournisseur : **Upstash** (offre gratuite 256 Mo / 500 K commandes par mois / 10 000 cmd/s, sans carte bancaire).
+**Périmètre** : implémentation Redis derrière la même interface. `factory.get_cache()` bascule entre `TTLCache` et `RedisBackend` (`redis-py`, `redis>=5.0`) selon `REDIS_URL`. Fournisseur libre à l'adoption : **Upstash** (offre gratuite 256 Mo / 500 K commandes par mois / 10 000 cmd/s) ou **Layerbase Solo** (5 $/mois, prix fixe).
 
-Trois caches à convertir, dans cet ordre de valeur :
-1. `mem:{user_id}:profile` et `mem:{user_id}:facts` — **le seul qui produit le défaut observable**.
-2. `subjects:registry` — invalidé à l'écriture, donc peu de trafic.
+Trois caches visés, dans cet ordre de valeur :
+1. `mem:{user_id}:profile` et `mem:{user_id}:facts` — **le seul qui produit le défaut observable** → ✅ converti.
+2. `subjects:registry` — invalidé à l'écriture, donc peu de trafic → conservé en mémoire (pas de bénéfice à convertir).
 3. Engine knowledge (`lru_cache`) — **ne rien faire**, c'est un singleton immuable, le transformer serait du bruit.
 
-### D3 — Trancher l'invalidation par motif
+### D3 — Trancher l'invalidation par motif ✅ tranché (2026-09-30)
 
-**Périmètre** : décider si `clear_prefix` est réellement nécessaire. Si oui, concevoir le contrat explicitement pour Redis. Si non, le supprimer de l'interface. **Ne pas laisser une promesse que l'implémentation ne peut pas tenir.**
+**Périmètre** : décider si `clear_prefix` est réellement nécessaire. **Décision** : oui, il reste dans le contrat (ADR-019). L'implémentation Redis utilise `SCAN` + `DEL` par lots — bornée par la TTL des clés, c'est un coût acceptable ; un `-1` signale l'échec à l'appelant. Pas de promesse que l'implémentation ne peut tenir.
 
 ### D4 — Mesurer avant de payer
 

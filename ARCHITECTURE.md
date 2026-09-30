@@ -240,13 +240,24 @@ Décision prise le 2026-09-29, consignée dans `DECISIONS.md` ADR-002.
 
 ## 6. Cache
 
-### 6.1 État actuel — 4 caches in-process
+### 6.1 Contrat, backends et état des caches
 
-| Cache | Emplacement | TTL | Partagé API ↔ worker |
+`[F]` Chaque cache passe par un contrat unique `CacheBackend` (`infrastructure/cache/base.py`), implémenté par deux backends (ADR-019) :
+
+| Backend | Fichier | Activé quand |
+|---|---|---|
+| Mémoire `TTLCache` | `infrastructure/cache/ttl.py` | `REDIS_URL` absente ou package `redis` absent — repli loggué |
+| Redis (`redis-py`) | `infrastructure/cache/redis_backend.py` | `REDIS_URL` définie et `redis>=5.0` installé |
+
+`factory.get_cache(ttl_seconds=300)` choisit le backend à l'import (l'échec Redis ne casse jamais l'application : le cache n'est pas une source de vérité). `REDIS_URL` n'est jamais commitée (dashboard Render, `sync: false`) ; en local, `docker-compose` expose `redis://redis:6379/0`.
+
+État des caches :
+
+| Cache | Emplacement | TTL | Partagé API ↔ worker (lot D) |
 |---|---|---|---|
-| Mémoire utilisateur (profil + faits) | `services/memory/memory.py:50` | 300 s | ❌ |
-| Registre des matières | `subjects/registry.py` | illimité + invalidation manuelle | ❌ |
-| Engine knowledge (lru) | `services/knowledge/store.py:44` | illimité | ❌ |
+| Mémoire utilisateur (profil + faits) | `services/memory/memory.py:50` | 300 s | ✅ via Redis — sinon repli mémoire |
+| Registre des matières | `subjects/registry.py` | illimité + invalidation manuelle | ❌ non converti (peu de trafic) |
+| Engine knowledge (lru) | `services/knowledge/store.py:44` | illimité | ❌ par choix (singleton immuable) |
 | Engines DB (singletons) | `infrastructure/database/connections.py:198,208` | illimité | ❌ par construction |
 
 ### 6.2 Le défaut que Redis corrige
@@ -264,11 +275,11 @@ Décision prise le 2026-09-29, consignée dans `DECISIONS.md` ADR-002.
 
 Ce défaut est **invisible en développement local** (un seul process), donc il ne sera pas trouvé par les tests.
 
-### 6.3 Cible
+### 6.3 Implémentation — lot D (2026-09-30)
 
-`[P]` Store partagé entre les deux services. Les clés déjà nommées dans le code (`mem:{user_id}:profile`, `mem:{user_id}:facts`) sont conservées telles quelles.
+`[F]` Le défaut §6.2 est traité : le cache mémoire utilisateur passe par `factory.get_cache` dans les **deux** processus (l'API et le worker vocal lisent le même backend). Si `REDIS_URL` + package `redis` sont disponibles, l'invalidation déclenchée par l'API atteint le worker immédiatement. Le fournisseur reste libre (URL `rediss://` compatible Upstash / Layerbase) — voir `DECISIONS.md` ADR-006bis.
 
-**Ce qui ne sera jamais mis en cache** (décision déjà écrite dans `memory.py:48-49`, à respecter) : les résultats LLM, et les états de thread — le checkpointer Postgres est la seule source de vérité.
+**Ce qui ne sera jamais mis en cache** (décision déjà écrite dans `memory.py:48-49`) : les résultats LLM, et les états de thread — le checkpointer Postgres est la seule source de vérité.
 
 ## 7. Sécurité
 

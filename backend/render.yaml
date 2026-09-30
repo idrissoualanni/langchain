@@ -70,6 +70,13 @@ services:
         sync: false
       - key: NEON_AUTH_JWKS_URL
         sync: false
+      # Cache partagé API <-> worker vocal ( ADR-006bis ). ABSENT ou vide
+      # = repli mémoire TTLCache par process ( chaque service a son
+      # cache privé → une invalidation côté API ne touche pas le worker
+      # jusqu'à la TTL de 5 min ). URL Redis managé ( Upstash, Layerbase )
+      # saisie dans le dashboard : `sync: false`, JAMAIS commitée ici.
+      - key: REDIS_URL
+        sync: false
       # Neon Storage ( S3 ) — bucket "assets" pour les uploads
       # document/image/vidéo. SANS CES VARS, object_store bascule en
       # BYTEA ( trace via OBJECT_STORAGE_S3_FALLBACK ) : ça marche, mais
@@ -131,4 +138,9 @@ services:
         value: fr
       # La mémoire du tuteur ( Faits/profil ) est lue par le worker.
       - key: DATABASE_URL
+        sync: false
+      # Cache partagé avec l'API ( ADR-006bis ) : le worker lit profil et
+      # faits, l'API les invalide à l'écriture. SANS Redis partagé, le
+      # worker sert un profil périmé jusqu'à 5 min après une mise à jour.
+      - key: REDIS_URL
         sync: false
