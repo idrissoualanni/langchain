@@ -1,0 +1,11 @@
+[project]
+  subdomain = "agent-cnavrwad"
+
+[agent]
+  id = "CA_39eRjheyTL2P"
+  # ⚠️ `lk agent create` supprime `name`. Il DOIT être restauré à chaque
+  # create/deploy, sinon l'agent s'enregistre avec un nom vide et le
+  # dispatch lancé par l'API Render ne trouve jamais sa cible.
+  # Doit correspondre à TUTOR_AGENT_NAME côté API
+  # (backend/app/infrastructure/livekit/constants.py).
+  name = "tutor"

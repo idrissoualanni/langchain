@@ -210,6 +210,27 @@ function VideoSessionContent() {
   const [inviting, setInviting] = useState(false);
   const [agentInvited, setAgentInvited] = useState(false);
 
+  // Registre backend du partage d'écran : sans cet aller-retour,
+  // `screen_share_status` reste vide et l'agent ignore l'affichage.
+  // On notifie chaque bascule de l'état RÉEL du participant — donc
+  // aussi une fin déclenchée hors de l'UI ( barre Chrome, onglet fermé )
+  // — et on repasse `enabled=false` au démontage de la session.
+  // Non bloquant : un échec de notify ne doit jamais casser la voix.
+  const screenShareActive = localParticipant.isScreenShareEnabled;
+
+  useEffect(() => {
+    apiFetch(`/api/livekit/screen-share/notify?enabled=${screenShareActive}`, {
+      method: "POST",
+    }).catch(() => undefined);
+
+    return () => {
+      if (!screenShareActive) return;
+      apiFetch("/api/livekit/screen-share/notify?enabled=false", {
+        method: "POST",
+      }).catch(() => undefined);
+    };
+  }, [screenShareActive]);
+
   // Tant que la salle n'est pas rattachée au contexte (connexion en cours),
   // on garde un état stable — jamais d'erreur stricte.
   if (!room) {

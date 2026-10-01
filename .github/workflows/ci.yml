@@ -7,8 +7,8 @@
 # déploiement automatique de Render et Vercel.
 #
 # Jobs :
-#   - backend  : install requirements.txt, syntaxe, smoke tests d'import
-#                ( uvicorn app.main + worker LiveKit ), tests
+#   - backend  : install requirements.txt, syntaxe ( app + agent/ ),
+#                smoke tests d'import, tests
 #   - frontend : npm ci + build Vite ( tsc -b && vite build )
 name: CI
 
@@ -55,11 +55,15 @@ jobs:
         run: pip install --no-input -r requirements.txt
 
       - name: Syntax check ( compileall )
-        run: python -m compileall -q app scripts
+        # `../agent` = l'agent LiveKit Cloud ( projet autonome ). Docker
+        # Desktop n'est pas requis : compileall ne fait que compiler, il
+        # n'importe rien — donc `livekit-agents` n'a pas besoin d'être
+        # installé ici.
+        run: python -m compileall -q app scripts ../agent
 
       # Smoke tests d'import : un import mort ( symbole supprimé lors d'un
-      # refactor ) fait crasher uvicorn ET le worker au démarrage. On
-      # importe donc les points d'entrée réels pour les valider.
+      # refactor ) fait crasher uvicorn au démarrage. On importe donc les
+      # points d'entrée réels pour les valider.
       - name: Import smoke tests
         env:
           # Le démarrage lit la config ; on fournit des valeurs factices
@@ -68,11 +72,9 @@ jobs:
           DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
           NEON_AUTH_BASE_URL: https://example.neon.tech
           JWT_ALGORITHM: RS256
-          RUN_AS_WORKER: "1"
         run: |
           python -c "import app.main; print('app.main OK')"
-          python -c "import app.infrastructure.livekit.agent; print('worker agent OK')"
-          python -c "import app.infrastructure.livekit.session; print('livekit session OK')"
+          python -c "import app.infrastructure.livekit; print('livekit helpers OK')"
           python -c "import app.tools; print('tools OK')"
           python -c "import app.graph.main; print('graph OK')"
 

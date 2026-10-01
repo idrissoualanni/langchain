@@ -9,7 +9,7 @@ import { VideoSession } from "@/components/livekit/VideoSession";
 import { useLiveKitToken } from "@/hooks/useLiveKitToken";
 
 export default function VideoPage() {
-  const { data, loading, error } = useLiveKitToken("video");
+  const { data, loading, error } = useLiveKitToken();
 
   if (loading) {
     return (

@@ -1,6 +1,7 @@
-# Agent-Tutor backend — FastAPI + worker LiveKit
-# Image unique : Render lance soit le serveur web, soit le worker LiveKit
-# selon la commande du service ( voir render.yaml ).
+# Agent-Tutor backend — API FastAPI
+# Rôle unique : serveur web ( port $PORT ). L'agent vocal n'est plus dans
+# cette image : il s'exécute sur LiveKit Cloud ( agent `tutor`, projet
+# `live` ), déployé depuis le dossier `agent/` de la racine du dépôt.
 #
 # Base : slim pour réduire la taille. Les wheels de torch/onnxruntime
 # ( dépendances de livekit-plugins-silero ) existent pour linux/x86_64.
@@ -81,14 +82,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:${PORT}/api/health || exit 1
 
-# Une seule image, deux rôles :
-#   - RUN_AS_WORKER=1 → worker LiveKit ( connexion persistante,
-#     aucun port web — Render le voit comme un service inactif,
-#     c'est normal et voulu ) ;
-#   - sinon → serveur web FastAPI ( port $PORT ).
-# Le shell form permet l'expansion de $RUN_AS_WORKER et $PORT.
-CMD if [ "$RUN_AS_WORKER" = "1" ]; then \
-        exec python -m app.infrastructure.livekit.worker_main; \
-    else \
-        exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}; \
-    fi
+# Rôle unique : serveur web FastAPI ( port $PORT ).
+# Le CMD reste en shell form pour l'expansion de $PORT par le runtime.
+CMD exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}

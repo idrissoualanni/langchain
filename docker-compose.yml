@@ -9,9 +9,7 @@
 #
 # CE QUE LA PROD A, ET QUE CE FICHIER REPRODUIT
 #   - Postgres + pgvector ......... service `db`
-#   - 1 API HTTP + 1 worker vocal . services `api` et `worker`
-#   - UNE seule image, deux rôles . `RUN_AS_WORKER` ( cf. render.yaml )
-#     → la même image Docker, donc le même code et les mêmes deps.
+#   - 1 API HTTP ................. service `api`
 #
 # CE QUE LA PROD A, ET QUE CE FICHIER NE REPRODUIT PAS
 #   - Neon managé ................ Postgres local : même SQL, mêmes
@@ -24,15 +22,14 @@
 #                                 Le code de vérification JWKS n'est donc
 #                                 PAS exercé en local.
 #
-# ⚠️ LE WORKER NE SE LANCE PAS PAR DÉFAUT.
-#    Il s'inscrit auprès de LiveKit CLOUD. Sans credentials il échoue ;
-#    avec de vraies credentials il peut réclamer de VRAIS dispatchs et
-#    ouvrir une session vocale payante. D'où le profile `voice`.
+# ⚠️ L'AGENT VOCAL NE SE LANCE PAS ICI.
+#    Il s'exécute sur LiveKit Cloud ( agent `tutor` ), déployé depuis le
+#    dossier `agent/`. Le profile `voice` de ce fichier est donc supprimé.
 #
-# REDIS EST CÂBLÉ ( lot D de ROADMAP.md, ADR-006bis ) : `api` et
-# `worker` lisent REDIS_URL et partagent le même cache. Si le service
-# est absent ou injoignable, le code retombe sur le cache mémoire
-# ( TTLCache ) — le cache n'est pas une source de vérité.
+# REDIS EST CÂBLÉ ( lot D de ROADMAP.md, ADR-006bis ) : `api` lit
+# REDIS_URL et l'utilise comme cache. Si le service est absent ou
+# injoignable, le code retombe sur le cache mémoire ( TTLCache ) — le
+# cache n'est pas une source de vérité.
 #
 # ---------------------------------------------------------------------------
 # Usage
@@ -40,7 +37,6 @@
 #   docker compose up -d                    # db + api + redis (le minimum)
 #   docker compose --profile cache up -d    # + interface Redis Insight (localhost:5540)
 #   docker compose --profile full   up -d    # + front Vite
-#   docker compose --profile voice  up -d    # + worker LiveKit
 #   docker compose logs -f api
 #   docker compose exec db psql -U agent_tutor -d agent_tutor
 #   docker compose down                     # garde les données
@@ -96,14 +92,11 @@ services:
       # Ces 4 variables ÉCRASENT backend/.env : sans ça, le conteneur
       # pointerait sur la base Neon de production depuis ta machine.
       DATABASE_URL: postgresql+psycopg://agent_tutor:agent_tutor@db:5432/agent_tutor
-      # Cache partagé API ↔ worker ( lot D ). Le service `redis` est
-      # dans le réseau Compose — cette URL est interne et ne fuit pas.
       REDIS_URL: redis://redis:6379/0
       AUTH_MODE: dev
       # Origine REÇUE par le navigateur, pas l'URL interne du conteneur :
       # le CORS compare l'en-tête Origin du navigateur à cette valeur.
       ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
-      RUN_AS_WORKER: ""
       PORT: "8000"
     ports:
       - "8000:8000"
@@ -122,49 +115,10 @@ services:
     pull_policy: build
 
   # -------------------------------------------------------------------------
-  # worker — rôle vocal ( LiveKit AgentServer ). MÊME image que `api`.
-  # D'où `command:` explicite plutôt qu'un `dockerCommand:`.
-  # -------------------------------------------------------------------------
-  worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: agent-tutor-worker
-    profiles: ["voice"]
-    restart: unless-stopped
-    env_file:
-      - path: ./backend/.env
-        required: false
-    environment:
-      DATABASE_URL: postgresql+psycopg://agent_tutor:agent_tutor@db:5432/agent_tutor
-      # MÊME cache que l'API : c'est le point du lot D ( l'invalidation
-      # côté API doit être vue par le worker vocal ).
-      REDIS_URL: redis://redis:6379/0
-      AUTH_MODE: dev
-      # `RUN_AS_WORKER=1` est ce que le CMD du Dockerfile teste pour
-      # choisir son rôle. Sans lui, ce service lancerait un DEUXIÈME
-      # uvicorn au lieu du worker.
-      RUN_AS_WORKER: "1"
-      PORT: "8000"
-    command: ["python", "-m", "app.infrastructure.livekit.worker_main"]
-    ports:
-      # 8001 → 8000 : le worker expose son /healthz sur le même port que
-      # l'API. Sans port écouté, un orchestrator le juge inactif.
-      - "8001:8000"
-    volumes:
-      - mcpdata:/app/data
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  # -------------------------------------------------------------------------
-  # redis — cache partagé API ↔ worker ( ADR-006bis, lot D ).
-  # En service par défaut : les deux rôles en dépendent via depends_on.
+  # redis — cache de l'API ( ADR-006bis, lot D ).
+  # En service par défaut : `api` en dépend via depends_on.
   # Si le service tombe, le code retombe sur le cache mémoire ( base.py :
-  # « le cache n'est PAS une source de vérité » ) — l'app ne casse pas,
-  # elle perd seulement la cohérence inter-processus jusqu'à reconnexion.
+  # « le cache n'est PAS une source de vérité » ) — l'app ne casse pas.
   # -------------------------------------------------------------------------
   redis:
     image: redis:7-alpine

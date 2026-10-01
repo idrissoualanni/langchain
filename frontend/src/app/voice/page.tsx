@@ -263,7 +263,7 @@ export default function VoicePage() {
 
   // Token LiveKit avec renouvellement automatique avant expiration
   // ( sinon le client boucle en 401 /rtc/v1/validate au-delà d'1 heure ).
-  const { data: tokenData, loading, error } = useLiveKitToken("voice");
+  const { data: tokenData, loading, error } = useLiveKitToken();
   const token = tokenData?.token ?? "";
   const url = tokenData?.url ?? "";
   const roomName = tokenData?.roomName ?? "";

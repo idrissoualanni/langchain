@@ -21,14 +21,17 @@ graph TB
     LKUI["@livekit/components-react<br/>WebRTC voix"]
   end
 
-  subgraph BE["Services métier — Render · FastAPI · 2 services, 1 image"]
+  subgraph BE["Services métier — Render · FastAPI · 1 service, 1 rôle"]
     API["api/ · ~90 routes<br/>CORS middleware · AppError"]
     CORE["auth-core · bibliothèque partagée<br/>verify_token · get_current_user · require_admin<br/>vérification locale, aucun appel réseau"]
     ORCH["graph/main/ · StateGraph<br/>17 nodes · 5 sous-graphes"]
     AG["services/agent/<br/>runner + gateway LLM"]
     T["tools/ · 6 familles · all_tools"]
     INF["infrastructure/<br/>database · livekit · mcp · sandbox · cache"]
-    W["worker · livekit/worker_main.py<br/>AgentServer — session vocale"]
+  end
+
+  subgraph LKCLOUD["Agent vocal — LiveKit Cloud · projet live · eu-central"]
+    AGENT["agent/ · projet Python autonome<br/>agent.py · config.py · session_factory.py<br/>AgentSession STT→LLM→TTS"]
   end
 
   subgraph AUTH["Service d'authentification — Render · autonome (cible multiservice)"]
@@ -47,7 +50,7 @@ graph TB
 
   subgraph CACHE["Cache"]
     TTLC["TTLCache in-process<br/>ttl.py · 300s"]
-    RDS[("Redis<br/>partagé API ↔ worker")]
+    RDS[("Redis<br/>cache de l'API")]
   end
 
   subgraph EXT["Externes"]
@@ -66,24 +69,23 @@ graph TB
   PROJ --> NEO
   API -.->|"import"| CORE
   ORCH -.->|"import"| CORE
-  W -.->|"import"| CORE
   UI <-->|"WebRTC"| LKC
   LKUI -.->|"token via /api/livekit/token"| API
+  API -->|"dispatch agent/start"| LKC
   API --> ORCH --> AG
   ORCH -.->|"dispatch conditionnel"| SG["subgraphs<br/>coding·document·problem<br/>research·video"]
   AG --> T
   AG --> INF
   ORCH --> INF
-  W --> AG
-  W --> INF
   INF --> NEO
   INF --> S3
   INF --> TTLC
   TTLC -.->|"migration planifiée"| RDS
-  W -.->|"même clés, autre process"| RDS
+  AGENT <-->|"WebRTC · dispatch"| LKC
+  AGENT -.->|"HTTP /api/agent-memory/*<br/>X-Service-Secret"| API
+  AGENT --> INF2
   AG --> OLL
   INF --> OLE
-  W --> LKC
   LKC --> INF2
   T --> TAV
   INF --> LS
@@ -91,14 +93,13 @@ graph TB
 
 ### Le point clé de l'architecture
 
-`backend/render.yaml` déploie **deux services depuis la même image Docker** :
+`backend/render.yaml` ne déclare **qu'un seul service** :
 
 | Service | Commande | Rôle |
 |---|---|---|
-| `agent-tutor-api` | uvicorn (défaut) | API HTTP, orchestration LangGraph, SSE |
-| `agent-tutor-worker` | `python -m app.infrastructure.livekit.worker_main` | Sessions vocales LiveKit AgentServer |
+| `agent-tutor-api` | uvicorn (défaut) | API HTTP, orchestration LangGraph, SSE, jetons + dispatch LiveKit |
 
-Conséquence structurante : **les deux processus lisent et écrivent les mêmes tables mais ont des mémoires distinctes.** C'est ce qui rend le cache local incohérent (voir §6) et c'est ce qui justifie Redis.
+L'agent vocal n'est **pas** dans cette image : il est déployé sur **LiveKit Cloud** (agent `tutor`, projet `live`, région `eu-central`) depuis le dossier `agent/`, qui est un projet Python autonome. Conséquence structurante : **l'API ne partage plus sa mémoire de processus avec un agent** — elle l'expose en HTTP (`/api/agent-memory/*`, en-tête `X-Service-Secret`). Le cache local est donc à nouveau cohérent (voir §6) ; Redis reste un optimisation, plus une obligation. Voir `DECISIONS.md` ADR-026.
 
 ## 3. Couches backend
 
@@ -129,7 +130,7 @@ backend/app/
 ├── repositories/            Accès données. SQL ici, PAS dans api/
 ├── infrastructure/
 │   ├── database/            connections · schema · persistence · threads · users
-│   ├── livekit/             worker vocal (12 fichiers, 1 983 lignes)
+│   ├── livekit/             capture d'écran + jetons (3 fichiers)
 │   ├── mcp/                 registry + toolset + servers (calendar, filesystem)
 │   ├── sandbox/             executor de code
 │   ├── cache/ttl.py         Cache in-process
@@ -253,16 +254,16 @@ Décision prise le 2026-09-29, consignée dans `DECISIONS.md` ADR-002.
 
 État des caches :
 
-| Cache | Emplacement | TTL | Partagé API ↔ worker (lot D) |
+| Cache | Emplacement | TTL | Backend |
 |---|---|---|---|
-| Mémoire utilisateur (profil + faits) | `services/memory/memory.py:50` | 300 s | ✅ via Redis — sinon repli mémoire |
+| Mémoire utilisateur (profil + faits) | `services/memory/memory.py:50` | 300 s | ✅ via Redis si `REDIS_URL` — sinon repli mémoire |
 | Registre des matières | `subjects/registry.py` | illimité + invalidation manuelle | ❌ non converti (peu de trafic) |
 | Engine knowledge (lru) | `services/knowledge/store.py:44` | illimité | ❌ par choix (singleton immuable) |
 | Engines DB (singletons) | `infrastructure/database/connections.py:198,208` | illimité | ❌ par construction |
 
-### 6.2 Le défaut que Redis corrige
+### 6.2 Le défaut que Redis corrige — et qui n'existe plus
 
-`ttl.py:11-14` justifie l'absence de Redis par « un seul process ». **Cette prémisse est fausse** : `render.yaml` déploie deux services.
+Historique : `ttl.py:11-14` justifiait l'absence de Redis par « un seul process », prémisse **fausse** tant que `render.yaml` déployait deux services :
 
 ```
 1. L'utilisateur modifie son profil depuis l'UI
@@ -273,11 +274,13 @@ Décision prise le 2026-09-29, consignée dans `DECISIONS.md` ADR-002.
    pendant 5 minutes. Aucun log, aucune erreur.
 ```
 
-Ce défaut est **invisible en développement local** (un seul process), donc il ne sera pas trouvé par les tests.
+Ce défaut était **invisible en développement local** (un seul process), donc il ne pouvait pas être trouvé par les tests.
 
-### 6.3 Implémentation — lot D (2026-09-30)
+**Depuis ADR-026, l'agent vit sur LiveKit Cloud et n'a plus de cache local** : il lit la mémoire par HTTP (`/api/agent-memory/*`) et n'en possède aucune copie. Il n'y a donc **plus qu'un seul cache en mémoire**, celui de l'API, et une invalidation est immédiatement visible de tous. Le scénario ci-dessus est devenu impossible.
 
-`[F]` Le défaut §6.2 est traité : le cache mémoire utilisateur passe par `factory.get_cache` dans les **deux** processus (l'API et le worker vocal lisent le même backend). Si `REDIS_URL` + package `redis` sont disponibles, l'invalidation déclenchée par l'API atteint le worker immédiatement. Le fournisseur reste libre (URL `rediss://` compatible Upstash / Layerbase) — voir `DECISIONS.md` ADR-006bis.
+### 6.3 Redis reste une optimisation, plus une obligation
+
+`[F]` Le lot D (2026-09-30) reste en place et fonctionne : le cache mémoire utilisateur passe par `factory.get_cache`, et si `REDIS_URL` + le package `redis` sont disponibles, l'invalidation atteint immédiatement tout client HTTP du backend. Ce que Redis **ne** fait plus : propager une invalidation à un processus worker, puisqu'il n'y en a plus. Le fournisseur reste libre (URL `rediss://` compatible Upstash / Layerbase) — voir `DECISIONS.md` ADR-006bis (contrat toujours valide) et ADR-026 (motif caduc).
 
 **Ce qui ne sera jamais mis en cache** (décision déjà écrite dans `memory.py:48-49`) : les résultats LLM, et les états de thread — le checkpointer Postgres est la seule source de vérité.
 
@@ -463,9 +466,9 @@ Vercel (région `fra1`), build Vite, sortie `frontend/dist`.
 |---|---|
 | Vercel | Front statique — rewrite `/api` supprimé (EX-4), tout passe par l'URL absolue `VITE_API_URL` |
 | Render `agent-tutor-api` | API HTTP, healthcheck `/api/health` |
-| Render `agent-tutor-worker` | Worker vocal, healthcheck `/healthz` (200 seulement si enregistré auprès de LiveKit) |
+| LiveKit Cloud (projet `live`, région `eu-central`) | Agent vocal `tutor` — déployé depuis `agent/`, scalable et payé à l'usage |
 
-Les credentials LiveKit **doivent être partagés** entre l'API et le worker : sinon le dispatch créé n'est jamais réclamé.
+L'API est la seule à détenir les credentials LiveKit : elle crée le dispatch (`POST /api/livekit/agent/start`). **L'agent Cloud n'a aucun credential à partager** — il s'enregistre lui-même auprès de LiveKit avec son propre `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` ( secrets de `agent/.env.local`, injectés au déploiement via `--secrets-file` ). Le piège décrit avant ADR-026 — deux jeux de credentials qui divergent en silence et un dispatch jamais réclamé — a disparu par construction.
 
 `render.yaml` se déclare « source de vérité **en plus** du dashboard, le dashboard gagne ». Toute modification de secret se fait donc dans les deux endroits, ou dans le dashboard seul.
 

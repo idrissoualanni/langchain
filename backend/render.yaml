@@ -6,8 +6,9 @@
 #    changement de commande, de plan, de healthcheck ), saisissez-la
 #    DANS LE DASHBOARD — ce fichier documente l'état attendu.
 #
-# Une seule image Docker ( ./Dockerfile ), deux rôles selon RUN_AS_WORKER.
-# Plan free : 512 Mo de RAM par service, région frankfurt.
+# Rôle unique : serveur web. L'agent vocal n'est plus dans cette image —
+# il est déployé sur LiveKit Cloud ( agent `tutor`, projet `live` ).
+# Plan free : 512 Mo de RAM, région frankfurt.
 
 services:
   # --------------------------------------------------------------------------
@@ -24,9 +25,6 @@ services:
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
-      # Rôle : API ( pas le worker ).
-      - key: RUN_AS_WORKER
-        value: ""
       # Backend.
       - key: AUTH_MODE
         value: neon
@@ -70,10 +68,8 @@ services:
         sync: false
       - key: NEON_AUTH_JWKS_URL
         sync: false
-      # Cache partagé API <-> worker vocal ( ADR-006bis ). ABSENT ou vide
-      # = repli mémoire TTLCache par process ( chaque service a son
-      # cache privé → une invalidation côté API ne touche pas le worker
-      # jusqu'à la TTL de 5 min ). URL Redis managé ( Upstash, Layerbase )
+      # Cache de l'API ( ADR-006bis ). ABSENT ou vide = repli mémoire
+      # TTLCache par process. URL Redis managé ( Upstash, Layerbase )
       # saisie dans le dashboard : `sync: false`, JAMAIS commitée ici.
       - key: REDIS_URL
         sync: false
@@ -92,55 +88,3 @@ services:
         value: eu-central-1
       - key: NEON_S3_BUCKET
         value: assets
-
-  # --------------------------------------------------------------------------
-  # Worker LiveKit — le tuteur vocal.
-  #
-  # Pas de type "worker" Docker sur le plan free : on reste un web_service,
-  # mais worker_main.py ouvre UN process qui lance l'AgentServer LiveKit ET
-  # un mini-serveur /healthz sur $PORT. Sans port écouté, Render suspend le
-  # service → aucun dispatch réclamé → le frontend boucle en reconnexion.
-  # --------------------------------------------------------------------------
-  - type: web
-    name: agent-tutor-worker
-    runtime: docker
-    rootDir: backend
-    plan: free
-    region: frankfurt
-    dockerfilePath: ./Dockerfile
-    dockerCommand: python -m app.infrastructure.livekit.worker_main
-    # /healthz renvoie 200 seulement quand le worker est ENREGISTRÉ auprès
-    # de LiveKit : c'est un vrai healthcheck, pas un simple "process vivant".
-    healthCheckPath: /healthz
-    autoDeploy: true
-    envVars:
-      - key: RUN_AS_WORKER
-        value: "1"
-      # Les credentials LiveKit sont PARTAGÉS avec l'API : c'est l'API qui
-      # signe les tokens et crée les dispatchs, c'est le worker qui les
-      # réclame. Une clé différente = dispatch créé mais jamais réclamé.
-      - key: LIVEKIT_URL
-        sync: false
-      - key: LIVEKIT_API_KEY
-        sync: false
-      - key: LIVEKIT_API_SECRET
-        sync: false
-      # Modèles identiques à l'API ( source unique ).
-      - key: LIVEKIT_AGENT_STT_MODEL
-        value: deepgram/nova-3
-      - key: LIVEKIT_AGENT_LLM_MODEL
-        value: google/gemini-2.5-flash
-      - key: LIVEKIT_AGENT_TTS_MODEL
-        value: rime/coda
-      - key: LIVEKIT_AGENT_TTS_VOICE
-        value: aurelie
-      - key: LIVEKIT_AGENT_LANGUAGE
-        value: fr
-      # La mémoire du tuteur ( Faits/profil ) est lue par le worker.
-      - key: DATABASE_URL
-        sync: false
-      # Cache partagé avec l'API ( ADR-006bis ) : le worker lit profil et
-      # faits, l'API les invalide à l'écriture. SANS Redis partagé, le
-      # worker sert un profil périmé jusqu'à 5 min après une mise à jour.
-      - key: REDIS_URL
-        sync: false

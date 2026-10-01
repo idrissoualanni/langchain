@@ -95,7 +95,7 @@ Statuts possibles : `validé` · `supersédé par ADR-XXX` · `proposé` · `rej
 ### ADR-006bis — Cache partagé entre l'API et le worker vocal
 
 - **Date** : 2026-09-29 / **implémenté** 2026-09-30
-- **Statut** : **validé · implémenté (lot D)**
+- **Statut** : ~~validé · implémenté (lot D)~~ → **supersédé par ADR-026** (le worker vocal n'existe plus : il n'y a plus qu'un seul processus, donc plus rien à partager. Le contrat de cache, lui, reste entier)
 - **Contexte** : le défaut décrit ci-dessus est structurel, pas un bug d'implémentation. Le corriger sans store partagé reviendrait à supprimer le cache.
 - **Options** :
   1. Supprimer le cache — rejeté : le coût des lectures répétées sur la mémoire longue durée est réel, et le TTL reste une sécurité utile contre les invalidations oubliées.
@@ -130,7 +130,7 @@ Statuts possibles : `validé` · `supersédé par ADR-XXX` · `proposé` · `rej
 ## ADR-008 — Deux services Render depuis une seule image Docker
 
 - **Date** : 2026-09-2X
-- **Statut** : validé
+- **Statut** : ~~validé~~ → **supersédé par ADR-026** (le worker vocal est déployé sur LiveKit Cloud, il n'y a plus qu'un service Render)
 - **Contexte** : le mode vocal exige un processus Python long-vivant avec un `AgentServer`. Le même code sert aussi d'API HTTP.
 - **Options** :
   1. Un seul service qui fait les deux — rejeté : le worker consumes beaucoup de RAM (Silero VAD, ~200-300 Mo) et tuait l'API.
@@ -172,7 +172,7 @@ Statuts possibles : `validé` · `supersédé par ADR-XXX` · `proposé` · `rej
 - **Options** :
   1. VAD cloud (LiveKit Inference ou Deepgram) — rejeté : ajoute un coût par seconde de silence.
   2. **VAD local, `num_idle_processes=0`** — retenu.
-- **Décision** : `AgentServer(num_idle_processes=0)` (`infrastructure/livekit/server.py:62`). Aucun agent préchargé ; le worker en lance un à la demande, avec un cold start de quelques secondes. `vad=silero.VAD.load()` est appelé dans `build_session()` (`session.py:168`), donc seulement quand un job existe.
+- **Décision** : aucun agent préchargé ; l'agent en lance un à la demande, avec un cold start de quelques secondes. `vad=silero.VAD.load()` est appelé dans `build_session()`, donc seulement quand un job existe. **Depuis ADR-026 ce code vit dans `agent/session_factory.py` (projet autonome `agent/`), plus dans `backend/app/infrastructure/livekit/`.**
 - **Conséquences** : le cold start de quelques secondes est accepté pour un tuteur vocal. Les logs LiveKit sont montés à `ERROR` (`agent.py:30-45`) parce que leur formatage synchrone bloquait la boucle audio jusqu'à 17 secondes sur le CPU partagé de Render — un défaut entendu en production.
 - **Revu si** : le projet passe au plan Render payant (mémoire plus large) ou si le cold start devient perceptible par les utilisateurs.
 
@@ -304,9 +304,9 @@ Statuts possibles : `validé` · `supersédé par ADR-XXX` · `proposé` · `rej
   1. **Ne rien faire** — rejeté : la décision ADR-002 a retiré un filet de sécurité sans le remplacer. Elle a créé un risque (données de production en local) plus grave que celui qu'elle supprimait.
   2. **Un Postgres local seul, backend hors conteneur** — écarté : simple, mais ne reproduit pas la contrainte qui compte, à savoir les **2 processus** de `render.yaml` (API + worker vocal). C'est précisément elle qui a produit le défaut de cache documenté en ADR-006bis.
   3. **`docker-compose.yml` reproduisant la topologie de prod** — retenu.
-- **Décision** : `docker-compose.yml` à la racine, 5 services — `db` (`pgvector/pgvector:pg16`) et `api` par défaut ; `worker`, `redis`, `front` sous profils. Une seule image Docker, deux rôles via `RUN_AS_WORKER`, exactement comme `render.yaml`.
+- **Décision** : `docker-compose.yml` à la racine, 4 services — `db` (`pgvector/pgvector:pg16`) et `api` par défaut ; `redis` et `front` sous profils. Le service `worker` et le profil `voice` ont été supprimés avec ADR-026 : l'agent vocal n'a rien à lancer en local, il tourne sur LiveKit Cloud.
 - **Choix non évidents, et leur raison** :
-  - Le worker est **sous profil**, pas par défaut : il s'inscrit auprès de LiveKit Cloud et, avec de vraies credentials, peut réclamer de vrais dispatchs.
+  - Le worker est **supprimé** (il était sous profil, pas par défaut : il s'inscrivait auprès de LiveKit Cloud et pouvait, avec de vraies credentials, réclamer de vrais dispatchs).
   - `redis` est **déclaré mais sous profil** : le contrat de cache n'existe pas encore (ADR-019). Déclarer un service que le code ignore donne l'illusion d'une architecture distribuée — c'est précisément le crime que ce projet s'efforce d'éviter ailleurs.
   - `DATABASE_URL` est surchargée dans `environment:` et pas seulement dans `env_file` : sans surcharge, le conteneur hériterait de l'URL Neon du `.env` local.
   - Deux correctifs `vite.config.ts` ont été nécessaires au service `front` : `strictPort: true` (sinon Vite décale sur 5174 et le CORS du backend, qui n'autorise que 5173, rejette tout en silence) et `VITE_DEV_API_TARGET` (le proxy était codé en dur sur `localhost:8000`, qui désigne le conteneur Vite lui-même).
@@ -384,3 +384,27 @@ Statuts possibles : `validé` · `supersédé par ADR-XXX` · `proposé` · `rej
 - **Décision** : nouvelle route `PUT /api/admin/users/{user_id}/role` dans `backend/app/api/admin/users.py`, montée sans préfixe supplémentaire (préfixe interne `/api/admin/users`), `Depends(require_admin)`, 404 si cible inconnue, 422 si auto-modification, log `USER_ROLE_SET` existant réutilisé via `users_db.set_user_role`.
 - **Conséquences** : la promotion/rétrogradation devient auditable (log événement), testable (Postman UR1), et consommable par une future page admin sans réouvrir le resolver. L'ADR-023 reste inchangé côté runtime : le rôle lu en base est le rôle appliqué.
 - **Revu si** : un mécanisme multi-rôles plus riche (ROLE, RBAC par ressource) remplace un jour le couple `admin`/`user`.
+
+## ADR-026 — L'agent vocal vit sur LiveKit Cloud, plus de worker dans l'image backend
+
+- **Date** : 2026-10-01
+- **Statut** : validé · implémenté
+- **Contexte** : le worker vocal (`agent-tutor-worker`) était un service Render `free` de 512 Mo qui hébergeait un `AgentServer` LiveKit, avec une cold start de quelques secondes à chaque job, un VAD Silero chargé en mémoire (~200-300 Mo) et un piège de conception fragile : **les credentials LiveKit devaient être identiques entre l'API et le worker**, faute de quoi le dispatch créé par l'API n'était jamais réclamé — en silence, sans log d'erreur. Deux services, deux quotas de plan gratuit, une RAM divisée par deux, et un pipeline de déploiement local (Docker) devenu inutilisable pour tester quoi que ce soit.
+- **Options** :
+  1. **Rien changer** — rejeté : le piège des credentials partagés et la RAM divisée sont structurels, pas des bugs.
+  2. Passer le worker au plan payant — écarté : ne corrige aucun des deux défauts, et ça coûte de l'argent.
+  3. **Agent managé LiveKit Cloud, dossier `agent/` autonome** — retenu.
+- **Décision** : l'agent est déployé sur **LiveKit Cloud** (agent `tutor`, projet `live`, région `eu-central`) via `lk agent deploy`, depuis le dossier **`agent/`** qui est un **projet Python autonome** (`agent.py`, `config.py`, `session_factory.py`, et à terme `memory_tools.py`). Raison structurelle : le contexte de build distant LiveKit ne peut être **qu'un seul dossier**, donc toute référence `../backend/app` échoue — d'où l'interdiction de dupliquer `backend/app/` dans `agent/`. Conséquences en chaîne :
+  - `backend/app/infrastructure/livekit/` est réduit à `browser.py` + `constants.py` + `token.py` (capture d'écran et jetons). Les 9 fichiers du worker (`worker_main.py`, `server.py`, `session.py`, `agent.py`, `errors.py`, `memory_tools.py`, `config.py`, `transcript.py`, `gradium-marius.wav`) sont supprimés.
+  - `render.yaml` ne déclare **qu'un** service ; le drapeau `RUN_AS_WORKER` disparaît, ainsi que le healthcheck `/healthz` et la duplication des credentials.
+  - `Dockerfile` a un **rôle unique** : `CMD exec python -m uvicorn app.main:app`.
+  - **Les outils mémoire passent en HTTP** : l'agent appelle `GET`/`POST /api/agent-memory/{user_id}/...` sur l'API, authentifié par un en-tête `X-Service-Secret`. `services/memory/memory.py` (985 lignes) n'est **pas** porté dans `agent/` — une seule implémentation de la mémoire, dans le backend.
+  - **La source de vérité du prompt** devient `agent/config.py::BASE_INSTRUCTIONS` ; le prompt du backend a été retiré.
+- **Conséquences** :
+  - **ADR-006bis devient caduc dans son motif** (plus de deux processus → plus de cache à partager), mais **son contrat reste valide** : `CacheBackend` / `TTLCache` / `RedisBackend` continuent de fonctionner, `REDIS_URL` reste déclarée sur l'API.
+  - **ADR-008 est supersédé** : un seul service Render, une seule image, un seul rôle.
+  - La RAM de l'API n'est plus divisée ; le worker ne consomme plus de quota de plan gratuit.
+  - Le piège du partage de credentials disparaît **par construction** : il n'y a plus qu'un seul jeu de credentials côté serveur, celui de l'API, et l'agent porte le sien.
+  - Coût : le démarrage à froid dépend de LiveKit et non plus de Render, et le service managé entre dans la facture à l'usage.
+  - Conséquence de test : **plus aucun build local possible** (Docker ne démarre pas sur la machine de dev) — `python -m compileall -q app ../agent` est la seule vérification statique disponible en local, d'où son ajout au job « Syntax check » de la CI.
+- **Revu si** : LiveKit Cloud devient plus cher que l'hébergement du worker (politique de prix inchangée), ou si le projet doit rester 100 % auto-hébergé sans dépendance à un service managé.

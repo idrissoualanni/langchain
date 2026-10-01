@@ -43,8 +43,12 @@ const FOREGROUND_REFRESH_WITHIN_MS = 2 * 60_000;
 /**
  * Récupère un token LiveKit et le renouvelle avant expiration.
  * Retourne { data, loading, error } — prêt pour LiveKitRoom.
+ *
+ * Le corps de la requête est vide : le backend ( `TokenRequest` ) ne
+ * connaît que `room_name` / `user_id` et déduit la room de la session
+ * — un `purpose` envoyé ici était silencieusement ignoré.
  */
-export function useLiveKitToken(purpose: "voice" | "video" = "video") {
+export function useLiveKitToken() {
   const [data, setData] = useState<TokenState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +67,7 @@ export function useLiveKitToken(purpose: "voice" | "video" = "video") {
       try {
         const res = await apiFetch<LiveKitTokenResponse>("/api/livekit/token", {
           method: "POST",
-          body: JSON.stringify(purpose === "voice" ? { purpose: "voice" } : {}),
+          body: JSON.stringify({}),
         });
         if (!alive) return;
         setData({
@@ -109,7 +113,7 @@ export function useLiveKitToken(purpose: "voice" | "video" = "video") {
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [purpose]);
+  }, []);
 
   // Identité stable : sans ça chaque re-render ( ex: le chrono de
   // session qui tick toutes les secondes ) passe un nouvel objet `data`

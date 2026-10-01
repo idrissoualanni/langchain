@@ -42,18 +42,17 @@ Statut au 2026-09-29, commit `bba8c36` ; **lot A committé le 2026-09-30**.
 
 **Pourquoi c'était nécessaire** : le repli SQLite a été retiré le 2026-09-29 (ADR-002). Conséquence directe et non anticipée : le développeur local n'avait plus **aucune** base. Les options restantes étaient Neon depuis la machine — donc écrire sur les données de production en cas d'erreur — ou ne rien faire. Le compose comble ce trou.
 
-**Contenu** — 5 services, 2 par défaut :
+**Contenu** — 4 services, 2 par défaut :
 
 | Service | Profil | Rôle |
 |---|---|---|
 | `db` | *(défaut)* | `pgvector/pgvector:pg16` — même moteur que Neon, extension vectorielle comprise |
 | `api` | *(défaut)* | uvicorn, `DATABASE_URL` pointant sur `db`, `AUTH_MODE=dev` |
-| `worker` | `voice` | worker LiveKit, **même image**, `RUN_AS_WORKER=1` |
-| `redis` | `cache` | cache partagé — **déclaré, pas encore câblé** (lot D) |
+| `redis` | `cache` | cache de l'API — **déclaré, pas encore câblé** (lot D) |
 | `front` | `full` | Vite en conteneur, sur le réseau Compose |
 
 **Décisions non évidentes, et pourquoi** :
-- Le worker est sous profil, pas par défaut : il s'inscrit auprès de **LiveKit Cloud**. Avec de vraies credentials, il peut réclamer de vrais dispatchs et ouvrir une session vocale payante.
+- Le service `worker` et le profil `voice` ont été **supprimés** (ADR-026) : l'agent vocal est déployé sur **LiveKit Cloud** depuis le dossier `agent/`, pas dans cette image. Il ne se lance donc pas ici.
 - `redis` est sous profil pour la même raison de rigueur : le contrat de cache n'existe pas encore (ADR-019). Déclarer un service que le code ignore crée l'illusion d'une architecture distribuée.
 - `DATABASE_URL` est surchargée dans `environment:`, pas seulement dans `env_file` — sans ça, le conteneur pointerait sur la **base Neon de production** depuis la machine du développeur.
 - `strictPort: true` ajouté à `vite.config.ts` : sinon Vite bascule sur 5174 si 5173 est occupé, et le CORS du backend (qui n'autorise que 5173) rejette tout en silence.
@@ -140,7 +139,7 @@ Le dépôt est committé en **B**, mais `ALLOWED_ORIGINS` sur Render est en A-va
 
 **Périmètre** : limiter `POST /api/chat`, `GET /api/chat/stream`, `POST /api/livekit/token`, `POST /api/livekit/agent/start`. Limite par `user_id` résolu depuis le token, pas par IP — une IP partagée (entreprise, lycée) ne doit pas pénaliser un utilisateur. Le rate limiter à mémoire distributed **dépend du lot D** : s'il est local, il a le même défaut que le cache actuel.
 
-**Critère de réussite** : une série de 10 requêtes au-delà du quota renvoie 429, et le compteur est partagé entre l'API et le worker.
+**Critère de réussite** : une série de 10 requêtes au-delà du quota renvoie 429, et le compteur est partagé entre l'API et l'agent vocal.
 
 ### B5 — Rétablir le blocage de la CI, par étapes
 
@@ -173,7 +172,7 @@ Le dépôt est committé en **B**, mais `ALLOWED_ORIGINS` sur Render est en A-va
 
 > ⚠ **La CI ne peut pas détecter `app/graph/main.py`** : `python -c "import app.graph.main"` résout le **package**, donc l'import passe. C'est exactement le genre de code mort que le smoke test ne voit pas.
 
-**Preuve que la suppression est sans effet** — 8 fichiers font `from app.graph.main import get_agent` : `app/main.py:9`, `app/config.py:399`, `app/api/activity.py:82`, `app/infrastructure/livekit/transcript.py:22`, `app/services/activity/store.py:32,117`, `app/services/agent/runner.py:93,163,428,589`. Or `get_agent` **n'existe pas** dans le shim : si le shim était résolu, ces 8 imports lèveraient `ImportError`. L'application tourne en prod → le shim n'a jamais été résolu.
+**Preuve que la suppression est sans effet** — 7 fichiers font `from app.graph.main import get_agent` : `app/main.py:9`, `app/config.py:399`, `app/api/activity.py:82`, `app/services/activity/store.py:32,117`, `app/services/agent/runner.py:93,163,428,589`. (Il y en avait 8 : `app/infrastructure/livekit/transcript.py:22` a disparu avec le worker vocal, ADR-026.) Or `get_agent` **n'existe pas** dans le shim : si le shim était résolu, ces imports lèveraient `ImportError`. L'application tourne en prod → le shim n'a jamais été résolu.
 
 **Suppression vérifiée le 2026-09-29** : après `git rm`, `from app.graph.main import get_agent, compile_main_graph, MainState, build_graph` et `from app.graph.main.state import CustomAgentState` importent correctement — le package exporte ces 5 symboles via `app/graph/main/__init__.py`.
 
@@ -256,11 +255,11 @@ Le dépôt est committé en **B**, mais `ALLOWED_ORIGINS` sur Render est en A-va
 
 ## Lot D — Cache partagé · 🔴
 
-**Objectif** : que l'API et le worker vocal voient la même donnée au même moment.
+**Objectif** : que l'API et tout client de la mémoire voient la même donnée au même moment. **Motif de cadence caduc avec ADR-026** : l'agent Cloud ne possède aucun cache local (il lit la mémoire en HTTP), donc il n'y a plus de second cache à désynchroniser. Le **contrat** `CacheBackend` reste valide et utile.
 
 **Fait (2026-09-30) — implémentation complète** : contrat `CacheBackend` (`base.py`), backends mémoire `TTLCache` + Redis (`redis_backend.py`), `factory.get_cache` branché sur la mémoire utilisateur, `REDIS_URL` câblée (compose + Render, jamais commitée), `redis>=5.0` dans `requirements.txt`. ADR-006bis et ADR-019 mis à jour dans `DECISIONS.md` ; ARCHITECTURE.md §6 reflète l'état implémenté. D4 (métriques hit/miss), D5 (bascule fournisseur) et D6 (rate limiting, dépend de B4) restent ouverts.
 
-La séquence du défaut corrigé est décrite dans `ARCHITECTURE.md` §6.2. En une phrase : l'API invalide le cache, le worker garde l'ancien profil **5 minutes**, sans log et sans erreur — et **invisible en développement local**.
+Le défaut que Redis corrigeait est décrit comme archive dans `ARCHITECTURE.md` §6.2 : l'API invalide le cache, un worker vocal garde l'ancien profil **5 minutes**, sans log et sans erreur — **invisible en développement local**. Ce scénario est désormais impossible.
 
 ### D1 — Définir le contrat, pas le fournisseur ✅ fait (2026-09-30)
 
@@ -297,7 +296,7 @@ Trois caches visés, dans cet ordre de valeur :
 
 ### D6 — Rendre le rate limiting compatible (dépend de B4)
 
-Le rate limiter doit être **partagé** entre l'API et le worker, pour la même raison que le cache. Un limiteur local, c'est un limiteur contournable.
+Le rate limiter doit être **partagé** entre l'API et l'agent vocal, pour la même raison que le cache. Un limiteur local, c'est un limiteur contournable — et l'agent Cloud, désormais hors de l'image, ne partage aucun espace mémoire avec l'API : c'est donc devenu un vrai sujet.
 
 ---
 

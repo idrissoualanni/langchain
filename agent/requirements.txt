@@ -1,0 +1,19 @@
+# Dépendances de l'agent vocal LiveKit Cloud (projet autonome `agent/`).
+#
+# Liste MINIMALE et intentionnelle : l'agent n'a besoin que du SDK LiveKit
+# et du VAD silero. Tout le reste de l'application (API, base, outils
+# mémoire) vit sur Render et n'est pas embarqué dans l'image de l'agent.
+#
+# livekit-agents 1.8.x fournit nativement `inference.STT/LLM/TTS` et
+# `TurnHandlingOptions` : aucun plugin STT/LLM/TTS supplémentaire n'est
+# nécessaire (LiveKit Inference). Seuls les STT locaux exigeraient un
+# plugin (ex. livekit-plugins-deepgram).
+#
+# Ne pas épingler langfuse ici tant que la tracing n'est pas recâblée sur
+# l'agent Cloud : langfuse>=4.16 exige opentelemetry-api>=1.45, en conflit
+# avec livekit-agents<1.9 (cf. commentaire équivalent dans
+# backend/requirements.txt).
+
+livekit-agents>=1.8.2
+livekit-plugins-silero>=1.8.2
+livekit-api

@@ -208,6 +208,22 @@ Le contenu binaire vit dans **Neon S3** ; la base ne stocke que les métadonnée
 
 > Le partage d'écran est **non critique** : son échec est publié comme `screen_capture_unavailable` et la voix continue.
 
+**`POST /api/livekit/screen-share/notify`** — sans corps : `enabled` est un **paramètre de query** (`?enabled=true|false`), pas du JSON. La room est déduite de la session. Réponse `{ "status": "sharing" | "stopped", "room": … }`.
+
+**`GET /api/livekit/agent/status`** — sans paramètre : la room est déduite de la session et le dispatch actif est cherché côté LiveKit Cloud pour l'agent `tutor`. Réponse 200 :
+
+```json
+{
+  "status": "started",
+  "room": "session_<user_id>",
+  "agent": "tutor",
+  "dispatch_id": "AD_…",
+  "active_count": 1
+}
+```
+
+Ne lève **jamais** de 503 — un agent absent (`status: "stopped"`) est un état normal, pas une erreur. Non consommé par le frontend aujourd'hui : conservé pour le diagnostic et l'observabilité de la session.
+
 ### Transcription — `features/transcription/api.py`
 
 | Rôle | Accès |

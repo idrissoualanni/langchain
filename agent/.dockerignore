@@ -1,0 +1,22 @@
+# Contexte Docker = dossier `agent/` uniquement.
+# Les secrets sont injectés par le CLI LiveKit au moment du déploiement
+# (--secrets-file .env.local) : ils ne doivent JAMAIS entrer dans l'image,
+# car elle est conservée et réutilisée par les déploiements suivants.
+
+.env.local
+.env
+.env.*
+.venv/
+venv/
+
+__pycache__/
+*.py[cod]
+*.pyd
+
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+*.log
+output.txt
+.DS_Store
