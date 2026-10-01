@@ -96,3 +96,7 @@ opencv-python-headless>=4.8
 # requis en dur : sans lui, factory.get_cache retombe en cache mémoire
 # ( loggué, pas bloquant ). Client officiel, >=5.0 requiert Python 3.8+.
 redis>=5.0
+
+# Rate limiting — slowapi avec backend Redis ( même REDIS_URL que le cache ).
+# Global 30 req/min/user + limites spécifiques sur endpoints sensibles.
+slowapi==0.1.9

@@ -43,6 +43,7 @@ from app.infrastructure.database.schema import init_schema
 from app.logging.events import log_event, setup_logging
 from app.logging.sse import sse_events
 from app.config import ALLOWED_ORIGINS
+from app.core.rate_limit import setup_rate_limiting, limiter
 
 
 @asynccontextmanager
@@ -125,6 +126,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate limiting — global 30 req/min/user + limites par endpoint sensible.
+# Backend Redis ( REDIS_URL ) si dispo, sinon mémoire. 429 formaté
+# comme les AppError {code, detail}.
+setup_rate_limiting(app)
 
 # Routes API
 app.include_router(users.router)
