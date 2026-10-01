@@ -501,7 +501,13 @@ def get_current_user(
 ) -> CurrentUser:
     """DÉPENDANCE CENTRALE — l'identité vient UNIQUEMENT d'ici."""
     token = _extract_bearer(request)
-    return _resolve_from_token(token)
+    current = _resolve_from_token(token)
+    # Peuple request.state pour le rate limiting ( app.core.rate_limit
+    # key_func _get_user_id_from_request lit request.state.current_user ).
+    # Ordre : les dépendances résolvent AVANT le décorateur @limiter.limit,
+    # donc la clé est disponible quand slowapi vérifie la limite.
+    request.state.current_user = current
+    return current
 
 
 def require_admin(

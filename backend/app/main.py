@@ -32,6 +32,7 @@ from app.api.admin import (
     observability_router as admin_observability_router,
     dashboard_router as admin_dashboard_router,
     users_router as admin_users_router,
+    mcp_router as admin_mcp_router,
 )
 from app.infrastructure.database.connections import init_db
 from app.infrastructure.database.persistence import (
@@ -99,6 +100,14 @@ async def lifespan(app: FastAPI):
     from app.observability.langfuse import shutdown_langfuse
 
     shutdown_langfuse()  # vide la file d'export Langfuse (jamais levant)
+
+    # Sessions MCP (inspector admin) — sans ça, les sous-processus
+    # stdio survivent au redémarrage du serveur.
+    # Ne leve JAMAIS : on ne bloque pas la sortie du process.
+    from app.infrastructure.mcp.session import close_all_sessions
+
+    await close_all_sessions()
+
     log_event("SERVER_STOP", message="Backend shutting down")
 
 
@@ -144,6 +153,7 @@ app.include_router(admin_monitoring_router, tags=["admin-monitoring"])
 app.include_router(admin_observability_router, prefix="/api/admin", tags=["admin-observability"])
 app.include_router(admin_dashboard_router, prefix="/api/admin", tags=["admin-dashboard"])
 app.include_router(admin_users_router, tags=["admin-users"])
+app.include_router(admin_mcp_router, prefix="/api/admin", tags=["admin-mcp"])
 
 # SSE — événements agent temps réel
 app.add_api_route(

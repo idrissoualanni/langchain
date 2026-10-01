@@ -37,6 +37,7 @@ const TracesPage = lazy(() => import('./features/admin/traces/TracesPage').then(
 const ModelsPage = lazy(() => import('./features/admin/models/ModelsPage').then((m) => ({ default: m.ModelsPage })));
 const KnowledgePage = lazy(() => import('./features/admin/knowledge/KnowledgePage').then((m) => ({ default: m.KnowledgePage })));
 const ObservabilityPage = lazy(() => import('./features/admin/observability/ObservabilityPage').then((m) => ({ default: m.ObservabilityPage })));
+const McpInspectorPage = lazy(() => import('./features/admin/mcp/McpInspectorPage').then((m) => ({ default: m.McpInspectorPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage })));
 const DocumentsPage = lazy(() => import('./pages/DocumentsPage').then((m) => ({ default: m.DocumentsPage })));
 const VideoPage = lazy(() => import('./app/video/page'));
@@ -354,6 +355,14 @@ function AppShell() {
             element={
               <AdminGate>
                 <ObservabilityPage />
+              </AdminGate>
+            }
+          />
+          <Route
+            path="/admin/mcp"
+            element={
+              <AdminGate>
+                <McpInspectorPage />
               </AdminGate>
             }
           />

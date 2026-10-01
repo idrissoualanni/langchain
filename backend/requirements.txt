@@ -29,6 +29,20 @@ langfuse==4.15.6
 ollama
 tavily-python
 
+# MCP ( Model Context Protocol ) — §39/§40/§41
+# mcp        : FastMCP + client stdio. Les serveurs calendar_server.py /
+#              filesystem_server.py sont des process Python LANCES en
+#              sous-processus ; sans ce paquet, ils ne demarrent pas et
+#              app/infrastructure/mcp/ degrade silencieusement ( warning
+#              MCP_SERVER_FAILED, on continue SANS les tools ).
+# adapters   : MultiServerMCPClient / load_mcp_tools — le pont
+#              MCP -> tools LangChain consomme par les subgraphs.
+# ABSENTS jusqu'au 2026-10-01 : la couche MCP ne fonctionnait que par
+# hasard (installes transitivement dans l'env de dev), jamais sur un
+# build propre. 1.29.0 est requis pour FastMCP run(streamable-http).
+mcp==1.29.0
+langchain-mcp-adapters==0.3.2
+
 # Realtime
 livekit-api
 # SDK Deepgram v2 : expose Deepgram() + LiveOptions utilisés par

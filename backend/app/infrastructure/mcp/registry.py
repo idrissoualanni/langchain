@@ -81,6 +81,34 @@ def _default_servers() -> dict[str, McpServerConfig]:
     scripts = _server_scripts_dir()
     agenda_script = scripts / "calendar_server.py"
     fs_script = scripts / "filesystem_server.py"
+
+    # PYTHONPATH du sous-processus (§41).
+    #
+    # Les serveurs importent `app.*` (ex. filesystem_server ->
+    # app.services.storage.mcp_files). Lancé par `python
+    # <abs>/servers/filesystem_server.py`, Python ne met QUE le dossier
+    # DU SCRIPT sur sys.path — pas le CWD — donc `import app` échoue
+    # avec ModuleNotFoundError.
+    #
+    # Ce n'est pas une contrainte de l'inspector : c'est un bug du
+    # chemin de PRODUCTION aussi. `toolset.py` construit ses
+    # `connections` avec le même command/args et le même env minimal,
+    # donc MultiServerMCPClient obtenait exactement la même erreur —
+    # le serveur filesystem n'a jamais démarré. Symptôme trompeur :
+    # `get_mcp_tools` dégrade en silence (MCP_SERVER_FAILED) et
+    # l'agent tourne sans les tools.
+    #
+    # On pose PYTHONPATH ici, dans la source unique des serveurs par
+    # défaut, pour que les DEUX consommateurs en héritent via cfg.env :
+    #   - toolset.py      : env = {**cfg.env, **run_env}
+    #   - mcp/session.py  : env_for_server(cfg, user_id)
+    #
+    # Ce n'est PAS une fuite de secret : PYTHONPATH est un chemin, et
+    # `McpServerConfig.env` reste une allowlist qui ne doit porter ni
+    # secret ni valeur d'env du process parent.
+    backend_root = _here.parents[2]
+    subprocess_env = {"PYTHONPATH": str(backend_root)}
+
     return {
         "agenda": McpServerConfig(
             name="agenda",
@@ -94,6 +122,7 @@ def _default_servers() -> dict[str, McpServerConfig]:
             allowed_workflows=["document"],
             timeout_s=20.0,
             rate_limit=10,
+            env=dict(subprocess_env),
         ),
         "filesystem": McpServerConfig(
             name="filesystem",
@@ -108,6 +137,7 @@ def _default_servers() -> dict[str, McpServerConfig]:
             allowed_workflows=["document", "coding"],
             timeout_s=20.0,
             rate_limit=20,
+            env=dict(subprocess_env),
         ),
     }
 

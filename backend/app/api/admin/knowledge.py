@@ -12,11 +12,12 @@
 # Sécurité : réservé aux admins (vérification ADMIN_EXTERNAL_IDS)
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from pydantic import BaseModel, Field
 from typing import Literal
 
 from app.auth.resolver import CurrentUser, require_admin
+from app.core.rate_limit import limiter
 from app.services.knowledge.resolver import (
     KnowledgeBaseInfo,
     KnowledgeAccessRule,
@@ -470,7 +471,12 @@ class FileUploadResponse(BaseModel):
     response_model=FileUploadResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit("10/minute")
 async def admin_upload_knowledge_file(
+    request: Request,
+    # `response` requis par le décorateur slowapi ( injection headers ),
+    # cf. commentaire dans api/chat.py.
+    response: Response,
     file: UploadFile = File(...),
     subject_id: str | None = None,
     source_label: str | None = None,

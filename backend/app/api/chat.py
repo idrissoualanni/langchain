@@ -8,7 +8,7 @@
 #     via Authorization header — JAMAIS de token en URL , §17 )
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
@@ -19,6 +19,7 @@ from app.auth.resolver import CurrentUser, get_current_user
 from app.infrastructure.database.connections import init_db
 from app.infrastructure.database.threads import get_thread, thread_belongs_to_user
 from app.logging.events import log_event
+from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -58,7 +59,14 @@ def _validate_chat(
 
 
 @router.post("", response_model=ChatResponse)
+@limiter.limit("20/minute")
 def api_chat(
+    request: Request,
+    # paramètre `response` OBLIGATOIRE pour le décorateur slowapi :
+    # sans lui, _inject_headers(None, ...) lève sur chaque requête
+    # ( la réponse finale n'étant pas une Response ). FastAPI le
+    # peuple automatiquement.
+    response: Response,
     payload: ChatRequest,
     current: CurrentUser = Depends(get_current_user),
 ) -> ChatResponse:
@@ -97,7 +105,12 @@ def api_chat(
 
 
 @router.get("/stream")
+@limiter.limit("20/minute")
 async def api_chat_stream(
+    request: Request,
+    # `response` requis par le décorateur slowapi ( injection headers ),
+    # cf. commentaire sur api_chat.
+    response: Response,
     user_id: str,
     thread_id: str,
     message: str,
