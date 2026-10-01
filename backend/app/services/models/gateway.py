@@ -1,12 +1,10 @@
 # Model Gateway — Abstraction des providers LLM (§5)
 #
 # Le gateway fournit une interface unifiée pour instancier des LLMs
-# via LiteLLM Proxy ou directement via LangChain.
+# via les providers configurés dans providers.yaml.
 #
 # Architecture :
-#   Application → Model Gateway → LiteLLM Proxy → Provider
-#                                    ↓
-#                              Ollama/OpenAI/Anthropic/etc.
+#   Application → Model Gateway → Provider Registry → Client Factory → LLM
 #
 # Utilisation :
 #   llm = get_llm_for_purpose("coding", user_id="user_123")
@@ -28,13 +26,36 @@ from langchain_core.language_models import BaseChatModel
 from app.config import (
     MODEL_PROVIDER_RETRIES,
     MODEL_REQUEST_TIMEOUT_SECONDS,
-    OLLAMA_HOST,
-    ollama_headers,
 )
+from app.services.models.provider_registry import (
+    get_provider_config,
+    resolve_base_url,
+    resolve_auth_headers,
+)
+from app.services.models.registry import get_model_config
 
 
 class ModelGatewayError(RuntimeError):
     """Erreur contrôlée du Model Gateway (résolution/instanciation)."""
+
+
+# Mapping provider_type → classe LangChain
+_LANGCHAIN_CLIENTS = {
+    "openai_compatible": "langchain_openai.ChatOpenAI",
+    "ollama": "langchain_ollama.ChatOllama",
+    "anthropic": "langchain_anthropic.ChatAnthropic",
+}
+
+
+def _import_langchain_client(provider_type: str):
+    """Importe dynamiquement la classe LangChain pour un provider."""
+    import_path = _LANGCHAIN_CLIENTS.get(provider_type)
+    if not import_path:
+        raise ModelGatewayError(f"Provider type '{provider_type}' non supporté par LangChain")
+    
+    module_path, class_name = import_path.rsplit(".", 1)
+    module = __import__(module_path, fromlist=[class_name])
+    return getattr(module, class_name)
 
 
 def get_llm_for_purpose(
@@ -47,8 +68,8 @@ def get_llm_for_purpose(
     """Obtient un LLM configuré pour un purpose donné.
 
     Utilise le Model Resolver (registry→resolver) pour déterminer le
-    modèle, puis instancie le LLM via le provider idoine. Un modèle
-    désactivé/sans capacités requises/inconnu → ModelGatewayError
+    modèle, puis instancie le LLM via le provider idoine depuis providers.yaml.
+    Un modèle désactivé/sans capacités requises/inconnu → ModelGatewayError
     explicite (jamais de silence, jamais de config bidon).
 
     Args:
@@ -90,7 +111,7 @@ def get_llm_for_purpose(
             max_tokens=max_tokens,
         )
 
-    return _get_direct_llm(
+    return _get_direct_llm_from_provider(
         config,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -126,67 +147,90 @@ def _get_litellm_llm(
     )
 
 
-def _get_direct_llm(
+def _get_direct_llm_from_provider(
     config: Any,
     temperature: float = 0.0,
     max_tokens: int | None = None,
 ) -> BaseChatModel:
-    """Instancie un LLM directement selon le provider."""
-    provider = config.provider.lower()
+    """Instancie un LLM directement selon le provider configuré dans providers.yaml."""
+    provider = get_provider_config(config.provider)
+    if provider is None:
+        raise ModelGatewayError(
+            f"Provider '{config.provider}' introuvable dans providers.yaml"
+        )
+    
+    if not provider.enabled:
+        raise ModelGatewayError(
+            f"Provider '{config.provider}' désactivé (enabled=false)"
+        )
+    
+    provider_type = provider.type.lower()
     model_name = config.model_name
-
-    if provider == "ollama":
-        from langchain_ollama import ChatOllama
-
-        headers = ollama_headers()
-        client_kwargs: dict = {"timeout": MODEL_REQUEST_TIMEOUT_SECONDS}
+    
+    # Résoudre URL et headers depuis le provider
+    base_url = resolve_base_url(provider)
+    if provider.api_path:
+        base_url = base_url.rstrip("/") + provider.api_path
+    
+    headers = resolve_auth_headers(provider)
+    
+    # Importer la classe LangChain appropriée
+    ClientClass = _import_langchain_client(provider_type)
+    
+    # Préparer les arguments communs
+    common_kwargs = {
+        "model": model_name,
+        "temperature": temperature,
+        "timeout": MODEL_REQUEST_TIMEOUT_SECONDS,
+        "max_retries": MODEL_PROVIDER_RETRIES,
+    }
+    
+    if max_tokens is not None:
+        common_kwargs["max_tokens"] = max_tokens
+    elif config.max_output_tokens is not None:
+        common_kwargs["max_tokens"] = config.max_output_tokens
+    
+    # Arguments spécifiques par provider type
+    if provider_type == "ollama":
+        # Ollama utilise base_url + client_kwargs pour headers
+        common_kwargs["base_url"] = base_url
+        client_kwargs = {}
         if headers:
             client_kwargs["headers"] = headers
-
-        return ChatOllama(
-            model=model_name,
-            base_url=OLLAMA_HOST,
-            temperature=temperature,
-            num_predict=max_tokens or config.max_output_tokens,
-            client_kwargs=client_kwargs,
-        )
-
-    elif provider == "openai":
-        from langchain_openai import ChatOpenAI
-
-        api_key = os.getenv("OPENAI_API_KEY", "")
+        if client_kwargs:
+            common_kwargs["client_kwargs"] = client_kwargs
+        # Ollama ignore api_key mais LangChain l'exige
+        common_kwargs["api_key"] = "ollama"
+    
+    elif provider_type == "openai_compatible":
+        # OpenAI-compatible (Cloudflare, OpenAI, Together, etc.)
+        common_kwargs["base_url"] = base_url
+        common_kwargs["default_headers"] = headers
+        # API key : utiliser la première trouvée dans headers Authorization
+        api_key = headers.get("Authorization", "").replace("Bearer ", "")
         if not api_key:
-            raise ModelGatewayError("OPENAI_API_KEY non configuré")
-
-        return ChatOpenAI(
-            model=model_name,
-            api_key=api_key,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            timeout=MODEL_REQUEST_TIMEOUT_SECONDS,
-            max_retries=MODEL_PROVIDER_RETRIES,
-        )
-
-    elif provider == "anthropic":
-        from langchain_anthropic import ChatAnthropic
-
-        api_key = os.getenv("ANTHROPIC_API_KEY", "")
+            api_key = "dummy"  # Sera ignoré si auth dans headers
+        common_kwargs["api_key"] = api_key
+    
+    elif provider_type == "anthropic":
+        # Anthropic utilise anthropic_api_key
+        api_key = headers.get("x-api-key") or headers.get("Authorization", "").replace("Bearer ", "")
         if not api_key:
-            raise ModelGatewayError("ANTHROPIC_API_KEY non configuré")
-
-        return ChatAnthropic(
-            model=model_name,
-            anthropic_api_key=api_key,
-            temperature=temperature,
-            max_tokens=max_tokens or config.max_output_tokens,
-            timeout=MODEL_REQUEST_TIMEOUT_SECONDS,
-            max_retries=MODEL_PROVIDER_RETRIES,
+            raise ModelGatewayError(f"Clé API Anthropic manquante pour provider '{provider.id}'")
+        common_kwargs["anthropic_api_key"] = api_key
+        if base_url != "https://api.anthropic.com":
+            common_kwargs["base_url"] = base_url
+        # Headers additionnels (ex: anthropic-version)
+        extra_headers = {k: v for k, v in headers.items() if k not in ("x-api-key", "authorization")}
+        if extra_headers:
+            common_kwargs["default_headers"] = extra_headers
+    
+    else:
+        raise ModelGatewayError(
+            f"Provider type '{provider_type}' non supporté pour instanciation LangChain"
         )
-
-    raise ModelGatewayError(
-        f"Provider inconnu '{provider}' pour le modèle '{model_name}' — "
-        "configurer le provider côté admin (jamais de fallback silencieux)"
-    )
+    
+    return ClientClass(**common_kwargs)
 
 
 def create_llm_from_config(
@@ -200,8 +244,6 @@ def create_llm_from_config(
     Un modèle inconnu OU désactivé → ModelGatewayError explicite
     (le champ `enabled` du registry est RESPECTÉ au point d'usage).
     """
-    from app.services.models.registry import get_model_config
-
     config = get_model_config(model_id, path=path)
     if not config:
         raise ModelGatewayError(f"Modèle {model_id} non configuré")
@@ -209,7 +251,7 @@ def create_llm_from_config(
     if not config.enabled:
         raise ModelGatewayError(f"Modèle {model_id} désactivé")
 
-    return _get_direct_llm(
+    return _get_direct_llm_from_provider(
         config, temperature=temperature, max_tokens=max_tokens
     )
 

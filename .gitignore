@@ -40,3 +40,4 @@ postman/
 # Collections API (client local — lutilisateur les garde hors du dépôt)
 postman/
 **/postman/
+.opencode

@@ -6,7 +6,7 @@ Architecture :
   Application → Model Registry → Model Resolver → Model Gateway → LLM
 
 Logical model IDs : default, coding, research, fast, reasoning, vision
-Providers : ollama, openai, anthropic, etc. (configurables par admin)
+Providers : ollama, openai, anthropic, etc. (configurables par admin via providers.yaml)
 """
 
 from app.services.models.schemas import ModelConfig, ModelAssignment, ModelPurposeResult
@@ -23,9 +23,17 @@ from app.services.models.resolver import (
     set_global_assignment,
     get_global_assignment,
 )
-from app.services.models.gateway import (
-    get_llm_for_purpose,
-    create_llm_from_config,
+from app.services.models.provider_registry import (
+    get_provider_config,
+    list_providers,
+    resolve_base_url,
+    resolve_auth_headers,
+)
+from app.services.models.client_factory import (
+    get_llm_client,
+    get_unified_client,
+    UnifiedLLMClient,
+    invalidate_client_cache,
 )
 
 __all__ = [
@@ -44,7 +52,14 @@ __all__ = [
     "get_model_for_subgraph",
     "set_global_assignment",
     "get_global_assignment",
-    # Gateway
-    "get_llm_for_purpose",
-    "create_llm_from_config",
+    # Provider Registry
+    "get_provider_config",
+    "list_providers",
+    "resolve_base_url",
+    "resolve_auth_headers",
+    # Client Factory
+    "get_llm_client",
+    "get_unified_client",
+    "UnifiedLLMClient",
+    "invalidate_client_cache",
 ]

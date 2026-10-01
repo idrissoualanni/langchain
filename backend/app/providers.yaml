@@ -1,0 +1,153 @@
+# Provider Registry — Configuration des providers LLM (§4-§5)
+#
+# Chaque provider définit comment se connecter à un backend LLM.
+# Les modèles dans models.yaml référencent un provider par son ID.
+#
+# Types supportés :
+#   - openai_compatible : API compatible OpenAI (Cloudflare, OpenAI, Together, etc.)
+#   - ollama            : API Ollama native (/v1 ou /api)
+#   - anthropic         : API Anthropic native
+#   - custom            : Client Python personnalisé (classe importable)
+
+providers:
+  # ──────────────────────────────────────────────────────────────
+  # Ollama (local ou cloud)
+  # ──────────────────────────────────────────────────────────────
+  ollama:
+    type: "ollama"
+    display_name: "Ollama"
+    enabled: true
+    # Base URL : soit via env OLLAMA_HOST, soit valeur par défaut
+    base_url_env: "OLLAMA_HOST"
+    base_url_default: "http://localhost:11434"
+    # Ollama utilise /v1 pour l'API OpenAI-compatible
+    api_path: "/v1"
+    # Auth : header Authorization: Bearer <key> (optionnel pour Ollama)
+    auth:
+      type: "bearer"
+      api_key_env: "OLLAMA_API_KEY"
+      required: false
+    # Headers additionnels
+    extra_headers_env: "OLLAMA_EXTRA_HEADERS"  # JSON string optionnel
+    # Modèles supportés (pour validation)
+    supported_models: []
+    # Capacités par défaut pour les modèles de ce provider
+    default_capabilities:
+      supports_tools: true
+      supports_structured_output: false
+      supports_vision: false
+      supports_audio: false
+    # Timeout et retry
+    timeout_seconds: 120
+    max_retries: 2
+
+  # ──────────────────────────────────────────────────────────────
+  # Cloudflare Workers AI (OpenAI-compatible)
+  # ──────────────────────────────────────────────────────────────
+  cloudflare:
+    type: "openai_compatible"
+    display_name: "Cloudflare Workers AI"
+    enabled: true
+    # URL de base : soit explicite, soit construite depuis CF_ACCOUNT_ID
+    base_url_env: "CF_AI_BASE_URL"
+    base_url_template: "https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/v1"
+    base_url_vars:
+      CF_ACCOUNT_ID: "CF_ACCOUNT_ID"
+    api_path: ""
+    auth:
+      type: "bearer"
+      api_key_env: "CF_API_TOKEN"
+      required: true
+    extra_headers: {}
+    supported_models:
+      - "@cf/meta/llama-3.2-3b-instruct"
+      - "@cf/meta/llama-3.1-8b-instruct"
+      - "@cf/meta/llama-3.1-70b-instruct"
+      - "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"
+      - "@cf/llava-next-llama-3-8b"
+      - "@cf/baai/bge-base-en-v1.5"
+    default_capabilities:
+      supports_tools: true
+      supports_structured_output: true
+      supports_vision: false
+      supports_audio: false
+    timeout_seconds: 60
+    max_retries: 3
+
+  # ──────────────────────────────────────────────────────────────
+  # OpenAI officiel
+  # ──────────────────────────────────────────────────────────────
+  openai:
+    type: "openai_compatible"
+    display_name: "OpenAI"
+    enabled: false  # Désactivé par défaut, activer via env
+    base_url_env: "OPENAI_BASE_URL"
+    base_url_default: "https://api.openai.com/v1"
+    api_path: ""
+    auth:
+      type: "bearer"
+      api_key_env: "OPENAI_API_KEY"
+      required: true
+    extra_headers: {}
+    supported_models:
+      - "gpt-4o"
+      - "gpt-4o-mini"
+      - "gpt-4-turbo"
+      - "gpt-3.5-turbo"
+      - "text-embedding-3-small"
+      - "text-embedding-3-large"
+    default_capabilities:
+      supports_tools: true
+      supports_structured_output: true
+      supports_vision: true
+      supports_audio: false
+    timeout_seconds: 60
+    max_retries: 3
+
+  # ──────────────────────────────────────────────────────────────
+  # Anthropic (via API native ou OpenAI-compatible proxy)
+  # ──────────────────────────────────────────────────────────────
+  anthropic:
+    type: "anthropic"
+    display_name: "Anthropic"
+    enabled: false
+    base_url_env: "ANTHROPIC_BASE_URL"
+    base_url_default: "https://api.anthropic.com"
+    api_path: ""
+    auth:
+      type: "x-api-key"
+      api_key_env: "ANTHROPIC_API_KEY"
+      required: true
+    extra_headers:
+      anthropic-version: "2023-06-01"
+    supported_models:
+      - "claude-3-5-sonnet-20241022"
+      - "claude-3-5-haiku-20241022"
+      - "claude-3-opus-20240229"
+    default_capabilities:
+      supports_tools: true
+      supports_structured_output: true
+      supports_vision: true
+      supports_audio: false
+    timeout_seconds: 120
+    max_retries: 2
+
+  # ──────────────────────────────────────────────────────────────
+  # Exemple : Provider custom (classe Python importable)
+  # ──────────────────────────────────────────────────────────────
+  # custom_provider:
+  #   type: "custom"
+  #   display_name: "Mon Provider Custom"
+  #   enabled: false
+  #   client_class: "app.services.models.clients.MyCustomClient"
+  #   config:
+  #     param1: "value1"
+  #     param2: "value2"
+  #   auth:
+  #     type: "custom"
+  #     api_key_env: "CUSTOM_API_KEY"
+  #   default_capabilities:
+  #     supports_tools: true
+  #     supports_structured_output: true
+  #     supports_vision: false
+  #     supports_audio: false

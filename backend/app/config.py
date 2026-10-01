@@ -269,6 +269,9 @@ def langfuse_settings() -> LangfuseSettings:
     )
 
 
+# ------------------------------------------------------------------
+# Utilitaire d'env (déclaré ICI, avant tout usage module-level )
+# ------------------------------------------------------------------
 def _env_or_default(name: str, default: str) -> str:
     """Valeur d'env non vide, sinon le défaut.
 
@@ -278,6 +281,120 @@ def _env_or_default(name: str, default: str) -> str:
     """
     value = os.getenv(name, "")
     return value.strip() if value.strip() else default
+
+
+# ------------------------------------------------------------------
+# Cloudflare Workers AI — endpoint OpenAI-compatible
+# ------------------------------------------------------------------
+# NOMS DE VARIABLES : le projet renseigne CLOUDFLARE_ACCOUNT_ID /
+# CLOUDFLARE_API_TOKEN (préfixe complet, celui du dashboard Cloudflare).
+# CF_ACCOUNT_ID / CF_API_TOKEN sont acceptés en repli : le préfixe court
+# est celui qu'on trouve dans la plupart des exemples et des templates,
+# et lire un seul des deux noms rendait la feature silencieusement
+# inerte selon le fichier .env utilisé (backend/.env vs .env racine).
+#
+# L'ordre de lecture est FIXE : nom complet d'abord, court ensuite.
+#
+# CF_AI_BASE_URL : chemin de BASE OpenAI-compatible (chat completions +
+# embeddings). L'endpoint natif, lui, est
+#   POST {CF_AI_API_ROOT}/run/{MODEL}
+# où CF_AI_API_ROOT vaut « …/accounts/{id}/ai ». Les deux cohabitent : le
+# premier sert aux clients LangChain, le second au health check et aux
+# appels directs (embeddings).
+#
+# CF_AI_ENABLED n'est plus lu comme un simple booléen : absent, il
+# s'auto-active dès que l'account ID ET le token sont présents. Une
+# variable d'env vide reste « non configuré » (voir _env_or_default).
+
+# Racine de l'API Workers AI (sans /v1) — base des deux formes d'appel.
+CF_AI_API_ROOT_TEMPLATE = (
+    "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai"
+)
+# Base OpenAI-compatible : la racine + /v1
+CF_AI_OPENAI_BASE_URL_TEMPLATE = CF_AI_API_ROOT_TEMPLATE + "/v1"
+
+CF_AI_DEFAULT_MODEL = _env_or_default(
+    "CF_AI_DEFAULT_MODEL", "@cf/meta/llama-3.2-3b-instruct"
+)
+CF_AI_DEFAULT_EMBEDDING_MODEL = _env_or_default(
+    "CF_AI_DEFAULT_EMBEDDING_MODEL", "@cf/baai/bge-base-en-v1.5"
+)
+
+
+@dataclass(frozen=True)
+class CloudflareAISettings:
+    """Config Cloudflare Workers AI — lecture fraîche (testable)."""
+
+    enabled: bool
+    account_id: str
+    api_token: str
+    api_root: str
+    base_url: str
+
+
+def cloudflare_ai_settings() -> CloudflareAISettings:
+    """Config Workers AI — nom complet prioritaire, nom court en repli."""
+    account_id = _env_or_default(
+        "CLOUDFLARE_ACCOUNT_ID", _env_or_default("CF_ACCOUNT_ID", "")
+    )
+    api_token = _env_or_default(
+        "CLOUDFLARE_API_TOKEN", _env_or_default("CF_API_TOKEN", "")
+    )
+
+    api_root = _env_or_default("CF_AI_API_ROOT", "")
+    if not api_root and account_id:
+        api_root = CF_AI_API_ROOT_TEMPLATE.format(account_id=account_id)
+
+    # Base OpenAI-compatible : elle INCLUT /v1. Un caller qui fournit
+    # une base SANS /v1 l'obtiendrait complète mais cassée (le SDK
+    # OpenAI concatène « /chat/completions » sans rien ajouter).
+    base_url = _env_or_default("CF_AI_BASE_URL", "")
+    if not base_url and api_root:
+        base_url = api_root.rstrip("/") + "/v1"
+
+    # Auto-activation : CF_AI_ENABLED reste l'interrupteur explicite
+    # (« false » désactive même avec des clés), mais son absence ne
+    # doit pas laisser Workers AI mort alors que les clés sont là.
+    explicit = os.getenv("CF_AI_ENABLED", "").strip().lower()
+    if explicit in ("0", "false", "no", "off"):
+        enabled = False
+    else:
+        # « true » explicite OU variable absente/vide : on exige dans
+        # les deux cas que les DEUX credentials soient là, sinon on
+        # activerait un provider qui ne peut pas s'authentifier.
+        enabled = bool(account_id and api_token)
+
+    return CloudflareAISettings(
+        enabled=enabled,
+        account_id=account_id,
+        api_token=api_token,
+        api_root=api_root,
+        base_url=base_url,
+    )
+
+
+# Alias rétro-compatibles (le nom court reste exporté pour les appelants
+# existants ; ce sont des CONSTANTES figées au'import, la source de
+# vérité reste cloudflare_ai_settings() ).
+_CF_SETTINGS = cloudflare_ai_settings()
+CF_AI_ENABLED = _CF_SETTINGS.enabled
+CF_ACCOUNT_ID = _CF_SETTINGS.account_id
+CF_API_TOKEN = _CF_SETTINGS.api_token
+CF_AI_BASE_URL = _CF_SETTINGS.base_url
+
+
+# ------------------------------------------------------------------
+# OpenAI — API officielle
+# ------------------------------------------------------------------
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "").strip()  # Optionnel, pour proxy
+
+
+# ------------------------------------------------------------------
+# Anthropic — API officielle
+# ------------------------------------------------------------------
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
+ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "").strip()  # Optionnel
 
 
 # ------------------------------------------------------------------

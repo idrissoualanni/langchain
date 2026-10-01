@@ -167,13 +167,13 @@ class TestGateway:
         """Pas de fallback silencieux : un provider inconnu lève une
         erreur contrôlée (ModelGatewayError) — jamais un ChatOllama
         en dur avec un provider étranger."""
-        from app.services.models.gateway import ModelGatewayError, _get_direct_llm
+        from app.services.models.gateway import ModelGatewayError, _get_direct_llm_from_provider
         from app.services.models.registry import get_model_config
 
         config = get_model_config("default")
         config.provider = "provider-inconnu"
         with pytest.raises(ModelGatewayError):
-            _get_direct_llm(config)
+            _get_direct_llm_from_provider(config)
 
 
 # ============================================================
