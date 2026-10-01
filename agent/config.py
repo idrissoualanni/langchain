@@ -25,18 +25,37 @@ def _env(name: str, default: str) -> str:
     return value.strip() if value and value.strip() else default
 
 
+def _env_any(default: str, *names: str) -> str:
+    """Lecture tolérante aux deux conventions de nommage.
+
+    Le projet `agent/` lit `LIVEKIT_*` (préfixe nu) alors que l'API backend
+    lit `LIVEKIT_AGENT_*`. Les deux rejoignent la même configuration : sans ce
+    repli, une variable posée uniquement côté backend (ex. la voix TTS) est
+    silencieusement ignorée par l'agent, qui retombe alors sur son défaut.
+
+    Ordre de priorité : le premier nom défini ET non vide gagne.
+    """
+    for name in names:
+        value = _env(name, "")
+        if value:
+            return value
+    return default
+
+
 @dataclass
 class AgentConfig:
     """Configuration complète de l'agent tuteur."""
 
-    # Modèles LiveKit Inference
-    stt_model: str = _env("LIVEKIT_STT_MODEL", "deepgram/nova-3")
-    llm_model: str = _env("LIVEKIT_LLM_MODEL", "google/gemini-2.5-flash")
-    tts_model: str = _env("LIVEKIT_TTS_MODEL", "rime/coda")
-    tts_voice: str = _env("LIVEKIT_TTS_VOICE", "")
+    # Modèles LiveKit Inference — `LIVEKIT_*` gagne sur `LIVEKIT_AGENT_*`.
+    stt_model: str = _env_any("deepgram/nova-3", "LIVEKIT_STT_MODEL", "LIVEKIT_AGENT_STT_MODEL")
+    llm_model: str = _env_any(
+        "google/gemini-2.5-flash", "LIVEKIT_LLM_MODEL", "LIVEKIT_AGENT_LLM_MODEL"
+    )
+    tts_model: str = _env_any("rime/coda", "LIVEKIT_TTS_MODEL", "LIVEKIT_AGENT_TTS_MODEL")
+    tts_voice: str = _env_any("aurelie", "LIVEKIT_TTS_VOICE", "LIVEKIT_AGENT_TTS_VOICE")
 
     # Langue
-    language: str = _env("LIVEKIT_STT_LANGUAGE", "fr")
+    language: str = _env_any("fr", "LIVEKIT_STT_LANGUAGE", "LIVEKIT_AGENT_LANGUAGE")
 
     # Limites
     max_tool_steps: int = int(_env("LIVEKIT_MAX_TOOL_STEPS", "2"))

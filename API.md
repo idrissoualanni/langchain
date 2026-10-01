@@ -224,6 +224,40 @@ Le contenu binaire vit dans **Neon S3** ; la base ne stocke que les métadonnée
 
 Ne lève **jamais** de 503 — un agent absent (`status: "stopped"`) est un état normal, pas une erreur. Non consommé par le frontend aujourd'hui : conservé pour le diagnostic et l'observabilité de la session.
 
+### Mémoire de l'agent — `api/agent_memory.py`, prefix `/api/agent-memory`
+
+| Rôle | Accès |
+|---|---|
+| Bootstrap mémoire de l'agent vocal (profil, faits, recherche, écriture) | 🔑 `X-Service-Secret` |
+
+⚠️ Ces routes sont **service-à-service**, pas user-facing : l'agent vocal vit sur
+LiveKit Cloud et n'a **ni cookie de session ni accès à la base**. Il appelle
+l'API en HTTP avec un secret partagé, ce qui évite de dupliquer
+`services/memory/memory.py` dans le projet `agent/` (voir ADR-026).
+
+| Route | Rôle |
+|---|---|
+| `GET /{user_id}/profile` | Profil complet de l'utilisateur |
+| `GET /{user_id}/overview` | Profil + faits en **un seul** aller-retour (au démarrage de session) |
+| `GET /{user_id}/facts?category=` | Faits, filtrés par catégorie si fourni |
+| `GET /{user_id}/search?q=&limit=` | Recherche plein texte dans les faits |
+| `POST /{user_id}/facts` | Écrit un fait (`category`, `content`, `confidence`) |
+
+```http
+X-Service-Secret: <AGENT_SERVICE_SECRET>
+```
+
+`AGENT_SERVICE_SECRET` est comparé en temps constant. Si la variable n'est pas
+configurée sur le service, **toutes** ces routes répondent **503** — aucun
+endpoint n'est ouvert par défaut.
+
+Catégories acceptées : `identity`, `background`, `personality`, `preference`,
+`interest` — toute autre valeur renvoie **422**.
+
+Codes possibles : **200** · **401** (secret absent ou faux) · **422**
+(catégorie inconnue ou corps invalide) · **503** (secret non configuré, ou
+base injoignable).
+
 ### Transcription — `features/transcription/api.py`
 
 | Rôle | Accès |

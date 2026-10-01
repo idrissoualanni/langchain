@@ -47,7 +47,12 @@ ENV PATH=/root/.local/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1
 
 # Code de l'agent (imports absolus `config` / `session_factory` → WORKDIR).
-COPY agent.py config.py session_factory.py ./
+#
+# Glob `*.py` volontairement : une liste explicite avait oublié
+# `memory_tools.py` lors de son ajout, ce qui cassait le job en production
+# (`ModuleNotFoundError` au démarrage). Le glob garantit qu'un nouveau module
+# Python est toujours embarqué. `livekit.toml` reste exclu (pas du Python).
+COPY *.py ./
 
 ENV PORT=8080
 EXPOSE 8080
