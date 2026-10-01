@@ -105,7 +105,11 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="flex min-h-0 flex-1 gap-0 overflow-hidden">
+      {/* SidebarContent a déjà overflow-auto par défaut (composant ui) :
+          le laisser faire pour que nav + conversations défilent quand la
+          sidebar dépasse la hauteur d'écran. Ajouter overflow-hidden ici
+          coupait le contenu sans possibilité de scroll (bug sidebar). */}
+      <SidebarContent className="flex min-h-0 flex-1 gap-0">
         <SidebarGroup>
           <SidebarGroupLabel className="font-mono text-[10px] tracking-[0.1em] uppercase">
             principal

@@ -14,6 +14,7 @@ import { KnowledgeTable } from "./KnowledgeTable";
 import { KnowledgeAccessPanel } from "./KnowledgeAccessPanel";
 import { KnowledgeCorpusPanel } from "./KnowledgeCorpusPanel";
 import { SubjectDefinitionsPanel } from "./SubjectDefinitionsPanel";
+import { KnowledgeFileUploadPanel } from "./KnowledgeFileUploadPanel";
 import { apiRequest } from "@/api/request";
 
 interface KnowledgeBase {
@@ -360,6 +361,9 @@ export function KnowledgePage() {
           immédiatement ) */}
       <KnowledgeCorpusPanel />
       <SubjectDefinitionsPanel />
+
+      {/* Fichiers sources — upload .md/.txt → parsing auto + preview bucket */}
+      <KnowledgeFileUploadPanel />
     </div>
   );
 }

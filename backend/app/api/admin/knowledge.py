@@ -378,4 +378,238 @@ def admin_delete_section(
     return {"success": True, "deleted": section_id}
 
 
+# ==================================================================
+# UPLOAD DE FICHIERS — parsing Markdown/texte → sections vectorisées
+# ==================================================================
+
+from fastapi import File, UploadFile
+import re
+import unicodedata
+import hashlib
+import time
+
+
+def _strip_accents(value: str) -> str:
+    """Retire les accents — identique au découpage d'indexation."""
+    return "".join(
+        c
+        for c in unicodedata.normalize("NFKD", value)
+        if not unicodedata.combining(c)
+    )
+
+
+def _split_sections(content: str) -> list[tuple[str, str, str]]:
+    """[(topic_slug, title_brut, contenu)] — découpe sur « ## Titre »."""
+    sections: list[tuple[str, str, str]] = []
+    current_topic = "_intro"
+    current_title = "(introduction)"
+    current_lines: list[str] = []
+    for line in content.splitlines():
+        m = re.match(r"^##\s+(.+)$", line)
+        if m:
+            if current_lines:
+                sections.append(
+                    (current_topic, current_title, "\n".join(current_lines).strip())
+                )
+            current_title = m.group(1).strip()
+            current_topic = _strip_accents(current_title.lower())
+            current_lines = []
+        else:
+            current_lines.append(line)
+    if current_lines:
+        sections.append(
+            (current_topic, current_title, "\n".join(current_lines).strip())
+        )
+    return [(t, ti, c) for t, ti, c in sections if c]
+
+
+def _subject_for_path(path: str, definitions: dict[str, str]) -> str:
+    """Résout le subject_id depuis le chemin du fichier.
+
+    Stratégie : mapping YAML knowledge.sources → subject_id ;
+    repli : premier segment du chemin ( ex: "informatique/python" → "informatique" ).
+    """
+    path_no_ext = path.removesuffix(".md")
+    if path_no_ext in definitions:
+        return definitions[path_no_ext]
+    # Repli : premier segment du chemin
+    return path_no_ext.split("/")[0] if path_no_ext else "general"
+
+
+# Cache des définitions YAML ( rechargé à chaque upload si nécessaire )
+async def _load_definitions_map() -> dict[str, str]:
+    from app.services.knowledge.store import load_subject_definitions
+    mapping: dict[str, str] = {}
+    definitions = load_subject_definitions()
+    for sid, yaml_text in definitions.items():
+        try:
+            import yaml
+            data = yaml.safe_load(yaml_text) or {}
+        except Exception:
+            continue
+        for src in (data.get("knowledge") or {}).get("sources", []):
+            mapping[str(src)] = sid
+    return mapping
+
+
+class FileUploadRequest(BaseModel):
+    """Métadonnées optionnelles pour l'upload ( le fichier vient dans multipart )."""
+    subject_id: str | None = None
+    source_label: str | None = None
+
+
+class FileUploadResponse(BaseModel):
+    file_path: str
+    subject_id: str
+    sections_created: int
+    sections: list[dict]
+
+
+@router.post(
+    "/upload",
+    response_model=FileUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def admin_upload_knowledge_file(
+    file: UploadFile = File(...),
+    subject_id: str | None = None,
+    source_label: str | None = None,
+    current_user: CurrentUser = Depends(require_admin),
+) -> FileUploadResponse:
+    """Upload un fichier ( .md / .txt ) → parsing sections + vectorisation.
+
+    - Le fichier est stocké dans le bucket `knowledge_files` ( Neon )
+    - Chaque section « ## Titre » devient une entrée dans `knowledge_sections`
+      avec embedding ( recherche sémantique immédiate )
+    - Si subject_id n'est pas fourni, il est déduit du chemin / définitions YAML
+    """
+    # --- Validation type de fichier ---
+    allowed_ct = {"text/markdown", "text/plain", "text/x-markdown"}
+    filename = file.filename or "upload.md"
+    if file.content_type not in allowed_ct and not filename.endswith((".md", ".txt")):
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Type de fichier non supporté ( .md ou .txt uniquement )",
+        )
+
+    # --- Lecture contenu ---
+    content_bytes = await file.read()
+    try:
+        content = content_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Fichier non-UTF-8",
+        )
+
+    if not content.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Fichier vide",
+        )
+
+    # --- Stockage dans le bucket knowledge_files ---
+    sha = hashlib.sha256(content_bytes).hexdigest()
+    file_path = filename
+    from app.services.knowledge.store import put_file
+    put_file(file_path, subject_id or "auto", content)
+
+    # --- Résolution subject_id ---
+    resolved_subject = subject_id
+    if not resolved_subject:
+        definitions_map = await _load_definitions_map()
+        resolved_subject = _subject_for_path(file_path, definitions_map)
+
+    # --- Parsing en sections + upsert ( vectorisation ) ---
+    created_sections = []
+    for topic_slug, title, section_content in _split_sections(content):
+        if not section_content.strip():
+            continue
+        try:
+            result = knowledge_store.upsert_section(
+                subject_id=resolved_subject,
+                title=title,
+                content=section_content,
+                source_label=source_label or f"upload/{file_path}",
+            )
+            created_sections.append({
+                "id": result["id"],
+                "topic_slug": result["topic_slug"],
+                "title": result["title"],
+            })
+        except Exception as exc:
+            # On log mais on continue pour les autres sections
+            log_event(
+                "KNOWLEDGE_UPLOAD_SECTION_FAILED",
+                level="WARNING",
+                message=f"Section upload failed: {topic_slug} ({exc})",
+                extra={"file": file_path, "topic": topic_slug},
+            )
+
+    return FileUploadResponse(
+        file_path=file_path,
+        subject_id=resolved_subject,
+        sections_created=len(created_sections),
+        sections=created_sections,
+    )
+
+
+# ==================================================================
+# LISTE / PREVIEW des fichiers du bucket knowledge_files
+# ==================================================================
+
+from app.services.knowledge.store import list_files, get_file  # noqa: E402
+
+
+class FilePreviewResponse(BaseModel):
+    path: str
+    subject_id: str
+    sha256: str
+    created_at: str
+    content_preview: str
+    size_bytes: int
+
+
+@router.get("/files", response_model=list[FilePreviewResponse])
+def admin_list_knowledge_files(
+    subject_id: str | None = None,
+    current_user: CurrentUser = Depends(require_admin),
+) -> list[FilePreviewResponse]:
+    """Liste les fichiers sources du bucket ( sans le contenu complet )."""
+    files = list_files(subject_id)
+    return [
+        FilePreviewResponse(
+            path=f["path"],
+            subject_id=f["subject_id"],
+            sha256=f["sha256"],
+            created_at=f["created_at"],
+            content_preview="",
+            size_bytes=0,
+        )
+        for f in files
+    ]
+
+
+@router.get("/files/{file_path:path}", response_model=FilePreviewResponse)
+def admin_get_knowledge_file(
+    file_path: str,
+    current_user: CurrentUser = Depends(require_admin),
+) -> FilePreviewResponse:
+    """Récupère un fichier avec son contenu ( pour preview )."""
+    content = get_file(file_path)
+    if content is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Fichier {file_path} introuvable",
+        )
+    return FilePreviewResponse(
+        path=file_path,
+        subject_id="",
+        sha256=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+        created_at="",
+        content_preview=content[:2000],
+        size_bytes=len(content.encode("utf-8")),
+    )
+
+
 __all__ = ["router"]
