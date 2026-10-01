@@ -80,8 +80,15 @@ def _validate_model(kind: str, model: str, fallbacks: list[str]) -> str:
     )
 
 
-def build_session(config: AgentConfig | None = None) -> AgentSession:
-    """Construit la chaîne vocale : STT → LLM → TTS (+ VAD)."""
+def build_session(
+    config: AgentConfig | None = None,
+    tools: list[Any] | None = None,
+) -> AgentSession:
+    """Construit la chaîne vocale : STT → LLM → TTS (+ VAD).
+
+    `tools` = outils mémoire HTTP ( voir `memory_tools.py` ). Injectés dans la
+    session pour que le LLM puisse les appeler pendant la conversation.
+    """
     if config is None:
         config = get_agent_config()
 
@@ -118,6 +125,7 @@ def build_session(config: AgentConfig | None = None) -> AgentSession:
                 preemptive_generation={"enabled": config.preemptive_generation},
             ),
             max_tool_steps=config.max_tool_steps,
+            tools=list(tools or []),
         )
     except ValueError as exc:
         # Les ValueError d'inference.* sont des erreurs de CONFIGURATION

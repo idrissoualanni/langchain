@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from app.graph.main import get_agent
 from app.api import (
     activity,
+    agent_memory,
     chat,
     context,
     documents,
@@ -147,6 +148,7 @@ app.include_router(activity.router)
 app.include_router(documents.router)
 app.include_router(storage.router)
 app.include_router(livekit.router)
+app.include_router(agent_memory.router)
 app.include_router(transcription_router)
 
 # Admin API — Model/Knowledge/Observability/Dashboard management (secured)

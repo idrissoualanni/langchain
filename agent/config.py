@@ -111,11 +111,20 @@ naturelles, courtes et faciles à comprendre à l'oral.
 
 L'identité persistante de l'étudiant est fournie par le contexte de session.
 
+La mémoire contient notamment :
+- identity
+- background
+- personality
+- preference
+- interest
+
 Ne mémorise que les informations que l'étudiant déclare explicitement
 et qui sont suffisamment durables.
 
 N'infère jamais une information personnelle à partir du comportement de
 l'étudiant.
+
+Lorsque cela est nécessaire, utilise les outils de mémoire disponibles.
 
 # Confidentialité
 
@@ -141,9 +150,10 @@ def build_system_instructions(
 ) -> str:
     """Assemble les instructions de base avec le contexte mémoire connu.
 
-    Les outils de mémoire longue durée (Postgres) ne sont pas encore câblés
-    sur l'agent LiveKit Cloud : `profile` / `overview` arrivent donc vides
-    et le contexte mémoire est simplement omis.
+    `profile` / `overview` proviennent de `memory_tools.fetch_memory_context`
+    ( lecture HTTP de l'API Render ). Ils sont vides si l'API est
+    indisponible : le contexte mémoire est alors simplement omis — l'agent
+    reste utilisable, il ne se souvient de rien.
     """
     parts = [BASE_INSTRUCTIONS]
 

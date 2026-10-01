@@ -21,6 +21,13 @@ import os
 from livekit.agents import Agent, AgentServer, JobContext, RunContext
 
 from config import GREETING, build_system_instructions, get_agent_config
+from memory_tools import (
+    fetch_memory_context,
+    get_user_memory,
+    get_user_profile,
+    save_user_memory,
+    search_user_memory,
+)
 from session_factory import (
     PipelineBuildError,
     build_session,
@@ -70,18 +77,40 @@ async def entrypoint(ctx: JobContext) -> None:
     config = get_agent_config()
     logger.info("Pipeline : %s", config.to_dict())
 
-    # Construction AVANT ctx.connect() : une configuration invalide doit
-    # faire échouer le job avec un log explicite, pas un agent muet en salle.
-    try:
-        session = build_session(config)
-    except PipelineBuildError as exc:
-        logger.error("Pipeline vocal inutilisable : %s", exc)
-        return
-
     user_id = resolve_user_id_from_job(ctx.job.metadata, ctx.room.name)
     logger.info("user_id résolu : %s", user_id or "(aucun)")
 
-    instructions = build_system_instructions()
+    # Outils mémoire : lecture/écriture via l'API Render ( ADR-026 ).
+    tools = [
+        get_user_profile,
+        get_user_memory,
+        search_user_memory,
+        save_user_memory,
+    ]
+
+    # Contexte mémoire au démarrage — HTTP avant ctx.connect() pour ne pas
+    # retarder l'entrée en salle. Une API indisponible ne doit pas faire échouer
+    # le job : `fetch_memory_context` renvoie ({}, {}) et l'agent enseigne sans
+    # mémoire.
+    profile: dict = {}
+    overview: dict = {}
+    if user_id:
+        profile, overview = fetch_memory_context(user_id)
+        logger.info(
+            "Mémoire chargée : profil=%s, %s fait(s)",
+            "oui" if (profile.get("name") or profile.get("description")) else "vide",
+            overview.get("total_facts", 0),
+        )
+
+    instructions = build_system_instructions(profile, overview)
+
+    # Construction AVANT ctx.connect() : une configuration invalide doit
+    # faire échouer le job avec un log explicite, pas un agent muet en salle.
+    try:
+        session = build_session(config, tools=tools)
+    except PipelineBuildError as exc:
+        logger.error("Pipeline vocal inutilisable : %s", exc)
+        return
 
     try:
         await ctx.connect()
