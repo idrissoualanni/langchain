@@ -40,4 +40,13 @@ postman/
 # Collections API (client local — lutilisateur les garde hors du dépôt)
 postman/
 **/postman/
+
+# Artefacts générés par les tests Vitest / Playwright — jamais sur GitHub :
+# ce sont des sorties de machine (rapports, traces, captures), pas du code.
+frontend/test-results/
+frontend/playwright-report/
+frontend/coverage/
+.playwright-mcp/
+vitest-ui.png
+
 .opencode
