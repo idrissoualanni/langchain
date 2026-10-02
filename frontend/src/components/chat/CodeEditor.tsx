@@ -31,7 +31,7 @@ interface CodeEditorProps {
   initialCode?: string;
 }
 
-const DEFAULT_CODE = '# Écrivez votre code Python ici\n# puis cliquez sur Exécuter pour le lancer dans la sandbox.\n';
+const DEFAULT_CODE = '# Écris ton code Python ici\n# puis clique sur Exécuter pour le lancer dans la sandbox.\n';
 
 export function CodeEditor({ userId, threadId, initialCode }: CodeEditorProps) {
   const [code, setCode] = useState<string>(initialCode ?? DEFAULT_CODE);
@@ -111,7 +111,7 @@ export function CodeEditor({ userId, threadId, initialCode }: CodeEditorProps) {
       <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border] p-6 text-center">
         <Terminal size={24} className="text-muted-foreground]/30" />
         <p className="font-mono text-[11px] text-muted-foreground]">
-          Sélectionnez un thread pour pratiquer le code.
+          Sélectionne un thread pour pratiquer le code.
         </p>
         <p className="font-mono text-[10px] text-muted-foreground]/50">
           l'exécution est attachée au thread courant (sandbox isolée)
@@ -181,7 +181,7 @@ export function CodeEditor({ userId, threadId, initialCode }: CodeEditorProps) {
           onKeyDown={handleKeyDown}
           disabled={running}
           spellCheck={false}
-          placeholder="# votre code python…"
+          placeholder="# ton code python…"
           rows={12}
           className="max-h-[420px] min-h-[200px] w-full resize-none overflow-auto bg-transparent px-3 py-2.5 font-mono text-[11px] leading-relaxed text-foreground] placeholder:text-muted-foreground]/40 focus:outline-none disabled:opacity-60"
         />

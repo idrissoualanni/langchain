@@ -43,7 +43,7 @@ export function useTranscription(
       | undefined;
 
     if (!SpeechRecognition) {
-      setError("Votre navigateur ne supporte pas la reconnaissance vocale");
+      setError("Ton navigateur ne supporte pas la reconnaissance vocale");
       return;
     }
 
@@ -110,6 +110,7 @@ export function useTranscription(
       setIsListening(true);
     } catch (e) {
       console.error("Failed to start recognition:", e);
+      setError("Impossible de démarrer la dictée. Réessaie.");
     }
   }, []);
 

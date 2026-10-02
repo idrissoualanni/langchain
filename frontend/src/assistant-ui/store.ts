@@ -238,7 +238,7 @@ export const useAssistantStore = create<AssistantStore>((set, get) => ({
     const terms = parseComposerTerms(text);
     const queryToSend = terms.query.trim() || text;
     if (!queryToSend.trim()) {
-      set({ error: 'Ajoutez un message au terme @ sélectionné.' });
+      set({ error: 'Ajoute un message au terme @ sélectionné.' });
       // rollback messages optimistes
       set((s) => ({ messages: s.messages.slice(0, -2), isRunning: false }));
       return;

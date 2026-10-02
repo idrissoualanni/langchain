@@ -156,7 +156,7 @@ export function AssistantUIRuntimeProvider({
       if (userId === null) {
         useAssistantStore
           .getState()
-          .setError('Sélectionnez un utilisateur (sidebar gauche).');
+          .setError('Sélectionne un utilisateur (sidebar gauche).');
         return;
       }
       const text = message.content

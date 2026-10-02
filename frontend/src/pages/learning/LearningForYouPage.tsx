@@ -22,7 +22,7 @@ import {
 
 export function LearningForYouPage() {
   const { internal } = useCurrentUser();
-  const { data } = useLearning(internal?.user_id ?? null);
+  const { data, loading } = useLearning(internal?.user_id ?? null);
   const { byId } = useSubjects();
 
   const focus = data.weakPoints.slice(0, 5);
@@ -41,7 +41,7 @@ export function LearningForYouPage() {
             <EmptyState
               icon={Sparkles}
               title="Aucune recommandation disponible pour le moment."
-              description="Le flux de recommandations n’est pas encore exposé par le backend. En attendant, voici ce que vos données réelles indiquent."
+              description="Le flux de recommandations n’est pas encore exposé par le backend. En attendant, voici ce que tes données réelles indiquent."
               action={
                 <Link
                   to="/assistant"
@@ -63,7 +63,9 @@ export function LearningForYouPage() {
               </span>
             </SurfaceHeader>
             <SurfaceBody className="space-y-2">
-              {focus.length === 0 ? (
+              {loading ? (
+                <p className="text-muted-foreground text-sm">Chargement…</p>
+              ) : focus.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
                   Aucune donnée disponible pour le moment.
                 </p>
@@ -92,7 +94,9 @@ export function LearningForYouPage() {
               <SurfaceTitle>Activités disponibles</SurfaceTitle>
             </SurfaceHeader>
             <SurfaceBody className="space-y-2">
-              {data.observations.length === 0 ? (
+              {loading ? (
+                <p className="text-muted-foreground text-sm">Chargement…</p>
+              ) : data.observations.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
                   Aucune activité enregistrée pour le moment.
                 </p>

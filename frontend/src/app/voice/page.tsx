@@ -99,7 +99,7 @@ function DictationPanel({ onInsert }: { onInsert: (text: string) => void }) {
           dictated
         ) : (
           <span className="text-muted-foreground italic">
-            Parlez — votre texte apparaîtra ici.
+            Parle — ton texte apparaîtra ici.
           </span>
         )}
       </p>
@@ -198,7 +198,7 @@ function VoiceSessionContent({
       ) : memory && memory.total_facts > 0 ? (
         <div className="bg-muted/30 max-w-md rounded-lg border p-4">
           <p className="text-muted-foreground mb-2 text-xs tracking-wide uppercase">
-            Ce que le tuteur sait de vous
+            Ce que le tuteur sait de toi
           </p>
           <ul className="space-y-1 text-sm">
             {memory.identity.name ? (

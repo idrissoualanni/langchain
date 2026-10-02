@@ -96,7 +96,7 @@ export function SettingsModelPage() {
       <PageHeader
         eyebrow="settings · model"
         title="Modèle"
-        description="Choisissez le modèle d’inférence utilisé pour vos conversations. Seuls les modèles configurés sont proposés."
+        description="Choisis le modèle d’inférence utilisé pour tes conversations. Seuls les modèles configurés sont proposés."
       />
 
       <div className="max-w-2xl space-y-5 p-6">
@@ -120,7 +120,7 @@ export function SettingsModelPage() {
               <EmptyState
                 icon={Cpu}
                 title="Aucun modèle configuré"
-                description="Le backend ne remonte aucun modèle. Vérifiez la configuration (models.yaml / Ollama)."
+                description="Le backend ne remonte aucun modèle. Vérifie la configuration (models.yaml / Ollama)."
               />
             </SurfaceBody>
           </Surface>

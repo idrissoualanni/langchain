@@ -57,8 +57,8 @@ export function KnowledgePage() {
       setKnowledgeBases(data.knowledge_bases || []);
     } catch (error) {
       toast({
-        title: "Error loading knowledge bases",
-        description: error instanceof Error ? error.message : "Unknown error",
+        title: "Erreur lors du chargement des bases de connaissances",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
         variant: "destructive",
       });
     } finally {
@@ -79,25 +79,25 @@ export function KnowledgePage() {
       });
       
       if (response.ok) {
-        toast({ title: "Knowledge base created successfully" });
+        toast({ title: "Base de connaissances créée" });
         setShowCreateDialog(false);
         setNewKb({ id: '', name: '', description: '', scope: 'private', enabled: true });
         loadKnowledgeBases();
       } else {
         const error = await response.json();
-        throw new Error(error.detail || "Failed to create");
+        throw new Error(error.detail || "Échec de la création");
       }
     } catch (error) {
       toast({
-        title: "Error creating knowledge base",
-        description: error instanceof Error ? error.message : "Unknown error",
+        title: "Erreur lors de la création de la base",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
         variant: "destructive",
       });
     }
   };
 
   const handleDelete = async (kbId: string) => {
-    if (!confirm(`Are you sure you want to delete this knowledge base?`)) return;
+    if (!confirm(`Supprimer cette base de connaissances ? Cette action est définitive.`)) return;
 
     try {
       const response = await apiRequest(`/api/admin/knowledge/${kbId}`, {
@@ -105,15 +105,15 @@ export function KnowledgePage() {
       });
       
       if (response.ok) {
-        toast({ title: "Knowledge base deleted successfully" });
+        toast({ title: "Base de connaissances supprimée" });
         loadKnowledgeBases();
       } else {
-        throw new Error("Failed to delete");
+        throw new Error("Échec de la suppression");
       }
     } catch (error) {
       toast({
-        title: "Error deleting knowledge base",
-        description: error instanceof Error ? error.message : "Unknown error",
+        title: "Erreur lors de la suppression de la base",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
         variant: "destructive",
       });
     }
@@ -142,17 +142,17 @@ export function KnowledgePage() {
       });
 
       if (response.ok) {
-        toast({ title: "Knowledge base updated successfully" });
+        toast({ title: "Base de connaissances mise à jour" });
         setEditingKb(null);
         loadKnowledgeBases();
       } else {
         const error = await response.json();
-        throw new Error(error.detail || "Failed to update");
+        throw new Error(error.detail || "Échec de la mise à jour");
       }
     } catch (error) {
       toast({
-        title: "Error updating knowledge base",
-        description: error instanceof Error ? error.message : "Unknown error",
+        title: "Erreur lors de la mise à jour de la base",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
         variant: "destructive",
       });
     } finally {
@@ -218,7 +218,7 @@ export function KnowledgePage() {
                     id="kb-description"
                     value={newKb.description}
                     onChange={(e) => setNewKb(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Describe this knowledge base..."
+                    placeholder="Décris cette base de connaissances…"
                   />
                 </div>
                 <div className="space-y-2">
@@ -279,7 +279,7 @@ export function KnowledgePage() {
                 id="edit-kb-description"
                 value={editForm.description}
                 onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
-                placeholder="Describe this knowledge base..."
+                placeholder="Décris cette base de connaissances…"
               />
             </div>
             <div className="space-y-2">
@@ -313,7 +313,7 @@ export function KnowledgePage() {
               disabled={savingEdit}
               className="w-full"
             >
-              {savingEdit ? 'Saving...' : 'Save Changes'}
+              {savingEdit ? 'Enregistrement…' : 'Enregistrer'}
             </Button>
           </div>
         </DialogContent>

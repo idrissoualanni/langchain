@@ -98,6 +98,7 @@ export function VideoCard({ title, duration, thumbnail_url, segments, status }: 
             <Button
               size="icon"
               variant="secondary"
+              aria-label={isPlaying ? 'Mettre la vidéo en pause' : 'Lire la vidéo'}
               className="h-16 w-16 rounded-full hover:scale-110 transition-transform"
               onClick={() => setIsPlaying(!isPlaying)}
             >

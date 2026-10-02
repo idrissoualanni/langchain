@@ -88,7 +88,7 @@ export function ProblemArtifact({
                     
                     {step.user_answer && (
                       <div className="mt-2 p-2 bg-white rounded text-sm border">
-                        <span className="text-xs text-muted-foreground block mb-1">Votre réponse :</span>
+                        <span className="text-xs text-muted-foreground block mb-1">Ta réponse :</span>
                         <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
                           {step.user_answer}
                         </code>

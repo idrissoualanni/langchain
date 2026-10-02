@@ -70,7 +70,7 @@ export function LearningOverviewPage() {
     if (data.observations.length > 0) {
       return {
         title: 'Continuer à apprendre',
-        desc: 'Reprenez une conversation avec l’assistant',
+        desc: 'Reprends une conversation avec l’assistant',
         to: '/assistant',
         label: 'Ouvrir l’assistant',
       };
@@ -88,7 +88,7 @@ export function LearningOverviewPage() {
       <PageHeader
         eyebrow="learning"
         title={internal ? `Bonjour, ${internal.name}` : 'Learning Overview'}
-        description="Votre progression pédagogique, agrégée depuis les données réellement enregistrées par l’agent."
+        description="Ta progression pédagogique, agrégée depuis les données réellement enregistrées par l’agent."
       />
 
       <div className="space-y-5 p-6">
@@ -132,7 +132,7 @@ export function LearningOverviewPage() {
             <EmptyState
               icon={GraduationCap}
               title="Aucune donnée disponible pour le moment."
-              description="Votre progression apparaîtra ici après vos premières interactions d’apprentissage avec l’assistant."
+              description="Ta progression apparaîtra ici après tes premières interactions d’apprentissage avec l’assistant."
             />
           </Surface>
         ) : (

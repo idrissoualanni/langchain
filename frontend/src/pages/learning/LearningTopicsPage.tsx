@@ -87,7 +87,7 @@ export function LearningTopicsPage() {
       <PageHeader
         eyebrow="learning · topics"
         title="Topics"
-        description="Topics pour lesquels une progression a été enregistrée. Filtrez par matière, statut ou niveau."
+        description="Topics pour lesquels une progression a été enregistrée. Filtre par matière, statut ou niveau."
       />
 
       <div className="space-y-5 p-6">
@@ -158,7 +158,7 @@ export function LearningTopicsPage() {
             <EmptyState
               icon={ListFilter}
               title="Aucune donnée disponible pour le moment."
-              description="Aucun topic n’a encore été étudié pour votre profil."
+              description="Aucun topic n’a encore été étudié pour ton profil."
             />
           </Surface>
         ) : rows.length === 0 ? (

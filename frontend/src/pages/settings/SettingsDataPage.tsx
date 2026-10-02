@@ -56,7 +56,7 @@ export function SettingsDataPage() {
           <SurfaceBody className="space-y-2">
             <p className="text-muted-foreground text-sm">
               L’identité (nom, email) est fournie par Neon Auth. Le backend
-              ne stocke pas votre email : il ne conserve que les données
+              ne stocke pas ton email : il ne conserve que les données
               nécessaires à l’application.
             </p>
             <p className="text-muted-foreground text-sm">
@@ -68,7 +68,7 @@ export function SettingsDataPage() {
 
         <Surface>
           <SurfaceHeader>
-            <SurfaceTitle>Gérer vos données</SurfaceTitle>
+            <SurfaceTitle>Gérer tes données</SurfaceTitle>
           </SurfaceHeader>
           <SurfaceBody className="flex flex-wrap gap-2">
             <Link

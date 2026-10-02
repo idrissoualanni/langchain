@@ -16,11 +16,11 @@ interface ErrorStateProps {
 
 function humanizeError(raw: string): string {
   // Map technique → humain (§24) : pas de "ApiError 422"
-  if (/422|validation/i.test(raw)) return 'Vos données n’ont pas pu être validées. Vérifiez les champs et réessayez.';
-  if (/401|unauthorized|session/i.test(raw)) return 'Votre session a expiré. Reconnectez-vous.';
-  if (/403|forbidden/i.test(raw)) return 'Vous n’avez pas les droits pour cette action.';
+  if (/422|validation/i.test(raw)) return 'Tes données n’ont pas pu être validées. Vérifie les champs et réessaie.';
+  if (/401|unauthorized|session/i.test(raw)) return 'Ta session a expiré. Reconnecte-toi.';
+  if (/403|forbidden/i.test(raw)) return 'Tu n’as pas les droits pour cette action.';
   if (/404|not found/i.test(raw)) return 'Ressource introuvable.';
-  if (/500|timeout|network|fetch/i.test(raw)) return 'Le service est temporairement indisponible. Réessayez dans un instant.';
+  if (/500|timeout|network|fetch/i.test(raw)) return 'Le service est temporairement indisponible. Réessaie dans un instant.';
   return raw;
 }
 

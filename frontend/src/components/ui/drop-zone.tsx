@@ -1,5 +1,5 @@
 // DropZone — drag & drop documents (§13) : Uploading/Processing/Ready/Failed
-import { useState, type DragEvent } from 'react';
+import { useRef, useState, type DragEvent } from 'react';
 import { Upload, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -29,8 +29,23 @@ export function DropZone({ onFiles, accept, maxBytes, disabled, className }: Dro
     onFiles(e.dataTransfer.files);
   };
 
+  const inputRef = useRef<HTMLInputElement>(null);
+  const openPicker = () => {
+    if (!disabled) inputRef.current?.click();
+  };
+
   return (
     <div
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      aria-disabled={disabled}
+      onClick={openPicker}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openPicker();
+        }
+      }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -45,12 +60,24 @@ export function DropZone({ onFiles, accept, maxBytes, disabled, className }: Dro
         {dragOver ? <Upload size={18} /> : <FileText size={18} />}
       </div>
       <p className="mt-3 text-sm font-medium text-foreground">
-        Glissez vos fichiers ici
+        Glisse tes fichiers ici
       </p>
       <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-        ou cliquez pour parcourir · txt, md, pdf (max {maxBytes ? `${(maxBytes / 1_000_000).toFixed(0)} Mo` : '2 Mo'})
+        ou clique pour parcourir · txt, md, pdf (max {maxBytes ? `${(maxBytes / 1_000_000).toFixed(0)} Mo` : '2 Mo'})
       </p>
       {accept && <p className="mt-1 font-mono text-[10px] text-muted-foreground">{accept}</p>}
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        multiple
+        aria-label="Choisir des fichiers à déposer"
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files?.length) onFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
     </div>
   );
 }

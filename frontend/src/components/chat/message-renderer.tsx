@@ -42,7 +42,7 @@ export function MessageRenderer() {
                     </span>
                 </MessagePrimitive.If>
                 <MessagePrimitive.If user>
-                    <span className="text-sm font-semibold">Vous</span>
+                    <span className="text-sm font-semibold">Toi</span>
                 </MessagePrimitive.If>
             </div>
 

@@ -26,7 +26,7 @@ const OPTIONS: {
   {
     value: 'system',
     label: 'Système',
-    description: 'Suit les préférences de votre appareil.',
+    description: 'Suit les préférences de ton appareil.',
     icon: Monitor,
   },
 ];
@@ -39,7 +39,7 @@ export function SettingsAppearancePage() {
       <PageHeader
         eyebrow="settings · appearance"
         title="Apparence"
-        description="Choisissez le thème de l’application. Le thème clair/sombre existe déjà — cette page l’expose."
+        description="Choisis le thème de l’application. Le thème clair/sombre existe déjà — cette page l’expose."
       />
 
       <div className="max-w-2xl p-6">

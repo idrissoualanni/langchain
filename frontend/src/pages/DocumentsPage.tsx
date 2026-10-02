@@ -107,6 +107,7 @@ export function DocumentsPage() {
     documents,
     loading,
     error,
+    refresh,
     upload,
     uploadDocument,
     deleteDocument,
@@ -124,6 +125,7 @@ export function DocumentsPage() {
   const [pasted, setPasted] = useState<string>('');
   const [fileName, setFileName] = useState<string>('');
   const [isPdfPick, setIsPdfPick] = useState(false);
+  const [pickError, setPickError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Onglet de la bibliothèque (§11)
@@ -173,7 +175,7 @@ export function DocumentsPage() {
       setKb({
         status: 'unavailable',
         reason:
-          'Aucune base de connaissances accessible. Le retrieval de connaissances partagées n’est pas disponible pour votre compte.',
+          'Aucune base de connaissances accessible. Le retrieval de connaissances partagées n’est pas disponible pour ton compte.',
       });
       return;
     }
@@ -222,10 +224,12 @@ export function DocumentsPage() {
 
   const onFilePick = async (file: File | undefined) => {
     if (!file) return;
+    setPickError(null);
     if (file.size > MAX_BYTES) {
       setFileName('');
       setPasted('');
       setIsPdfPick(false);
+      setPickError('Fichier trop volumineux — 2 Mo maximum.');
       return;
     }
     setIsPdfPick(file.name.toLowerCase().endsWith('.pdf'));
@@ -238,6 +242,7 @@ export function DocumentsPage() {
         setFileName('');
         setPasted('');
         setIsPdfPick(false);
+        setPickError('Impossible de lire ce PDF. Réessaie ou colle le contenu à la main.');
       }
       return;
     }
@@ -331,7 +336,7 @@ export function DocumentsPage() {
         <Card className="p-10 text-center">
           <FileText size={32} className="mx-auto mb-3 text-muted-foreground/30" />
           <div className="text-sm text-muted-foreground">
-            Connectez-vous pour gérer vos documents personnels.
+            Connecte-toi pour gérer tes documents personnels.
           </div>
         </Card>
       ) : (
@@ -353,13 +358,18 @@ export function DocumentsPage() {
                 maxBytes={MAX_BYTES}
                 onFiles={(files) => onFilePick(files[0])}
               />
+              {pickError && (
+                <p role="alert" className="text-destructive mt-1 text-xs">
+                  {pickError}
+                </p>
+              )}
               <textarea
                 className="w-full resize-y rounded-lg border border-border bg-background p-3 font-mono text-xs leading-relaxed text-foreground focus:outline-none focus:ring-1 focus:ring-live/40"
                 rows={4}
                 placeholder={
                   isPdfPick
                     ? '(contenu PDF encodé en base64 — prêt pour indexation)'
-                    : 'Ou collez le contenu texte ici (cours, notes, code, synthèses)...'
+                    : 'Ou colle le contenu texte ici (cours, notes, code, synthèses)...'
                 }
                 value={isPdfPick ? (fileName ? '(fichier sélectionné)' : '') : pasted}
                 onChange={(e) => setPasted(e.target.value)}
@@ -441,7 +451,7 @@ export function DocumentsPage() {
               <div className="flex items-center gap-2">
                 <Input
                   className="h-9 font-mono text-xs"
-                  placeholder="Que voulez-vous retrouver ? (recherche hybride : sémantique + lexical)"
+                  placeholder="Que veux-tu retrouver ? (recherche hybride : sémantique + lexical)"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(e) => {
@@ -600,7 +610,7 @@ export function DocumentsPage() {
                   chargement…
                 </div>
               ) : error ? (
-                <ErrorState message={error} details={error} />
+                <ErrorState message={error} details={error} onRetry={refresh} />
               ) : visibleDocuments.length === 0 ? (
                 <EmptyState
                   icon={<FileText />}
@@ -608,7 +618,7 @@ export function DocumentsPage() {
                   description={
                     tab === 'shared'
                       ? 'Le partage n’est pas encore disponible.'
-                      : 'Ajoutez votre premier document ci-dessus pour commencer.'
+                      : 'Ajoute ton premier document ci-dessus pour commencer.'
                   }
                 />
               ) : (
@@ -664,7 +674,11 @@ export function DocumentsPage() {
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            onClick={() => void deleteDocument(d.doc_id)}
+                            onClick={() => {
+                              if (window.confirm(`Supprimer « ${d.filename} » ? Cette action est définitive.`)) {
+                                void deleteDocument(d.doc_id);
+                              }
+                            }}
                             className="text-destructive focus:text-destructive"
                           >
                             <Trash2 className="h-3.5 w-3.5" />

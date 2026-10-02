@@ -77,7 +77,7 @@ export function SettingsProfilePage() {
       <PageHeader
         eyebrow="settings · profile"
         title="Profil"
-        description="Gérez les informations que l’application peut réellement enregistrer."
+        description="Gère les informations que l’application peut réellement enregistrer."
       />
 
       <div className="max-w-2xl space-y-5 p-6">
@@ -119,7 +119,7 @@ export function SettingsProfilePage() {
                 value={name}
                 disabled={loading || !userId}
                 maxLength={200}
-                placeholder="Votre nom"
+                placeholder="Ton nom"
                 onChange={(e) => {
                   setName(e.target.value);
                   setSaved(false);
@@ -140,7 +140,7 @@ export function SettingsProfilePage() {
                 disabled={loading || !userId}
                 maxLength={2000}
                 rows={4}
-                placeholder="Quelques mots sur vous, vos objectifs…"
+                placeholder="Quelques mots sur toi, tes objectifs…"
                 onChange={(e) => {
                   setDescription(e.target.value);
                   setSaved(false);

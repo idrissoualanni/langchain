@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import { SessionProvider, useSession } from "@livekit/components-react";
 import { Room, TokenSource } from "livekit-client";
 import { Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import { VideoSession } from "@/components/livekit/VideoSession";
 import { useLiveKitToken } from "@/hooks/useLiveKitToken";
 
 export default function VideoPage() {
   const { data, loading, error } = useLiveKitToken();
+  const navigate = useNavigate();
 
   if (loading) {
     return (
@@ -30,6 +32,13 @@ export default function VideoPage() {
           <p className="text-sm text-muted-foreground">
             {error || "Aucun token LiveKit reçu."}
           </p>
+          <button
+            type="button"
+            onClick={() => navigate("/assistant")}
+            className="text-primary text-sm underline"
+          >
+            Retour à l&apos;assistant
+          </button>
         </div>
       </div>
     );

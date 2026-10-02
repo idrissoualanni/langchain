@@ -49,7 +49,7 @@ export function LearningProgressPage() {
             <EmptyState
               icon={TrendingUp}
               title="Aucune donnée disponible pour le moment."
-              description="Aucun topic n’a encore été évalué pour votre profil."
+              description="Aucun topic n’a encore été évalué pour ton profil."
             />
           </Surface>
         ) : (

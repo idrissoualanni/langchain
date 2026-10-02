@@ -24,8 +24,8 @@ export function ModelsPage() {
       setModels(data.models || []);
     } catch (error) {
       toast({
-        title: "Error loading models",
-        description: error instanceof Error ? error.message : "Unknown error",
+        title: "Erreur lors du chargement des modèles",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
         variant: "destructive",
       });
     } finally {
@@ -48,7 +48,7 @@ export function ModelsPage() {
   };
 
   const handleDelete = async (modelId: string) => {
-    if (!confirm(`Are you sure you want to delete model ${modelId}?`)) return;
+    if (!confirm(`Supprimer le modèle ${modelId} ? Cette action est définitive.`)) return;
 
     try {
       const response = await apiRequest(`/api/admin/models/${modelId}`, {
@@ -56,15 +56,15 @@ export function ModelsPage() {
       });
       
       if (response.ok) {
-        toast({ title: "Model deleted successfully" });
+        toast({ title: "Modèle supprimé" });
         loadModels();
       } else {
-        throw new Error("Failed to delete model");
+        throw new Error("Échec de la suppression du modèle");
       }
     } catch (error) {
       toast({
-        title: "Error deleting model",
-        description: error instanceof Error ? error.message : "Unknown error",
+        title: "Erreur lors de la suppression du modèle",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
         variant: "destructive",
       });
     }
@@ -80,8 +80,8 @@ export function ModelsPage() {
       
       if (response.ok) {
         toast({ 
-          title: `Model ${enabled ? 'enabled' : 'disabled'}`,
-          description: `${modelId} is now ${enabled ? 'active' : 'disabled'}`,
+          title: `Modèle ${enabled ? 'activé' : 'désactivé'}`,
+          description: `${modelId} est maintenant ${enabled ? 'actif' : 'désactivé'}`,
         });
         loadModels();
       } else {
@@ -89,8 +89,8 @@ export function ModelsPage() {
       }
     } catch (error) {
       toast({
-        title: "Error updating model",
-        description: error instanceof Error ? error.message : "Unknown error",
+        title: "Erreur lors de la mise à jour du modèle",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
         variant: "destructive",
       });
       loadModels(); // Revert UI
@@ -107,16 +107,16 @@ export function ModelsPage() {
       
       if (response.ok) {
         toast({
-          title: "Model test successful",
-          description: `Response time: ${result.latency_ms?.toFixed(0) || 'N/A'}ms`,
+          title: "Test du modèle réussi",
+          description: `Temps de réponse : ${result.latency_ms?.toFixed(0) || 'N/A'} ms`,
         });
       } else {
-        throw new Error(result.detail || "Test failed");
+        throw new Error(result.detail || "Test échoué");
       }
     } catch (error) {
       toast({
-        title: "Model test failed",
-        description: error instanceof Error ? error.message : "Unknown error",
+        title: "Test du modèle échoué",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
         variant: "destructive",
       });
     }
@@ -148,7 +148,7 @@ export function ModelsPage() {
     } catch (error) {
       toast({
         title: `Error ${editingModel ? 'updating' : 'creating'} model`,
-        description: error instanceof Error ? error.message : "Unknown error",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
         variant: "destructive",
       });
     }

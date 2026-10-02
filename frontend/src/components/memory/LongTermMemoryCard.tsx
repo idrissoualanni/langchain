@@ -417,7 +417,9 @@ export function LongTermMemoryCard({
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => removeFact(fact.id)}
+                                  onClick={() => {
+                                    if (window.confirm('Supprimer ce fait de mémoire ?')) void removeFact(fact.id);
+                                  }}
                                   className="rounded p-1 text-muted hover:text-error"
                                   title="Supprimer ce fait"
                                 >

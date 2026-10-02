@@ -218,7 +218,11 @@ export function KnowledgeCorpusPanel() {
                   size="icon"
                   className="h-7 w-7"
                   disabled={busy}
-                  onClick={() => handleDelete(s.id)}
+                  onClick={() => {
+                    if (window.confirm(`Supprimer « ${s.title} » ? Cette action est définitive.`)) {
+                      void handleDelete(s.id);
+                    }
+                  }}
                   aria-label={`Supprimer ${s.title}`}
                 >
                   <Trash2 className="h-3.5 w-3.5" />

@@ -385,7 +385,7 @@ export function ActivityPanel() {
               </section>
             ) : (
               <div className="text-muted-foreground border-t border-border p-4 text-center text-xs">
-                Sélectionnez une activité pour en voir le détail.
+                Sélectionne une activité pour en voir le détail.
               </div>
             )}
           </>

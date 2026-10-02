@@ -154,7 +154,7 @@ export function McpInspectorPage() {
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Explorez les serveurs MCP autorisés et exécutez leurs outils pour déboguer un workflow.
             Le navigateur ne parle jamais MCP directement : chaque action passe par le backend, qui
-            pilote les serveurs stdio avec votre identité.
+            pilote les serveurs stdio avec ton identité.
           </p>
         </div>
         <Button
@@ -189,7 +189,7 @@ export function McpInspectorPage() {
             <EmptyState
               icon={<Server />}
               title="Aucun serveur MCP déclaré"
-              description="Le registre ne contient aucun serveur. Vérifiez la configuration MCP du backend."
+              description="Le registre ne contient aucun serveur. Vérifie la configuration MCP du backend."
             />
           )}
 
@@ -236,7 +236,7 @@ export function McpInspectorPage() {
             <EmptyState
               icon={<TerminalSquare />}
               title="Sélectionnez un serveur"
-              description="Choisissez un serveur à gauche pour afficher ses outils et les exécuter."
+              description="Choisis un serveur à gauche pour afficher ses outils et les exécuter."
             />
           )}
 
@@ -309,7 +309,7 @@ export function McpInspectorPage() {
                 {!selectedTool && (
                   <EmptyState
                     icon={<Play />}
-                    title="Choisissez un outil"
+                    title="Choisis un outil"
                     description="Les outils d'écriture demanderont une confirmation avant de s'exécuter."
                   />
                 )}
@@ -328,7 +328,7 @@ export function McpInspectorPage() {
                       {mutating && (
                         <p className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-foreground/80">
                           <FileWarning className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
-                          Cet outil modifie des données. Vérifiez les arguments, une confirmation vous
+                          Cet outil modifie des données. Vérifie les arguments, une confirmation te
                           sera demandée.
                         </p>
                       )}

@@ -215,7 +215,7 @@ export function AppSidebar() {
                 : 'Passer au thème sombre'
             }
             title={resolvedTheme === 'dark' ? 'Thème clair' : 'Thème sombre'}
-            className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-control)] transition-colors"
+            className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground -mr-1 -mb-1 flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-control)] transition-colors"
           >
             {resolvedTheme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
           </button>

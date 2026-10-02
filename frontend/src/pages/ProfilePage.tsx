@@ -65,7 +65,7 @@ function Avatar({
 export function ProfilePage() {
   const { internal, neonUser, devMode } = useCurrentUser();
   const userId = internal?.user_id ?? null;
-  const { data } = useLearning(userId);
+  const { data, loading } = useLearning(userId);
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
@@ -93,7 +93,7 @@ export function ProfilePage() {
       <PageHeader
         eyebrow="profil"
         title="Profil"
-        description="Vos informations d’identité et le résumé de votre activité."
+        description="Tes informations d’identité et le résumé de ton activité."
         actions={
           <Link
             to="/settings/profile"
@@ -191,7 +191,9 @@ export function ProfilePage() {
             </Link>
           </SurfaceHeader>
           <SurfaceBody>
-            {data.subjectCount === 0 && data.goals.length === 0 ? (
+            {loading ? (
+              <p className="text-muted-foreground text-sm">Chargement…</p>
+            ) : data.subjectCount === 0 && data.goals.length === 0 ? (
               <EmptyState
                 icon={GraduationCap}
                 title="Aucune donnée disponible pour le moment."

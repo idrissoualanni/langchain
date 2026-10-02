@@ -211,7 +211,11 @@ export function SubjectDefinitionsPanel() {
                   size="icon"
                   className="h-7 w-6"
                   disabled={busy}
-                  onClick={() => deleteSubject(s.subject_id)}
+                  onClick={() => {
+                    if (window.confirm(`Supprimer la définition « ${s.subject_id} » ? Cette action est définitive.`)) {
+                      void deleteSubject(s.subject_id);
+                    }
+                  }}
                   aria-label={`Supprimer ${s.subject_id}`}
                 >
                   <Trash2 className="h-3 w-3" />

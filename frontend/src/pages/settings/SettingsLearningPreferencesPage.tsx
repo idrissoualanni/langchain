@@ -25,7 +25,7 @@ export function SettingsLearningPreferencesPage() {
       <PageHeader
         eyebrow="settings · learning"
         title="Préférences d’apprentissage"
-        description="Réglages pédagogiques de votre compte."
+        description="Réglages pédagogiques de ton compte."
       />
 
       <div className="max-w-2xl space-y-5 p-6">
@@ -34,7 +34,7 @@ export function SettingsLearningPreferencesPage() {
             <EmptyState
               icon={SlidersHorizontal}
               title="Aucune préférence d’apprentissage disponible pour le moment."
-              description="Le backend n’expose pas encore de réglages pédagogiques modifiables. La progression est pilotée par l’agent pendant vos conversations."
+              description="Le backend n’expose pas encore de réglages pédagogiques modifiables. La progression est pilotée par l’agent pendant tes conversations."
               action={
                 <Link
                   to="/learning"

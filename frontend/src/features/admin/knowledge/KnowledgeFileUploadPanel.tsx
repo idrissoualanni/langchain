@@ -288,6 +288,7 @@ export function KnowledgeFileUploadPanel() {
                         className="h-7 w-7"
                         onClick={() => handlePreview(f.path)}
                         disabled={previewLoading}
+                        aria-label={`Prévisualiser ${f.path}`}
                       >
                         <Eye className="h-3.5 w-3.5" />
                       </Button>
@@ -296,6 +297,7 @@ export function KnowledgeFileUploadPanel() {
                         size="icon"
                         className="h-7 w-7"
                         onClick={() => handleDelete(f.path)}
+                        aria-label={`Supprimer le fichier ${f.path}`}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>

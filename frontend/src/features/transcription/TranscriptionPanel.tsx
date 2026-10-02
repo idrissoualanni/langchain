@@ -177,7 +177,7 @@ export function TranscriptionPanel({
             </div>
           )}
           <p className={`text-sm leading-relaxed ${!transcript ? "italic text-muted-foreground" : ""}`}>
-            {transcript || "Votre texte apparaîtra ici..."}
+            {transcript || "Ton texte apparaîtra ici..."}
           </p>
         </div>
 

@@ -172,7 +172,7 @@ export function SettingsSessionsPage() {
                   session.kind === 'error'
                     ? session.reason
                     : session.reason ??
-                      'Aucune session temps réel n’est en cours. Démarrez une session vidéo pour parler avec l’agent tuteur.'
+                      'Aucune session temps réel n’est en cours. Démarre une session vidéo pour parler avec l’agent tuteur.'
                 }
                 action={
                   <div className="flex flex-wrap justify-center gap-2">

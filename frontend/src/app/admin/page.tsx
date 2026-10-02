@@ -50,7 +50,7 @@ export default function AdminDashboardPage() {
         <AlertCircle className="h-12 w-12 text-destructive" />
         <p className="text-lg font-medium text-destructive">{error}</p>
         <p className="text-sm text-muted-foreground">
-          Vérifiez que vous êtes connecté avec un compte administrateur.
+          Vérifie que tu es connecté avec un compte administrateur.
         </p>
       </div>
     );

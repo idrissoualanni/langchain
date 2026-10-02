@@ -423,6 +423,11 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
           <ThreadListItemMorePrimitive.Item asChild>
             <ThreadListItemPrimitive.Delete
               data-slot="aui_thread-list-item-more-item"
+              onClick={(e) => {
+                if (!window.confirm('Supprimer cette conversation ? Cette action est définitive.')) {
+                  e.preventDefault();
+                }
+              }}
               className="text-destructive hover:bg-destructive hover:text-destructive-foreground focus:bg-destructive focus:text-destructive-foreground flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm outline-none select-none"
             >
               <Trash2Icon className="size-4" />

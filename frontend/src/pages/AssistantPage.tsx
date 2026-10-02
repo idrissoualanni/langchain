@@ -71,8 +71,8 @@ const THREAD_COMPONENTS: ThreadComponents = {
         Prêt à réviser ?
       </h1>
       <p className="text-muted-foreground mt-2 max-w-md text-sm leading-relaxed">
-        Posez une question, demandez un exercice, un quiz ou un indice.
-        Vos conversations sont persistées côté backend.
+        Pose une question, demande un exercice, un quiz ou un indice.
+        Tes conversations sont persistées côté backend.
       </p>
     </div>
   ),

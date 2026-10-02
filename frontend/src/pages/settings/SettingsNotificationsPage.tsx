@@ -9,7 +9,7 @@ export function SettingsNotificationsPage() {
       <PageHeader
         eyebrow="settings · notifications"
         title="Notifications"
-        description="Préférences de notification de votre compte."
+        description="Préférences de notification de ton compte."
       />
 
       <div className="max-w-2xl p-6">

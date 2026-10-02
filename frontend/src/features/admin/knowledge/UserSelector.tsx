@@ -45,6 +45,7 @@ export function UserSelector({
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
+          aria-label="Ajouter un utilisateur"
           className="flex-1"
         />
         <Button 
@@ -53,7 +54,7 @@ export function UserSelector({
           disabled={!inputValue.trim()}
         >
           <Search className="h-4 w-4 mr-2" />
-          Add
+          Ajouter
         </Button>
       </div>
 
@@ -63,7 +64,9 @@ export function UserSelector({
             <Badge key={userId} variant="default" className="gap-1">
               {userId}
               <button
+                type="button"
                 onClick={() => handleRemoveUser(userId)}
+                aria-label={`Retirer ${userId}`}
                 className="ml-1 hover:bg-white/20 rounded-full p-0.5"
               >
                 <X className="h-3 w-3" />

@@ -322,7 +322,7 @@ function VideoSessionContent() {
         toast({
           title: "Partage refusé",
           description:
-            "Vous avez refusé l'accès à l'écran. Autorisez-le dans les permissions du navigateur, puis réessayez.",
+            "Tu as refusé l'accès à l'écran. Autorise-le dans les permissions du navigateur, puis réessaie.",
           variant: "destructive",
         });
       } else if (dom?.name === "NotFoundError") {
@@ -337,7 +337,7 @@ function VideoSessionContent() {
           title: "Partage d'écran impossible",
           description:
             (e instanceof Error ? e.message : "Erreur inconnue") +
-            " — vérifiez votre connexion et réessayez.",
+            " — vérifie ta connexion et réessaie.",
           variant: "destructive",
         });
       }
@@ -411,7 +411,7 @@ function VideoSessionContent() {
               </div>
               <p className="text-sm font-medium mb-1">Aucun écran partagé</p>
               <p className="text-xs text-center max-w-[250px]">
-                Cliquez sur le bouton partage d'écran pour montrer votre display à l'agent
+                Clique sur le bouton partage d'écran pour montrer ton display à l'agent
               </p>
             </div>
           )}
