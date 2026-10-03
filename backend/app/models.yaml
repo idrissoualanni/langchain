@@ -1,4 +1,70 @@
 models:
+  anthropic-claude-3.5-sonnet:
+    context_window: 200000
+    display_name: Claude 3.5 Sonnet (Anthropic)
+    enabled: false
+    max_output_tokens: 8192
+    model: claude-3-5-sonnet-20241022
+    provider: anthropic
+    supports_audio: false
+    supports_structured_output: true
+    supports_tools: true
+    supports_vision: true
+  cf-deepseek-r1:
+    context_window: 16384
+    display_name: DeepSeek R1 (Cloudflare)
+    enabled: true
+    max_output_tokens: 8192
+    model: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b'
+    provider: cloudflare
+    supports_audio: false
+    supports_structured_output: false
+    supports_tools: false
+    supports_vision: false
+  cf-llama-3.1-70b:
+    context_window: 8192
+    display_name: Llama 3.1 70B (Cloudflare)
+    enabled: true
+    max_output_tokens: 4096
+    model: '@cf/meta/llama-3.1-70b-instruct'
+    provider: cloudflare
+    supports_audio: false
+    supports_structured_output: true
+    supports_tools: true
+    supports_vision: false
+  cf-llama-3.1-8b:
+    context_window: 8192
+    display_name: Llama 3.1 8B (Cloudflare)
+    enabled: true
+    max_output_tokens: 4096
+    model: '@cf/meta/llama-3.1-8b-instruct'
+    provider: cloudflare
+    supports_audio: false
+    supports_structured_output: true
+    supports_tools: true
+    supports_vision: false
+  cf-llama-3.2-3b:
+    context_window: 8192
+    display_name: Llama 3.2 3B (Cloudflare)
+    enabled: true
+    max_output_tokens: 2048
+    model: '@cf/meta/llama-3.2-3b-instruct'
+    provider: cloudflare
+    supports_audio: false
+    supports_structured_output: true
+    supports_tools: true
+    supports_vision: false
+  cf-llava-vision:
+    context_window: 8192
+    display_name: LLaVA Vision (Cloudflare)
+    enabled: true
+    max_output_tokens: 2048
+    model: '@cf/llava-next-llama-3-8b'
+    provider: cloudflare
+    supports_audio: false
+    supports_structured_output: true
+    supports_tools: true
+    supports_vision: true
   default:
     context_window: null
     max_output_tokens: null
@@ -8,6 +74,46 @@ models:
     supports_audio: false
     supports_structured_output: false
     supports_tools: true
+    supports_vision: false
+  disabled-test-model:
+    display_name: Disabled Test
+    enabled: false
+    model: test
+    provider: ollama
+    supports_audio: false
+    supports_structured_output: false
+    supports_tools: false
+    supports_vision: false
+  openai-gpt-4o:
+    context_window: 128000
+    display_name: GPT-4o (OpenAI)
+    enabled: false
+    max_output_tokens: 4096
+    model: gpt-4o
+    provider: openai
+    supports_audio: false
+    supports_structured_output: true
+    supports_tools: true
+    supports_vision: true
+  openai-gpt-4o-mini:
+    context_window: 128000
+    display_name: GPT-4o Mini (OpenAI)
+    enabled: false
+    max_output_tokens: 4096
+    model: gpt-4o-mini
+    provider: openai
+    supports_audio: false
+    supports_structured_output: true
+    supports_tools: true
+    supports_vision: true
+  test-model:
+    display_name: Test Model
+    enabled: true
+    model: gemma2:9b
+    provider: ollama
+    supports_audio: false
+    supports_structured_output: false
+    supports_tools: false
     supports_vision: false
   vision-default:
     context_window: null
@@ -21,108 +127,3 @@ models:
     supports_structured_output: false
     supports_tools: true
     supports_vision: true
-
-  # ──────────────────────────────────────────────────────────────
-  # Cloudflare Workers AI models
-  # ──────────────────────────────────────────────────────────────
-  cf-llama-3.2-3b:
-    display_name: "Llama 3.2 3B (Cloudflare)"
-    provider: cloudflare
-    model: "@cf/meta/llama-3.2-3b-instruct"
-    enabled: true
-    supports_tools: true
-    supports_structured_output: true
-    supports_vision: false
-    supports_audio: false
-    context_window: 8192
-    max_output_tokens: 2048
-  
-  cf-llama-3.1-8b:
-    display_name: "Llama 3.1 8B (Cloudflare)"
-    provider: cloudflare
-    model: "@cf/meta/llama-3.1-8b-instruct"
-    enabled: true
-    supports_tools: true
-    supports_structured_output: true
-    supports_vision: false
-    supports_audio: false
-    context_window: 8192
-    max_output_tokens: 4096
-  
-  cf-llama-3.1-70b:
-    display_name: "Llama 3.1 70B (Cloudflare)"
-    provider: cloudflare
-    model: "@cf/meta/llama-3.1-70b-instruct"
-    enabled: true
-    supports_tools: true
-    supports_structured_output: true
-    supports_vision: false
-    supports_audio: false
-    context_window: 8192
-    max_output_tokens: 4096
-  
-  cf-deepseek-r1:
-    display_name: "DeepSeek R1 (Cloudflare)"
-    provider: cloudflare
-    model: "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"
-    enabled: true
-    supports_tools: false
-    supports_structured_output: false
-    supports_vision: false
-    supports_audio: false
-    context_window: 16384
-    max_output_tokens: 8192
-  
-  cf-llava-vision:
-    display_name: "LLaVA Vision (Cloudflare)"
-    provider: cloudflare
-    model: "@cf/llava-next-llama-3-8b"
-    enabled: true
-    supports_tools: true
-    supports_structured_output: true
-    supports_vision: true
-    supports_audio: false
-    context_window: 8192
-    max_output_tokens: 2048
-
-  # ──────────────────────────────────────────────────────────────
-  # OpenAI models (disabled by default)
-  # ──────────────────────────────────────────────────────────────
-  openai-gpt-4o:
-    display_name: "GPT-4o (OpenAI)"
-    provider: openai
-    model: "gpt-4o"
-    enabled: false
-    supports_tools: true
-    supports_structured_output: true
-    supports_vision: true
-    supports_audio: false
-    context_window: 128000
-    max_output_tokens: 4096
-  
-  openai-gpt-4o-mini:
-    display_name: "GPT-4o Mini (OpenAI)"
-    provider: openai
-    model: "gpt-4o-mini"
-    enabled: false
-    supports_tools: true
-    supports_structured_output: true
-    supports_vision: true
-    supports_audio: false
-    context_window: 128000
-    max_output_tokens: 4096
-
-  # ──────────────────────────────────────────────────────────────
-  # Anthropic models (disabled by default)
-  # ──────────────────────────────────────────────────────────────
-  anthropic-claude-3.5-sonnet:
-    display_name: "Claude 3.5 Sonnet (Anthropic)"
-    provider: anthropic
-    model: "claude-3-5-sonnet-20241022"
-    enabled: false
-    supports_tools: true
-    supports_structured_output: true
-    supports_vision: true
-    supports_audio: false
-    context_window: 200000
-    max_output_tokens: 8192

@@ -50,3 +50,8 @@ frontend/coverage/
 vitest-ui.png
 
 .opencode
+
+# Lanceur de tests Windows local (menu Vitest UI / Playwright).
+# Utile sur une machine, inutile pour les autres : un raccourci de poste
+# n'est pas du code du projet.
+lancer-tests.cmd
