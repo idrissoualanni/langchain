@@ -11,18 +11,10 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap"
       rel="stylesheet"
     />
-    <script>
-      // Thème appliqué avant le premier paint (évite le flash).
-      try {
-        var pref = localStorage.getItem('dsh_theme');
-        var dark =
-          pref === 'dark' ||
-          (pref !== 'light' &&
-            window.matchMedia &&
-            window.matchMedia('(prefers-color-scheme: dark)').matches);
-        if (dark) document.documentElement.classList.add('dark');
-      } catch (e) {}
-    </script>
+    <!-- Thème avant le premier paint (évite le flash). Fichier EXTERNE,
+         et non script inline : c'est ce qui permet à la CSP de
+         construire un `script-src 'self'` sans `'unsafe-inline'`. -->
+    <script src="/theme-boot.js"></script>
   </head>
   <body>
     <div id="root"></div>

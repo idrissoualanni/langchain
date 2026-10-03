@@ -25,6 +25,12 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     css: false,
+    // timeout test 15s : les cartes animées ( framer-motion ) tournent
+    // leur boucle d'animation sous jsdom ; sous charge ( watch + UI ),
+    // un rendu peut dépasser les 5s par défaut → timeout flaky
+    // ( ex. ResponseRenderer › clarification, 8s en watch ). On élève
+    // le plafond au lieu de sonder le détail framer-motion.
+    testTimeout: 15000,
   },
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -34,6 +40,13 @@ export default defineConfig({
     preserveSymlinks: true, // évite optimizeSafeRealPathSync → spawn EPERM
   },
   build: {
+    // Pas de source maps en production. Elles publient le code source
+    // intégral — noms de fonctions, commentaires, chaînes de caractères
+    // — dans des fichiers publics et lisibles par tout le monde. Pour un
+    // bug report, une pile d'appels minifiée suffit largement, et un
+    //.traceur d'événements peut s'y brancher si le besoin s'en fait
+    // sentir. On ne paie donc pas le debuggabilité avec le secret.
+    sourcemap: false,
     rollupOptions: {
       // better-auth ( dépendance de @neondatabase/auth ) contient des
       // imports circulaires internes ( client/index.mjs → lui-même )
