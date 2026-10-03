@@ -84,6 +84,9 @@ def verify(token):
 @pytest.fixture(autouse=True)
 def _isolate(monkeypatch):
     """Faux JWKS + audience fixe, restaurés après chaque test."""
+    # Aucun test ne doit hériter du réglage NEON_AUTH_STRICT_AUD de la
+    # machine qui lance pytest.
+    monkeypatch.delenv("NEON_AUTH_STRICT_AUD", raising=False)
     monkeypatch.setattr(resolver, "_neon_jwk_client", _FakeJWKClient())
     monkeypatch.setattr(resolver, "NEON_AUTH_BASE_URL", _AUD)
 
@@ -152,10 +155,27 @@ def test_invalid_signature_rejected():
     assert err == "InvalidSignatureError"
 
 
-def test_wrong_audience_rejected():
+def test_wrong_audience_rejected_en_mode_strict(monkeypatch):
+    """En mode strict, une audience étrangère est bien refusée.
+
+    Par défaut l'audience n'est plus EXIGÉE ( elle est journalisée en
+    WARNING ) : la signature vérifiée contre l'unique clé du JWKS est
+    concluante, et le refus produisait des 401 sur des sessions valides.
+    NEON_AUTH_STRICT_AUD rétablit le refus — voir resolver._strict_aud.
+    Ce test verrouille que le mode strict fonctionne encore, pas que
+    l'audience est exigée par défaut.
+    """
+    monkeypatch.setenv("NEON_AUTH_STRICT_AUD", "1")
     ok, err = verify(make_token(aud="https://pas-le-bon.neon.tech"))
     assert not ok
     assert err == "InvalidAudienceError"
+
+
+def test_wrong_audience_acceptee_par_defaut(monkeypatch):
+    """Le défaut : un `aud` inconnu ne bloque pas l'authentification."""
+    monkeypatch.delenv("NEON_AUTH_STRICT_AUD", raising=False)
+    ok, err = verify(make_token(aud="https://pas-le-bon.neon.tech"))
+    assert ok, err
 
 
 def test_leeway_is_actually_applied(monkeypatch):

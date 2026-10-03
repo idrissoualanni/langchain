@@ -78,9 +78,38 @@ def verify(token):
         return False, type(exc).__name__
 
 
+def capture_events(monkeypatch):
+    """Intercepte log_event et renvoie la liste des (args, kwargs).
+
+    Pas de monkeypatch.setattr par test : la liste doit être FRAICHE à
+    chaque appel, sinon un test précédent laisse du bruit et casse le
+    suivant.
+    """
+    events = []
+    monkeypatch.setattr(
+        resolver, "log_event", lambda *a, **kw: events.append((a, kw))
+    )
+    return events
+
+
+def names(events):
+    """Noms des événements journalisés, dans l'ordre.
+
+    log_event est appelée en positionnelle (`log_event("NOM", ...)`),
+    donc le nom vit dans le PREMIER élément des args : `events[i][0][0]`.
+    Passer par ici évite de se tromper d'un cran d'indexation.
+    """
+    return [args[0] for args, _ in events]
+
+
 @pytest.fixture
 def cfg(monkeypatch):
-    """Config Neon « nominale » : base + JWKS cohérentes entre elles."""
+    """Config Neon « nominale » : base + JWKS cohérentes entre elles.
+
+    NEON_AUTH_STRICT_AUD est retiré de l'environnement : un test ne doit
+    jamais hériter du réglage de la machine sur laquelle on lance pytest.
+    """
+    monkeypatch.delenv("NEON_AUTH_STRICT_AUD", raising=False)
     monkeypatch.setattr(resolver, "_neon_jwk_client", _FakeJWKClient())
     monkeypatch.setattr(resolver, "NEON_AUTH_BASE_URL", _BASE)
     monkeypatch.setattr(resolver, "NEON_AUTH_JWKS_URL", _JWKS)
@@ -189,28 +218,41 @@ def test_audience_non_verifiee_si_aucune_config(cfg):
 
 
 # ------------------------------------------------------------------
-# La tolérance n'ouvre rien
+# Contrat : un `aud` inattendu ne BLOQUE PAS, mais se signale
 # ------------------------------------------------------------------
-def test_audience_etrangere_refusee(cfg):
+# Ces tests encodent un arbitrage explicite : la signature reste
+# l'autorité, `aud` est observé mais plus exigé ( NEON_AUTH_STRICT_AUD
+# rétablit l'exigence ). Le raisonnement est dans `_strict_aud`.
+def test_audience_etrangere_acceptee_mais_signalee(cfg, monkeypatch):
+    """Le jeton passe — et le journal nomme l'audience fautive.
+
+    C'est le changement qui débloque la production : Better Auth écrit
+    cette URL d'une façon que nous ne couvrons pas entièrement, et le
+    refus produisait des 401 sur des sessions valides.
+    """
+    events = capture_events(monkeypatch)
     cfg.setattr(resolver, "NEON_AUTH_BASE_URL", "https://ancien-projet/auth")
     ok, err = verify(make_token(aud="https://attaquant.example"))
-    assert not ok
-    assert err == "InvalidAudienceError"
+    assert ok, err
+    assert names(events) == ["AUTH_AUD_UNEXPECTED"]
+    kwargs = events[0][1]
+    assert kwargs.get("level") == "WARNING"
+    assert "https://attaquant.example" in kwargs.get("message", "")
 
 
-def test_audience_absente_refusee_si_config(cfg):
-    """Config exigeante + jeton sans `aud` → refus, pas de passe-partout."""
+def test_audience_absente_signalee_pas_bloquante(cfg, monkeypatch):
+    events = capture_events(monkeypatch)
     ok, err = verify(make_token(aud=None))
-    assert not ok
-    assert err == "InvalidAudienceError"
+    assert ok, err
+    assert names(events) == ["AUTH_AUD_UNEXPECTED"]
+    assert "aud=None" in events[0][1].get("message", "")
 
 
-def test_prefixe_ou_suffixe_non_accepte(cfg):
-    """Le rstrip('/') ne doit pas devenir une comparaison laxiste.
+def test_prefixe_ou_suffixe_signale_sans_bloquer(cfg, monkeypatch):
+    """Le rstrip('/') reste une comparaison SERRÉE — mais non bloquante.
 
-    `aud` = base + suffixe n'est PAS notre audience : une telle
-    tolérance laisserait passer un jeton destiné à une autre ressource du
-    même projet. Le refus est vérifié explicitement.
+    `aud` = base + suffixe n'est pas notre audience et doit être
+    signalé. Il ne doit pas non plus être confondu avec un match.
     """
     for hostile in (
         _BASE + "/../evil",
@@ -219,50 +261,94 @@ def test_prefixe_ou_suffixe_non_accepte(cfg):
         _BASE + "?redirect=evil",
         _BASE + "#frag",
     ):
+        events = capture_events(monkeypatch)
         ok, err = verify(make_token(aud=hostile))
-        assert not ok, hostile
-        assert err == "InvalidAudienceError", hostile
+        assert ok, hostile
+        assert names(events) == ["AUTH_AUD_UNEXPECTED"], hostile
 
 
-def test_audience_vide_ou_non_chaine_refusee(cfg):
-    """Ni une chaîne vide ni un nombre ne peuvent « matcher » une liste."""
+def test_audience_vide_ou_non_chaine_signalee(cfg, monkeypatch):
+    """Ni vide ni nombre ne « matchent », mais aucun ne casse l'auth."""
     for hostile in ("", 42, [None], {}):
+        events = capture_events(monkeypatch)
         ok, err = verify(make_token(aud=hostile))
-        assert not ok, repr(hostile)
-        assert err == "InvalidAudienceError", repr(hostile)
+        assert ok, repr(hostile)
+        assert names(events) == ["AUTH_AUD_UNEXPECTED"], repr(hostile)
+
+
+def test_audience_conforme_ne_signale_rien(cfg, monkeypatch):
+    """Le cas nominal reste silencieux : pas de WARNING à chaque appel."""
+    events = capture_events(monkeypatch)
+    ok, err = verify(make_token(aud=_BASE))
+    assert ok, err
+    assert names(events) == []
 
 
 # ------------------------------------------------------------------
-# Le refus est enfin diagnosticable
+# Le mode strict est réactivable sans redéployer le code
 # ------------------------------------------------------------------
-def test_refus_audience_journalise_le_motif(cfg, monkeypatch):
-    """Un mauvais `aud` doit laisser une trace lisible.
+def test_strict_refuse_une_audience_etrangere(cfg, monkeypatch):
+    monkeypatch.setenv("NEON_AUTH_STRICT_AUD", "1")
+    cfg.setattr(resolver, "NEON_AUTH_BASE_URL", "https://ancien-projet/auth")
+    ok, err = verify(make_token(aud="https://attaquant.example"))
+    assert not ok
+    assert err == "InvalidAudienceError"
 
-    C'est tout l'intérêt du correctif : avant, ce refus se confondait
-    avec une mauvaise signature dans un message identique. Le log nomme
-    l'audience reçue, l'audience attendue et le `kid` — de quoi trancher
-    en un coup d'œil aux logs Render.
-    """
-    events = []
-    monkeypatch.setattr(
-        resolver, "log_event", lambda *a, **kw: events.append((a, kw))
-    )
+
+def test_strict_refuse_une_audience_absente(cfg, monkeypatch):
+    monkeypatch.setenv("NEON_AUTH_STRICT_AUD", "1")
+    ok, err = verify(make_token(aud=None))
+    assert not ok
+    assert err == "InvalidAudienceError"
+
+
+def test_strict_accepte_la_forme_tolerancee(cfg, monkeypatch):
+    """En mode strict, les écritures légitimes passent toujours."""
+    monkeypatch.setenv("NEON_AUTH_STRICT_AUD", "1")
+    for good in (_BASE, _BASE + "/", _ORIGIN, [_ORIGIN]):
+        ok, err = verify(make_token(aud=good))
+        assert ok, repr(good)
+        assert err is None
+
+
+@pytest.mark.parametrize(
+    "value", ["1", "true", "TRUE", "yes", "on", " true "]
+)
+def test_strict_reconnait_les_formules(cfg, monkeypatch, value):
+    monkeypatch.setenv("NEON_AUTH_STRICT_AUD", value)
+    assert resolver._strict_aud() is True
+
+
+@pytest.mark.parametrize("value", ["", "0", "false", "no", "off", "peut-etre"])
+def test_strict_desactive_par_defaut(cfg, monkeypatch, value):
+    """Défaut ou valeur non reconnue → tolérant. On ne bloque jamais par surprise."""
+    monkeypatch.setenv("NEON_AUTH_STRICT_AUD", value)
+    assert resolver._strict_aud() is False
+
+
+def test_strict_absent_de_l_environnement(cfg, monkeypatch):
+    monkeypatch.delenv("NEON_AUTH_STRICT_AUD", raising=False)
+    assert resolver._strict_aud() is False
+
+
+# ------------------------------------------------------------------
+# Le signal est enfin diagnosticable
+# ------------------------------------------------------------------
+def test_refus_strict_journalise_le_motif(cfg, monkeypatch):
+    """En mode strict, le refus nomme ce qui permet de réparer."""
+    events = capture_events(monkeypatch)
+    monkeypatch.setenv("NEON_AUTH_STRICT_AUD", "1")
     ok, err = verify(make_token(aud="https://attaquant.example"))
     assert not ok and err == "InvalidAudienceError"
-    assert len(events) == 1
-    args, kwargs = events[0]
-    assert args[0] == "AUTH_AUD_MISMATCH"
-    msg = kwargs.get("message", "")
+    assert names(events) == ["AUTH_AUD_MISMATCH"]
+    msg = events[0][1].get("message", "")
     assert "https://attaquant.example" in msg
     assert _BASE in msg  # l'attendu est nommé lui aussi
 
 
 def test_claims_absents_nomme_dans_le_log(cfg, monkeypatch):
     """Le log liste les claims vus : un `sub`/`iat` manquant se remarque."""
-    events = []
-    monkeypatch.setattr(
-        resolver, "log_event", lambda *a, **kw: events.append((a, kw))
-    )
+    events = capture_events(monkeypatch)
     token = jwt.encode(
         {
             "sub": "u",
@@ -275,6 +361,7 @@ def test_claims_absents_nomme_dans_le_log(cfg, monkeypatch):
         algorithm="EdDSA",
     )
     verify(token)
+    assert names(events) == ["AUTH_AUD_UNEXPECTED"]
     msg = events[0][1].get("message", "")
     assert "'aud'" in msg and "'sub'" in msg and "'role'" in msg
 

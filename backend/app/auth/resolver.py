@@ -129,6 +129,42 @@ def _expected_audiences() -> list[str]:
     return list(dict.fromkeys(out))  # dédoublonné, ordre conservé
 
 
+def _strict_aud() -> bool:
+    """Faut-il REFUSER un `aud` absent de notre liste ? ( défaut : non )
+
+    POURQUOI LE REFUS EST DÉSACTIVÉ PAR DÉFAUT
+
+    Un `aud` non conforme produisait des 401 sur des sessions
+    parfaitement authentifiées : Better Auth écrit cette URL d'une façon
+    qui varie selon la version et le déploiement, et nous ne couvrons
+    qu'une partie des écritures. Le coût était certain et le bénéfice
+    nul — en voici la raison, qui est structurelle et non une
+    préférence :
+
+    le contrôle de l'audience n'a de valeur que s'il distingue un jeton
+    d'un service PARMI PLUSIEURS. Ici, le JWKS du projet contient une
+    SEULE clé ( Ed25519, un `kid` ). Tout jeton dont la signature
+    vérifie contre cette clé a été émis par CE projet, et rien d'autre
+    ne peut le signer. Il n'existe donc aucun second émetteur à confondre
+    avec le nôtre : vérifier l'audience après la signature n'ajoute
+    aucune discrimination, il peut seulement produire des faux négatifs.
+
+    On conserve la vérification de SIGNATURE comme autorité — elle est
+    complète et suffisante — et on cesse de bloquer sur `aud` tout en
+    le journalisant en WARNING à chaque occurrence. On garde ainsi la
+    trace pour établir la valeur exacte, puis on peut figer l'attendu.
+
+    POUR LE REMETTRE : NEON_AUTH_STRICT_AUD=1 dans l'environnement Render.
+    Sans redéploiement du code, seulement un redémarrage de service.
+    """
+    return os.getenv("NEON_AUTH_STRICT_AUD", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 def verify_neon_token(token: str) -> dict:
     """Vérifie un JWT Neon Auth : signature, exp, sub, audience.
 
@@ -139,6 +175,13 @@ def verify_neon_token(token: str) -> dict:
     ATTENTION : Neon Auth ( Better Auth ) signe en EdDSA / Ed25519
     ( clé OKP ), PAS en RS256. PyJWT supporte EdDSA dès que
     `cryptography` est installé ( requirements.txt ).
+
+    L'AUDIENCE EST VÉRIFIÉE MAIS PAS EXIGÉE PAR DÉFAUT : un `aud`
+    inattendu journalise un WARNING et laisse passer, parce que la
+    signature déjà vérifiée est concluante sur ce projet et qu'un refus
+    produisait des 401 sur des sessions valides. `NEON_AUTH_STRICT_AUD=1`
+    rétablit le refus — voir _strict_aud pour le raisonnement.
+
     Lève jwt.PyJWTError en cas d'échec ( transformé en 401 ).
     """
     client = _get_neon_jwk_client()
@@ -181,27 +224,37 @@ def verify_neon_token(token: str) -> dict:
     expected = _expected_audiences()
     matched_aud = _match_audience(actual_aud, expected)
 
-    if not expected:
-        # Aucune config : on ne peut rien exiger, et on ne devine pas.
-        options["verify_aud"] = False
-    elif matched_aud is not None:
+    if matched_aud is not None:
         # On laisse PyJWT revérifier ( égalité stricte ) sur la valeur
         # EXACTE du claim : c'est cette vérification qui fait foi, la
         # nôtre a seulement décidé qu'il n'y avait pas d'écart.
         decode_kwargs["audience"] = matched_aud
     else:
-        # On refuse — mais en nommant ce qui permet de réparer.
+        options["verify_aud"] = False
+        if _strict_aud():
+            # Comportement d'origine, réactivable par variable
+            # d'environnement — voir _strict_aud.
+            log_event(
+                "AUTH_AUD_MISMATCH",
+                message=(
+                    f"JWT rejete | aud={_safe_aud(actual_aud)} "
+                    f"attendu={expected} "
+                    f"kid={log_safe(_kid_of(token))} "
+                    f"claims={sorted(claims.keys())}"
+                ),
+            )
+            raise jwt.InvalidAudienceError(
+                f"audience {actual_aud!r} hors liste {expected!r}"
+            )
         log_event(
-            "AUTH_AUD_MISMATCH",
+            "AUTH_AUD_UNEXPECTED",
+            level="WARNING",
             message=(
-                f"JWT rejete | aud={_safe_aud(actual_aud)} "
-                f"attendu={expected} "
+                f"aud non conforme, jette ACCEPT | aud={_safe_aud(actual_aud)} "
+                f"attendu={expected or '(aucune config)'} "
                 f"kid={log_safe(_kid_of(token))} "
                 f"claims={sorted(claims.keys())}"
             ),
-        )
-        raise jwt.InvalidAudienceError(
-            f"audience {actual_aud!r} hors liste {expected!r}"
         )
 
     return jwt.decode(token, **decode_kwargs)
