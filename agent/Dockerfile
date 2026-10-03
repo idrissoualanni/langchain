@@ -24,7 +24,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+
+# Environnement virtuel dans un emplacement lisible par l'utilisateur non
+# root : le `--user` de pip écrivait dans /root/.local, illisible apres le
+# passage a USER app (le home de root est en mode 700).
+RUN python -m venv /opt/venv
+RUN /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # ------------------------------------------------------------------
 # Runtime
@@ -39,10 +44,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Utilisateur non root : le conteneur ne tournait qu'en uid 0.
+RUN groupadd --system app \
+    && useradd --system --gid app --home-dir /home/app \
+       --shell /usr/sbin/nologin --create-home app
+
 WORKDIR /app
 
-COPY --from=builder /root/.local /root/.local
-ENV PATH=/root/.local/bin:$PATH \
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
@@ -52,7 +62,9 @@ ENV PATH=/root/.local/bin:$PATH \
 # `memory_tools.py` lors de son ajout, ce qui cassait le job en production
 # (`ModuleNotFoundError` au démarrage). Le glob garantit qu'un nouveau module
 # Python est toujours embarqué. `livekit.toml` reste exclu (pas du Python).
-COPY *.py ./
+COPY --chown=app:app *.py ./
+
+USER app
 
 ENV PORT=8080
 EXPOSE 8080
