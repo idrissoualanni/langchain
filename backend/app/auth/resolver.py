@@ -25,6 +25,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 import jwt
 from fastapi import Depends, HTTPException, Request
@@ -92,13 +93,48 @@ def _get_neon_jwk_client() -> PyJWKClient:
     return _neon_jwk_client
 
 
-def verify_neon_token(token: str) -> dict:
-    """Vérifie un JWT Neon Auth : signature, exp, sub.
+def _expected_audiences() -> list[str]:
+    """Toutes les écritures LEGITIMES de l'audience du projet Neon.
 
-    Pas d'issuer ni d'audience codés en dur ( Neon/Better Auth ne
-    fournit pas de vérification d'issuer côté backend — la signature
-    JWKS + l'exp suffisent ; la clé publique ne provient QUE du
-    well-known Neon ).
+    Better Auth pose `aud` = URL de son propre serveur d'auth. Selon la
+    version et le déploiement, cette URL se lit avec ou sans slash final,
+    et pointe tantôt la base du service, tantôt son origine seule. On ne
+    pouvait comparer qu'à UNE de ces formes : les autres rejetaient un
+    jeton parfaitement valide, avec un 401 aggregated sans le dire.
+
+    Toutes ces valeurs sont dérivées de notre PROPRE configuration
+    ( NEON_AUTH_BASE_URL, NEON_AUTH_JWKS_URL ) — on n'accepte donc
+    rien que l'opérateur n'ait pas lui-même déclaré. C'est de la
+    tolérance aux variantes d'un même secret, pas un élargissement de la
+    frontière de confiance : la signature reste vérifiée par le JWKS,
+    et un `aud` qui n'en fait PAS partie est refusé.
+    """
+    out: list[str] = []
+    if NEON_AUTH_BASE_URL:
+        out.append(NEON_AUTH_BASE_URL.rstrip("/"))
+    if NEON_AUTH_JWKS_URL:
+        # <base>/.well-known/jwks.json  ->  <base>, puis l'origine seule.
+        # Exemple : base = https://hote/neondb/auth donne l'origine
+        # https://hote — l'autre écriture que pose Better Auth selon la
+        # version et le deploiement.
+        base = NEON_AUTH_JWKS_URL.split("/.well-known/")[0].rstrip("/")
+        if base:
+            out.append(base)
+            parts = urlsplit(base)
+            origin = (
+                f"{parts.scheme}://{parts.netloc}" if parts.netloc else ""
+            )
+            if origin and origin != base:
+                out.append(origin)
+    return list(dict.fromkeys(out))  # dédoublonné, ordre conservé
+
+
+def verify_neon_token(token: str) -> dict:
+    """Vérifie un JWT Neon Auth : signature, exp, sub, audience.
+
+    Pas d'issuer codé en dur ( Neon/Better Auth n'expose pas de
+    document de découverte ) — la signature JWKS + l'exp suffisent ; la
+    clé publique ne provient QUE du well-known Neon.
 
     ATTENTION : Neon Auth ( Better Auth ) signe en EdDSA / Ed25519
     ( clé OKP ), PAS en RS256. PyJWT supporte EdDSA dès que
@@ -118,15 +154,109 @@ def verify_neon_token(token: str) -> dict:
         # des postes ; n'affaiblit PAS la vérification.
         "leeway": JWT_LEEWAY,
     }
-    # Better Auth pose un claim aud ( = URL du service Neon Auth ).
-    # PyJWT rejette par défaut tout token portant un aud non vérifié
-    # ( InvalidAudienceError ) → on déclare l'audience attendue dès que
-    # la base URL est configurée, sinon on déspose juste la vérif aud.
-    if NEON_AUTH_BASE_URL:
-        decode_kwargs["audience"] = NEON_AUTH_BASE_URL
-    else:
+
+    # On LIT l'audience AVANT toute vérification, signature désactivée
+    # pour ce seul décodage : ce claim n'autorise rien, il sert à
+    # (a) choisir l'audience attendue et (b) journaliser l'écart quand
+    # il y en a un. Sans ce décodage, un 401 pour mauvais `aud` était
+    # INDISTINGUABLE d'un 401 pour mauvaise signature — deux pannes qui
+    # se réparent à l'opposé l'une de l'autre.
+    actual_aud: object = None
+    claims: dict = {}
+    try:
+        unverified = jwt.decode(
+            token,
+            options={
+                "verify_signature": False,
+                "verify_exp": False,
+                "verify_aud": False,
+            },
+        )
+        claims = unverified if isinstance(unverified, dict) else {}
+        actual_aud = claims.get("aud")
+    except Exception:  # noqa: BLE001 — jeton illisible : le decode
+        # principal le dira avec un message bien meilleur que le nôtre.
+        actual_aud = None
+
+    expected = _expected_audiences()
+    matched_aud = _match_audience(actual_aud, expected)
+
+    if not expected:
+        # Aucune config : on ne peut rien exiger, et on ne devine pas.
         options["verify_aud"] = False
+    elif matched_aud is not None:
+        # On laisse PyJWT revérifier ( égalité stricte ) sur la valeur
+        # EXACTE du claim : c'est cette vérification qui fait foi, la
+        # nôtre a seulement décidé qu'il n'y avait pas d'écart.
+        decode_kwargs["audience"] = matched_aud
+    else:
+        # On refuse — mais en nommant ce qui permet de réparer.
+        log_event(
+            "AUTH_AUD_MISMATCH",
+            message=(
+                f"JWT rejete | aud={_safe_aud(actual_aud)} "
+                f"attendu={expected} "
+                f"kid={log_safe(_kid_of(token))} "
+                f"claims={sorted(claims.keys())}"
+            ),
+        )
+        raise jwt.InvalidAudienceError(
+            f"audience {actual_aud!r} hors liste {expected!r}"
+        )
+
     return jwt.decode(token, **decode_kwargs)
+
+
+def _match_audience(actual: object, expected: list[str]) -> str | None:
+    """Retourne le claim `aud` BRUT qui correspond, sinon None.
+
+    `aud` est une chaîne unique OU une liste ( RFC 7519 ) : les deux
+    formes sont traitées. La comparaison ignore le slash final, seule
+    différence observée en pratique entre deux déploiements du même
+    service.
+
+    On renvoie le claim tel quel, et NON la forme attendue : PyJWT
+    revérifie l'audience avec une égalité stricte, donc lui passer la
+    version normalisée ferait échouer le jeton qui portait justement le
+    slash final — le défaut qu'on est en train de corriger.
+    """
+    if not actual:
+        return None
+    candidates = actual if isinstance(actual, list) else [actual]
+    for cand in candidates:
+        if not isinstance(cand, str):
+            continue
+        norm = cand.rstrip("/")
+        if any(norm == exp for exp in expected):
+            return cand
+    return None
+
+
+def _safe_aud(actual: object) -> str:
+    """Journalise un `aud` sans jamais laisser passer un secret.
+
+    Le claim vient du fournisseur, pas de l'utilisateur : le risque
+    n'est pas une fuite vers les logs (déjà publics côté opérateur),
+    mais d'inonder la ligne de trace. On borne donc la longueur.
+    """
+    if isinstance(actual, list):
+        return "[" + ",".join(str(a)[:80] for a in actual[:5]) + "]"
+    return str(actual)[:200]
+
+
+def _kid_of(token: str) -> str:
+    """`kid` de l'en-tête JOSE — sert à diagnostiquer une rotation de clé.
+
+    Si le `kid` du jeton ne figure pas dans le JWKS, PyJWKClient lève
+    `PyJWKClientError` AVANT même d'atteindre la vérification de
+    signature : le message est explicite, mais on le journalise aussi
+    pour distinguer « clé unknown » de « signature fausse ».
+    """
+    try:
+        header = jwt.get_unverified_header(token)
+        return str(header.get("kid", ""))[:80]
+    except Exception:  # noqa: BLE001 — jeton illisible
+        return ""
 
 
 # ------------------------------------------------------------------
