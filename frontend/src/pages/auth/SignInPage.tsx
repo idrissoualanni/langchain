@@ -34,7 +34,9 @@ export function SignInPage() {
     setErr(null);
     try {
       await authClient.signInEmail(email.trim(), password);
-      // Rafraîchit window.__neonGetToken + le contexte user réactif.
+      // POSE le cookie de session + rafraîchit le contexte user.
+      // L'await est indispensable : sans lui, la navigation suivante
+      // partirait avec le cookie de la session PRÉCÉDENTE ( ou aucun ).
       await refreshNeonSession();
       navigate('/assistant', { replace: true });
     } catch (ex) {

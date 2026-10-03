@@ -10,6 +10,7 @@ from app.graph.main import get_agent
 from app.api import (
     activity,
     agent_memory,
+    auth,
     chat,
     context,
     documents,
@@ -119,7 +120,90 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ----------------------------------------------------------------------
+# Mission Sécurité — CSRF + en-têtes
+# ----------------------------------------------------------------------
+# ORDRE DES MIDDLEWARES : Starlette empile en LIFO — le DERNIER
+# `add_middleware` ajouté est le PLUS EXTERNE. On déclare donc ces deux
+# lavas AVANT le CORS pour que le CORS reste au plus haut de l'pile :
+# ainsi un 403 anti-CSRF passe quand meme par le CORS et porte les
+# `Access-Control-*`, donc le front peut le lire au lieu de voir une
+# erreur réseau opaque.
+#
+# Triche assumee : une reponse de PREFLIGHT (OPTIONS) est traitee
+# directement par CORSMiddleware, sans descendre jusqu'ici. Elle ne
+# sera donc pas decoratee de nos en-tetes. C'est sans consequence —
+# un preflight ne contient aucune donnee et n'est jamais rendu.
+SECURITY_HEADERS = {
+    # HSTS : force le HTTPS pendant 1 an, sous-domaines inclus.
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    # Empeche le navigateur de deviner un type MIME different de
+    # celui annonce (une "image" servie en HTML devient un script).
+    "X-Content-Type-Options": "nosniff",
+    # Ne laisse fuiter le chemin complet vers les sites tiers.
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    # Le micro et la camera ne sont autorises que pour nous-memes.
+    # Rappel : LiveKit a besoin du micro → on ne peut pas les interdire.
+    "Permissions-Policy": (
+        "camera=(self), microphone=(self), geolocation=()"
+    ),
+    # Defense en profondeur : la CSP porte aussi frame-ancestors, mais
+    # ce header couvre les clients qui ne lisent pas la CSP.
+    "X-Frame-Options": "DENY",
+}
+
+# Methodes qui modifient une donnee — les seules que le CSRF menace.
+MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+@app.middleware("http")
+async def enforce_origin(request: Request, call_next):
+    """Rejette les requetes mutantes venues d'un site non autorisé.
+
+    Le cookie de session est `SameSite=None` — c'est le prix à payer
+    pour que le front Vercel atteigne l'API Render (cf. auth.py). Mais
+    `SameSite=None` supprime precisement la protection que `Lax`
+    apportait : n'importe quel site peut désormais poster une requete
+    au NAVIGATEUR de l'utilisateur, qui part avec son cookie. Sans ce
+    garde-fou, la lecture seule d'une page tierce suffirait à agir en
+    son nom.
+
+    On separe donc `Lax` (confort) de `Origin` (securite) : meme
+    domaine pour le cookie, liste blanche explicite pour l'Origine.
+
+    Le controle porte sur `Origin` seul. Les navigateurs l'envoient
+    systematiquement sur POST/PUT/PATCH/DELETE, y compris cross-site :
+    une attaque CSRF depuis une page tierre fournit donc TOUJOURS un
+    Origin, et il est rejete. Une requete sans Origin n'est pas une
+    attaque : elle vient d'un client non-navigateur (curl, CLI, test
+    LiveKit), qui ne peut pas detourner le cookie de quelqu'un d'autre.
+    `Referer` n'est donc pas necessaire — et l'analyser en repli
+    n'ajouterait qu'un second parseur, fragile, a maintenir.
+    """
+    if request.method in MUTATING_METHODS:
+        origin = request.headers.get("origin")
+        if origin and origin not in ALLOWED_ORIGINS:
+            return JSONResponse(
+                {"detail": "Origine non autorisée"},
+                status_code=403,
+            )
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Pose les en-tetes de securite sur TOUTES les reponses."""
+    response = await call_next(request)
+    for header, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(header, value)
+    return response
+
+
 # CORS — frontend (dev Vite local + domaines Vercel via env)
+# allow_credentials=True est coherent avec les cookies : c'est
+# exactement ce qui rend le cookie `SameSite=None` utilisable, et c'est
+# aussi pourquoi ALLOWED_ORIGINS ne doit JAMAIS contenir `*` (le
+# navigateur le refuserait avec les credentials).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -148,6 +232,7 @@ app.include_router(activity.router)
 app.include_router(documents.router)
 app.include_router(storage.router)
 app.include_router(livekit.router)
+app.include_router(auth.router)
 app.include_router(agent_memory.router)
 app.include_router(transcription_router)
 

@@ -83,14 +83,16 @@ export function TranscriptionPanel({
 
         // Appel à l'API backend pour transcription Deepgram.
         //
-        // Auth : on passe par la couche centrale ( apiFetchRaw ). Avant,
-        // l'en-tête était construit à la main avec
+        // Auth : on passe par la couche centrale ( apiFetchRaw ), qui
+        // joint le cookie HttpOnly via `credentials: 'include'`.
+        // Avant, l'en-tête était construit à la main avec
         // `Bearer ${window.__neonGetToken?.() || ""}` — or
-        // __neonGetToken est une PROMISE : l'interpolation produisait
+        // __neonGetToken était une PROMISE : l'interpolation produisait
         // littéralement "Bearer [object Promise]", un header que le
-        // backend rejette → 401 sur chaque upload. apiFetchRaw attend
-        // le vrai jeton, et rejoue l'appel après un refresh si le 401
-        // venait d'un JWT simplement expiré.
+        // backend rejette → 401 sur chaque upload. Le cookie supprime
+        // au passage cette classe de bug : il n'y a plus de chaîne à
+        // composer à la main. apiFetchRaw rejoue en outre l'appel après
+        // un refresh si le 401 venait d'un cookie simplement expiré.
         const response = await apiFetchRaw("/api/transcription/transcribe", {
           method: "POST",
           body: formData,

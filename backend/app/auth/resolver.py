@@ -21,6 +21,7 @@
 # None sans lever — une dépendance FastAPI qui reçoit None casse
 # l'isolation silencieusement.
 import datetime as dt
+import os
 import time
 import uuid
 from dataclasses import dataclass
@@ -396,17 +397,72 @@ def _role_of(user_row: dict) -> str:
 # Dépendances FastAPI (§4/§9)
 # ------------------------------------------------------------------
 
-def _extract_bearer(request: Request) -> str:
-    """Extrait le Bearer token — 401 sinon."""
+# Mission Sécurité — paramètres du cookie de session.
+#
+# Lus par `os.getenv` et NON depuis app/config.py : ce fichier est
+# partagé avec le chantier du model gateway et on n'y touche pas. Les
+# valeurs vivent ICI parce que resolver.py est le module d'auth de
+# référence : les routes ( app/api/auth.py ) les importent depuis lui,
+# ce qui garantit qu'elles ne peuvent pas diverger.
+#
+# Defauts calés sur le déploiement réel ( front `*.vercel.app` ↔ API
+# `*.onrender.com` ) :
+#   - Path=/api  : le cookie accompagne TOUTES les routes API. Un
+#     `path=/api/auth` ne couvrirait que la route d'echange — les
+#     appels `/api/users/me`, `/api/chat`... partiraient sans cookie.
+#   - SameSite=None : deux sites differents. En Lax, le navigateur
+#     n'enverrait RIEN sur une requete cross-site → deconnexion a
+#     chaque appel.
+#   - Secure=True : imposé par les navigateurs des lors que
+#     SameSite=None. En local (http://localhost) il faut le passer a
+#     false via AUTH_COOKIE_SECURE, sinon le cookie est rejete.
+AUTH_COOKIE_NAME = os.getenv("AUTH_COOKIE_NAME") or "tutor_session"
+AUTH_COOKIE_PATH = "/api"
+AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE") or "none"
+_RAW_COOKIE_SECURE = os.getenv("AUTH_COOKIE_SECURE")
+AUTH_COOKIE_SECURE = (
+    True
+    if _RAW_COOKIE_SECURE is None
+    else _RAW_COOKIE_SECURE.strip().lower() not in ("false", "0", "no", "off")
+)
+
+
+def extract_token(request: Request) -> str | None:
+    """Token de session — header `Authorization` OU cookie. None si absent.
+
+    Le HEADER reste prioritaire, et ce n'est pas un détail de style :
+    les clients qui n'ont pas de navigateur n'ont pas de cookie. Le CLI
+    de test LiveKit, curl, les appels service-à-service et le mode dev
+    (`Bearer dev:...`) passent tous par là. Inverser la priorité les
+    casserait tous.
+
+    Le COOKIE est le chemin nominal côté navigateur : le front échange
+    son JWT une fois ( POST /api/auth/session ) puis ne le manipule
+    plus jamais. Un XSS ne peut donc plus l'exfiltrer — il ne peut que
+    faire passer la requête, ce qui est la différence entre « voler une
+    session » et « usurpater une reponse ».
+    """
     header = request.headers.get("authorization") or ""
-    if not header.lower().startswith("bearer "):
+    if header.lower().startswith("bearer "):
+        token = header[7:].strip()
+        if token:
+            return token
+    cookie = request.cookies.get(AUTH_COOKIE_NAME)
+    if cookie:
+        cookie = cookie.strip()
+        if cookie:
+            return cookie
+    return None
+
+
+def _extract_bearer(request: Request) -> str:
+    """Extrait le token de session — 401 sinon ( header OU cookie )."""
+    token = extract_token(request)
+    if not token:
         raise HTTPException(
             status_code=401,
-            detail="Authentification requise (Bearer token)",
+            detail="Authentification requise",
         )
-    token = header[7:].strip()
-    if not token:
-        raise HTTPException(status_code=401, detail="Token manquant")
     return token
 
 
@@ -530,13 +586,10 @@ def optional_current_user(
     Pour les routes publiques qui s'enrichissent si authentifiées
     ( ex : /api/health reste public ).
     """
-    header = request.headers.get("authorization") or ""
-    if not header.lower().startswith("bearer "):
+    token = extract_token(request)
+    if not token:
         return None
     try:
-        token = header[7:].strip()
-        if not token:
-            return None
         return _resolve_from_token(token)
     except HTTPException:
         return None

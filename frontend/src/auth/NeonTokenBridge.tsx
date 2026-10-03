@@ -1,9 +1,26 @@
-// Mission Identité — pont Neon Auth ↔ apiFetch + contexte user réactif.
+// Mission Identité — pont Neon Auth ↔ contexte user réactif.
 //
-// apiFetch ( api/base.ts ) lit window.__neonGetToken : ce module le
-// pose dès qu'une session Neon existe. Un seul endroit injecte le
-// token ( §19 ) — aucun autre fichier ne touche au header Authorization.
-// Il alimente aussi NeonUserContext ( nom/email pour les pages profil ).
+// Ce module est désormais le SEUL détenteur du JWT Neon côté front, et
+// il ne le rend à personne : il l'échange une fois contre un cookie
+// HttpOnly (`POST /api/auth/session`) puis n'en garde que l'échéance.
+// Le JWT a maintenant une durée de vie de QUINZE MINUTES côté cookie,
+// pas trente jours.
+//
+// Pourquoi ce changement : le header `Authorization: Bearer` était
+// injecté dans TOUTE requête via `window.__neonGetToken`, une fonction
+// globale. Or une fonction globale est, par définition, lisible par
+// n'importe quel script de la page. Un XSS n'avait qu'à l'appeler pour
+// s'approprier la session ; il suffisait aussi d'ouvrir les DevTools.
+//
+// Un cookie `HttpOnly` n'est atteignable ni par le JS de la page, ni par
+// une console, ni par l'onglet Network. Le seul effet qui reste à un
+// script injecté est d'ÉMETTRE des requêtes au nom de la victime —
+// c'est une usurpation de réponse, pas un vol de session, et la
+// révocation de session coupe court.
+//
+// La session longue durée (30–90 j) reste celle de Better Auth, côté
+// Neon. Notre cookie ne fait que REFLETER le JWT, renouvelé en silence
+// trois minutes avant son expiration.
 //
 // État partagé entre instances ( la page de login déclenche le refresh,
 // Protected et la sidebar s'y abonnent ).
@@ -85,7 +102,101 @@ async function resolveJWT(): Promise<string | null> {
   return token;
 }
 
-/** Purge LOCALE et IMMÉDIATE de la session — sans appel réseau.
+// ----------------------------------------------------------------------
+// Mission Sécurité — bascule du JWT vers le cookie HttpOnly
+// ----------------------------------------------------------------------
+
+const API_URL = import.meta.env.VITE_API_URL || '';
+const SESSION_PATH = '/api/auth/session';
+
+/** Fenêtre de renouvellement : 3 min AVANT l'expiration du JWT.
+ *
+ *  Trente secondes suffiraient pour un appel isolé. Trois minutes
+ *  couvrent le pire cas réel : l'onglet mis en arrière-plan, où les
+ *  timers sont throttlés puis figés par le navigateur — on ne peut pas
+ *  compter sur un `setTimeout` qui sonne à la seconde. Renewer en
+ *  avance absorbe ce retard sans que l'utilisateur le voie. */
+const RENEWAL_WINDOW_MS = 3 * 60_000;
+
+let renewalTimer: number | null = null;
+
+function cancelRenewal(): void {
+  if (renewalTimer !== null) {
+    window.clearTimeout(renewalTimer);
+    renewalTimer = null;
+  }
+}
+
+/** Échange le JWT contre le cookie HttpOnly. `true` si posé.
+ *
+ *  Le JWT entre dans le corps de la requête et ne ressort JAMAIS dans
+ *  la réponse : le backend le vérifie puis le dépose en `Set-Cookie`.
+ *  Il n'y a donc aucun point où le token redevient lisible par la page.
+ *  On garde `credentials: 'include'` et non `omit` : au premier
+ *  renouvellement, un vieux cookie périmé ferait échouer la
+ *  vérification server. */
+async function pushSessionCookie(jwt: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_URL}${SESSION_PATH}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: jwt }),
+    });
+    return res.ok;
+  } catch {
+    // Réseau indisponible : l'UI reste utilisable, le prochain refresh
+    // ( focus d'onglet, 401 ) retentera la pose du cookie.
+    return false;
+  }
+}
+
+/** Supprime le cookie côté API au sign-out.
+ *
+ *  SANS cet appel, le cookie survivrait au signOut côté Neon et le
+ *  backend continuerait d'accepter les requêtes pendant les ~15
+ *  minutes restantes : une déconnexion qui n'en serait pas une. Le
+ *  cookie est borné dans le temps par construction, mais « au plus
+ *  quinze minutes » n'est pas « déconnecté ». */
+async function dropSessionCookie(): Promise<void> {
+  try {
+    await fetch(`${API_URL}${SESSION_PATH}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+  } catch {
+    /* le cookie expirera de lui-même */
+  }
+}
+
+function scheduleRenewal(expMs: number): void {
+  cancelRenewal();
+  // Pas d'expiration connue ( claim absent ou illisible ) : on ne
+  // programme rien plutôt que de boucler sur un délai arbitraire. Le
+  // retry 401 de base.ts prend alors le relais.
+  if (!expMs) return;
+  // Plancher à 30 s : évite une rafale d'appels si le JWT arrive
+  // presque expiré ( horloge du fournisseur en avance ).
+  const delay = Math.max(30_000, expMs - Date.now() - RENEWAL_WINDOW_MS);
+  renewalTimer = window.setTimeout(() => {
+    renewalTimer = null;
+    void syncSessionCookie();
+  }, delay);
+}
+
+/** JWT neuf → cookie posé → prochain renouvellement programmé. */
+async function syncSessionCookie(): Promise<boolean> {
+  const token = await resolveJWT();
+  if (!token) {
+    cancelRenewal();
+    return false;
+  }
+  const ok = await pushSessionCookie(token);
+  scheduleRenewal(cachedExp);
+  return ok;
+}
+
+/** Purge LOCALE et IMMÉDIATE de la session — sans appel réseau bloquant.
  *
  *  EF-10 : après un `signOut` RÉUSSI, l'état doit passer à « anonyme »
  *  tout de suite, et non après un aller-retour vers le fournisseur.
@@ -97,23 +208,26 @@ async function resolveJWT(): Promise<string | null> {
  *     simplement plus court. Et si le fournisseur est lent ou
  *     injoignable juste après le sign-out, la déconnexion n'est jamais
  *     reflétée du tout.
- *  2. Sécurité : le cache JWT et `window.__neonGetToken` resteraient
- *     vivants pendant ce même round-trip. Toute requête API partie
- *     entre le sign-out et la réponse de `/get-session` porterait
- *     l'ANCIEN Bearer, que le backend accepte encore jusqu'à son `exp`
- *     — une déconnexion qui n'en est pas une. On retire donc le
- *     jeton AVANT toute attente.
+ *  2. Sécurité : le COOKIE de session resterait vivant pendant ce même
+ *     round-trip. Toute requête API partie entre le sign-out et la
+ *     réponse de `/get-session` porterait l'ANCIEN cookie, que le
+ *     backend accepte encore jusqu'à son `exp` — une déconnexion qui
+ *     n'en est pas une. On coupe donc la source AVANT toute attente :
+ *     le timer de renouvellement est annulé, ce qui empêche le pire
+ *     scénario (un renouvellement programmé qui ressuscite la session
+ *     quelques secondes après la déconnexion), et le cookie est
+ *     révoqué côté API en tâche de fond.
  *
- *  L'ordre n'est pas indifférent : on coupe d'abord la source du jeton
- *  (`__neonGetToken`), puis le cache (défense en profondeur si un
- *  appelant a déjà capturé la référence), et on publie enfin l'état
- *  vide — la notification est ce qui fait basculer les gardes de
- *  routes, elle vient en dernier pour que l'UI bascule une seule fois,
- *  sur un état cohérent. */
+ *  L'ordre n'est pas indifférent : on coupe d'abord ce qui pourrait
+ *  regenerer le secret (timer + cache), on révoque le cookie, et on
+ *  publie enfin l'état vide — la notification est ce qui fait basculer
+ *  les gardes de routes, elle vient en dernier pour que l'UI bascule
+ *  une seule fois, sur un état cohérent. */
 export function clearNeonSession(): void {
-  (window as any).__neonGetToken = undefined;
+  cancelRenewal();
   cachedJWT = null;
   cachedExp = 0;
+  void dropSessionCookie();
   notifyNeonUser(EMPTY);
 }
 
@@ -156,7 +270,9 @@ async function getSessionBounded(): Promise<{
   }
 }
 
-/** Rafraîchit le token + l'user ( login / focus / retour d'onglet ). */
+/** Rafraîchit la session : état utilisateur + cookie de session.
+ *
+ *  Appelé au login, au cold start, et à chaque retour sur l'onglet. */
 export async function refreshNeonSession() {
   try {
     const { session, timedOut } = await getSessionBounded();
@@ -177,19 +293,24 @@ export async function refreshNeonSession() {
       // On applique l'invariant I-2 — une défaillance du fournisseur
       // produit un refus, jamais un accès — donc « pas de session »,
       // ce qui mènera l'utilisateur vers /sign-in.
-      (window as any).__neonGetToken = undefined;
+      cancelRenewal();
+      cachedJWT = null;
+      cachedExp = 0;
       notifyNeonUser(EMPTY);
       return;
     }
 
-    (window as any).__neonGetToken = session?.user
-      ? () => resolveJWT()
-      : undefined;
-    // Invalide le cache JWT au changement de session.
+    // Invalide le cache JWT au changement de session AVANT tout
+    // ré-échange : sinon `syncSessionCookie()` rendrait le jeton
+    // précédent, que le sign-out vient d'invalider chez le fournisseur.
     cachedJWT = null;
+    cachedExp = 0;
 
+    const signedIn = !!session?.user;
+    // Notification AVANT la synchronisation du cookie : les gardes de
+    // routes se libèrent sans attendre un aller-retour réseau ( EF-11 ).
     notifyNeonUser({
-      isSignedIn: !!session?.user,
+      isSignedIn: signedIn,
       userId: session?.user?.id ?? null,
       name: session?.user?.name ?? null,
       email: session?.user?.email ?? null,
@@ -198,8 +319,21 @@ export async function refreshNeonSession() {
       // de « patienter », quelle que soit sa réponse.
       pending: false,
     });
+
+    // ICI on attend, et c'est délibéré : `retryAfter401` ( base.ts )
+    // consomme le retour de cette fonction puis rejoue la requête. Sans
+    // cet `await`, le rejeu partirait avec le cookie expiré — donc un
+    // second 401, et le retry ne servirait à rien.
+    if (signedIn) {
+      await syncSessionCookie();
+    } else {
+      cancelRenewal();
+      void dropSessionCookie();
+    }
   } catch {
-    (window as any).__neonGetToken = undefined;
+    cancelRenewal();
+    cachedJWT = null;
+    cachedExp = 0;
     // Même en cas d'échec on AFFIRME un état (déconnecté) au lieu de
     // rester en attente indéfinie : sans cela, une session invalide
     // laisserait l'app bloquée sur « Résolution de la session… ».
@@ -219,6 +353,9 @@ export function NeonTokenBridge({ children }: { children: React.ReactNode }) {
     return () => {
       unsub();
       window.removeEventListener('focus', refreshNeonSession);
+      // Un timer de renouvellement survivrait au démontage et
+      // continuerait de poser des cookies sur une page morte.
+      cancelRenewal();
     };
   }, []);
 

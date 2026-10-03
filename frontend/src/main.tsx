@@ -1,9 +1,10 @@
-// Mission Identité — bootstrap : le pont token Neon entoure l'app.
+// Mission Identité — bootstrap : le pont de session Neon entoure l'app.
 //
-// NeonTokenBridge pose window.__neonGetToken ( JWT Ed25519 ) lu par
-// apiFetch → Authorization: Bearer. Le fournisseur d'identité
-// ( Neon Auth ) n'exige aucun domaine personnel, donc fonctionne
-// sur *.vercel.app.
+// NeonTokenBridge échange le JWT Neon contre un cookie HttpOnly et
+// alimente le contexte user ; apiFetch joint ensuite ce cookie via
+// `credentials: 'include'`. Aucun jeton n'est exposé au JavaScript.
+// Le fournisseur d'identité ( Neon Auth ) n'exige aucun domaine
+// personnel, donc fonctionne sur *.vercel.app.
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'

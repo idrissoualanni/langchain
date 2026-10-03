@@ -47,9 +47,10 @@ export function NeonUserMenu() {
     // encore l'utilisateur connecté après le logout ( EF-10 ).
     //
     // clearNeonSession() fait les DEUX moitiés indispensables, et
-    // SYNSCHRONEMENT : purge du jeton ( window.__neonGetToken + cache
-    // JWT — sans quoi le backend continuerait d'accepter l'ancien
-    // Bearer jusqu'à son expiration, donc la déconnexion ne serait
+    // SYNSCHRONEMENT : révocation du cookie de session côté API +
+    // annulation du timer de renouvellement + purge du cache JWT
+    // ( sans quoi le backend continuerait d'accepter l'ancien cookie
+    // pendant ses ~15 minutes restantes, donc la déconnexion ne serait
     // pas effective) ET publication de l'état vide
     // ( notifyNeonUser(EMPTY) ), qui fait basculer sur-le-champ les
     // gardes Protected / RequireAnonymous.

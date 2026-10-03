@@ -470,18 +470,120 @@ async def get_run_detail(
             if cid and pid:
                 parent_map[cid] = pid
 
+        # Clés dont la valeur ne doit JAMAIS quitter le serveur.
+        #
+        # On masquait jusqu'ici trois noms (`system_prompt`, `prompt`,
+        # `serialized`) — le prompt système, en effet. Mais LangSmith
+        # range le texte des entrées dans des champs au nom innocent :
+        # `input`, `question`, `query`, `api_key`, `authorization`… Un
+        # traceur de debug qui affiche « les entrées du run » affichait
+        # donc en clair tout ce que l'utilisateur avait tapé, et tout
+        # jeton passé par un tool.
+        #
+        # On compare en MINUSCULES car les clés varient d'un tool à
+        # l'autre (`api_key` vs `apiKey` vs `API_KEY`) : sans
+        # normalisation, le même secret passait sous trois noms.
+        SENSITIVE_KEYS = {
+            "authorization",
+            "cookie",
+            "set-cookie",
+            "password",
+            "passwd",
+            "secret",
+            "token",
+            "access_token",
+            "refresh_token",
+            "id_token",
+            "api_key",
+            "apikey",
+            "api-key",
+            "private_key",
+            "bearer",
+            "jwt",
+            "session_token",
+            "auth",
+            "credentials",
+            "system_prompt",
+            "prompt",
+            "serialized",
+        }
+
+        def _is_sensitive(key: str) -> bool:
+            k = key.lower()
+            return k in SENSITIVE_KEYS or any(
+                s in k for s in ("password", "secret", "token", "api_key")
+            )
+
         def _sanitize(data: dict | None) -> dict[str, Any]:
+            """Copie non destructive, filtrée en profondeur.
+
+            RÉCURSION jusqu'au bout : LangSmith imbrique librement
+            (`inputs` → `messages` → `content`, ou `metadata` →
+            `request` → `headers`). Un filtrage au premier niveau laissait
+            passer tout ce qui était plus profond — précisément la
+            structure réelle des runs.
+
+            Le filtrage est par NOM de clé, pas par analyse du contenu :
+            deviner qu'une chaîne est un jeton est une heuristique
+            („commence par eyJ" ) qui manque les secrets opaque, et qui
+            redacterait par erreur des données légitimes.
+            """
             if not isinstance(data, dict):
                 return {}
-            out = {}
+            out: dict[str, Any] = {}
             for k, v in data.items():
+                # Convention interne : un `_` en tête marque un champ
+                # technique (ids LangGraph, timestamps), jamais utile à
+                # un lecteur humain.
                 if k.startswith("_"):
                     continue
-                if k in ("system_prompt", "prompt", "serialized"):
+                if _is_sensitive(k):
                     out[k] = "[REDACTED]"
+                elif isinstance(v, dict):
+                    out[k] = _sanitize(v)
+                elif isinstance(v, list):
+                    # Les listes de messages sont le cas le plus fréquent
+                    # : chaque entrée est un dict à son tour.
+                    out[k] = [
+                        _sanitize(item) if isinstance(item, dict) else item
+                        for item in v
+                    ]
                 else:
                     out[k] = v
             return out
+
+        def _redact_text(raw: str) -> str:
+            """Filtre une trace d'erreur, elle que soit sa forme.
+
+            LangSmith fait fréquemment stocker l'erreur sous forme de JSON
+            sérialisé (un tool qui remonte un dict, une réponse HTTP). On
+            tente donc le parse : s'il réussit, le texte passe par
+            `_sanitize` et conserve sa structure. Sinon — texte libre,
+            traceback, message — on masque ENTIÈREMENT.
+
+            Le masque total du cas non-JSON est délibéré, même s'il est
+            moins précis : on ne peut pas deviner qu'une phrase contient
+            un secret sans le chercher dans une liste de mots, et
+            afficher un message d'erreur en clair revient à exposer
+            URLs internes, noms de colonnes et fragments de payload.
+            L'intérêt d'un champ « error » est de savoir QUEL run a
+            échoué — son nom et son statut suffisent, et le texte
+            reste consultable sur LangSmith, où l'accès est déjà
+            restreint.
+            """
+            try:
+                parsed = json.loads(raw)
+            except (ValueError, TypeError):
+                return "[REDACTED]"
+            if isinstance(parsed, dict):
+                redacted = _sanitize(parsed)
+                # On ne ressérialise que si quelque chose a réellement
+                # changé : sinon on renvoie la chaîne d'origine, plus
+                # lisible pour un humain.
+                if redacted == parsed:
+                    return raw
+                return json.dumps(redacted, ensure_ascii=False)
+            return "[REDACTED]"
 
         def _build(r, depth: int = 0) -> TraceDetail:
             children_ids = [str(cid) for cid in getattr(r, "child_run_ids", None) or []]
@@ -514,8 +616,15 @@ async def get_run_detail(
                 end_time=r.end_time,
                 inputs=inputs,
                 outputs=outputs,
-                error=str(r.error) if r.error else None,
-                metadata=r.metadata or {},
+                # `error` est une chaîne libre : une trace d'exception
+                # HTTP porte l'URL d'appel, et une exception applicative
+                # peut avoir été levée AVEC le payload (un tool qui
+                # remonte `{"token": …}`). On la coupe donc comme les
+                # entrées, clé par clé.
+                error=_redact_text(str(r.error)) if r.error else None,
+                # Idem : `metadata` porte les en-têtes de requête,
+                # l'IP, les identifiants de tool — pas des métadonnées.
+                metadata=_sanitize(r.metadata or {}),
                 feedback=None,  # À implémenter si nécessaire
                 child_runs=children,
             )

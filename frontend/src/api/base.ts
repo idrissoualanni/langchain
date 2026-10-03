@@ -1,15 +1,28 @@
 // Couche API — base fetch + helpers
 //
-// Mission Identité : TOUTE requête passe par ici → le token
-// Neon ( ou dev ) est injecté UNE fois , ici (§19). Aucun autre
-// fichier ne manipule le Authorization header.
+// Mission Sécurité : PLUS AUCUN header Authorization côté navigateur.
+// Le JWT Neon est échangé une fois contre un cookie HttpOnly par
+// NeonTokenBridge ( POST /api/auth/session ) ; depuis, chaque requête
+// porte `credentials: 'include'` et le navigateur joint le cookie
+// tout seul.
 //
-// Mission Refresh : un 401 n'est plus fatal. Le JWT Neon étant à courte
-// durée ( rotation ), une requête peut échouer alors que la session
-// sous-jacente est encore valide → on tente un refresh UNE fois, puis on
-// réessaie. Évite les déconnexions silencieuses au retour d'onglet.
+// Ce n'est pas une optimisation, c'est le but : un header est lisible
+// par l'onglet Network, par la console, et par TOUT script injecté dans
+// la page. Un XSS n'avait qu'à appeler `window.__neonGetToken()` pour
+// voler quinze minutes de session. Le cookie HttpOnly n'est pas
+// atteignable depuis le JavaScript de la page — un XSS peut seulement
+// faire passer des requêtes au nom de l'utilisateur, pas s'en emparer.
+//
+// Seul vestige : `getDevAuth()`, qui reste en mode dev local (aucun
+// cookie à ce jour, pas de fournisseur d'identité derrière).
+//
+// Mission Refresh : un 401 n'est plus fatal. Le cookie de session
+// suit la durée de vie du JWT (15 min) et est renouvelé en silence par
+// NeonTokenBridge ; une requête peut néanmoins tomber pendant ce
+// renouvellement → on tente un refresh UNE fois, puis on réessaie.
+// Évite les déconnexions silencieuses au retour d'onglet.
 import { getDevAuth } from '../auth/devAuth';
-import { refreshNeonSession } from '../auth/NeonTokenBridge';
+import { getNeonUser, refreshNeonSession } from '../auth/NeonTokenBridge';
 
 const BASE = import.meta.env.VITE_API_URL || '';
 
@@ -21,19 +34,12 @@ export class ApiError extends Error {
   }
 }
 
-/** Retourne le token d'authentification courant (Neon ou dev). */
-async function authHeader(): Promise<Record<string, string>> {
-  // Neon Auth ( production ) : token signé Ed25519 posé par
-  // NeonTokenBridge, vérifié côté backend via le JWKS Neon.
-  const neon = window.__neonGetToken;
-  if (neon) {
-    try {
-      const token = await neon();
-      if (token) return { Authorization: `Bearer ${token}` };
-    } catch {
-      /* pas de session → pas de header */
-    }
-  }
+/** Retourne le token d'authentification courant.
+ *
+ * En production : RIEN. Le cookie HttpOnly fait le travail et n'a pas
+ * à être lu ici — c'est précisément l'intérêt. Ce helper ne reste que
+ * pour le mode dev local (`Bearer dev:<name>`), qui n'a pas de cookie. */
+function authHeader(): Record<string, string> {
   const dev = getDevAuth();
   if (dev) return { Authorization: `Bearer ${dev}` };
   return {};
@@ -67,13 +73,20 @@ async function readErrorDetail(res: Response): Promise<string> {
   return detail;
 }
 
-/** fetch JSON commun ( headers fusionnés : Content-Type puis auth ). */
+/** fetch JSON commun ( headers fusionnés : Content-Type puis auth ).
+ *
+ * `credentials: 'include'` est INDISPENSABLE : sans lui le navigateur
+ * n'envoie aucun cookie vers une autre origine (notre API est sur
+ * `*.onrender.com`, le front sur `*.vercel.app`). C'est le setting qui
+ * fait tenir tout le dispositif — et il se trouve ici, une seule fois,
+ * plutôt que rappelé à chaque appel. */
 function fetchJson(
   path: string,
   options: RequestInit | undefined,
   auth: Record<string, string>
 ): Promise<Response> {
   return fetch(`${BASE}${path}`, {
+    credentials: 'include',
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -88,25 +101,27 @@ function fetchJson(
  * rafraîchie. Retourne la réponse du retry, ou null si le refresh
  * n'a rien changé ( l'appelant propage alors l'ApiError 401 ).
  *
- * La condition "a-t-on un token après refresh" empêche la boucle
- * infinie : sans session, on ne réessaie pas.
+ * La condition « la session existe-t-elle encore après refresh ? »
+ * empêche la boucle infinie ET la course : `refreshNeonSession()`
+ * attend le re-posage du cookie avant de résoudre, donc le retry part
+ * avec un cookie à jour. Sans cet `await`, on renverrait la requête
+ * avec le cookie expiré et on obtiendrait un second 401.
  */
 async function retryAfter401(
   path: string,
   options: RequestInit | undefined
 ): Promise<Response | null> {
   await tryRefreshSession();
-  const after = await authHeader();
-  // Pas de token après refresh → session réellement morte, on abandonne.
-  if (!('Authorization' in after)) return null;
-  return fetchJson(path, options, after);
+  // Session réellement morte → on abandonne, le 401 remonte.
+  if (!getNeonUser().isSignedIn && !getDevAuth()) return null;
+  return fetchJson(path, options, authHeader());
 }
 
 export async function apiFetch<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-  let res = await fetchJson(path, options, await authHeader());
+  let res = await fetchJson(path, options, authHeader());
 
   // 401 → refresh + réessai unique ( JWT expiré mais session valide ).
   if (res.status === 401) {
@@ -121,15 +136,16 @@ export async function apiFetch<T>(
   return res.json() as Promise<T>;
 }
 
-/** Variant NON-JSON (SSE texte, etc.) — token injecté pareil. */
+/** Variant NON-JSON (SSE texte, etc.) — cookie transmis pareil. */
 export async function apiFetchRaw(
   path: string,
   options?: RequestInit
 ): Promise<Response> {
   const res = await fetch(`${BASE}${path}`, {
+    credentials: 'include',
     ...options,
     headers: {
-      ...(await authHeader()),
+      ...authHeader(),
       ...(options?.headers ?? {}),
     },
   });
