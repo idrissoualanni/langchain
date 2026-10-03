@@ -67,3 +67,4 @@ lancer-tests.cmd
 # backend/.env est le secret de la machine. Un motif large les
 # rendrait invisibles au lieu de manquants.
 /.env.local
+.env*

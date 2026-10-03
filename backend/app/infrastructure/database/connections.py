@@ -48,48 +48,26 @@ SCHEMA_STATEMENTS = [
     """,
     "CREATE INDEX IF NOT EXISTS idx_threads_user ON threads(user_id)",
     # --------------------------------------------------------------
-    # VideoSubgraph v2 — ingestion + persistance vidéo (Neon).
-    # videos : une ligne par vidéo ingérée ( transcript whisper, et
-    # optionnellement la description visuelle de l'agent ReAct ).
-    # video_segments : segments pédagogiques issus de la segmentation
-    # du transcript ( title/summary/start/end/topics ).
+    # `videos` et `video_segments` ne sont PLUS définis ici.
+    #
+    # Ils l'étaient, dans une version antérieure qui n'avait ni la
+    # colonne `embedding` ni `media_object_id`. Or ce module s'exécute
+    # AVANT schema.init_schema() : sur une base neuve, son
+    # `CREATE TABLE IF NOT EXISTS` créait donc la table PÉRIMÉE,
+    # schema.py ne faisait plus rien (`IF NOT EXISTS`), et le démarrage
+    # mourait sur la création de l'index HNSW `embedding` — colonne
+    # absente. Le cas est resté invisible en production parce que la
+    # table existait déjà dans la bonne forme.
+    #
+    # schema.py fait foi : c'est la seule version cohérente avec les
+    # écritures réelles de video/persist.py, et `videos.media_object_id`
+    # y référence `object_storage`, qui n'est défini que par ce même
+    # module. Un test (test_schema_ownership.py) verrouille qu'aucune
+    # table n'est définie par deux modules à la fois.
+    #
+    # Ce module ne garde que ce que schema.py ne définit pas :
+    # `users` (parent du graphe LangGraph) et `threads`.
     # --------------------------------------------------------------
-    """
-    CREATE TABLE IF NOT EXISTS videos (
-        video_id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL REFERENCES users(user_id),
-        filename TEXT NOT NULL,
-        source_url TEXT NOT NULL DEFAULT '',
-        duration REAL NOT NULL DEFAULT 0.0,
-        origin TEXT NOT NULL DEFAULT '',
-        format TEXT NOT NULL DEFAULT '',
-        language TEXT NOT NULL DEFAULT '',
-        transcript TEXT NOT NULL DEFAULT '',
-        visual_description TEXT NOT NULL DEFAULT '',
-        knowledge_key TEXT NOT NULL DEFAULT '',
-        created_at TEXT NOT NULL
-    )
-    """,
-    "CREATE INDEX IF NOT EXISTS idx_videos_user ON videos(user_id)",
-    """
-    CREATE TABLE IF NOT EXISTS video_segments (
-        id TEXT PRIMARY KEY,
-        video_id TEXT NOT NULL REFERENCES videos(video_id),
-        user_id TEXT NOT NULL,
-        title TEXT NOT NULL DEFAULT '',
-        summary TEXT NOT NULL DEFAULT '',
-        start REAL NOT NULL DEFAULT 0.0,
-        "end" REAL NOT NULL DEFAULT 0.0,
-        topics TEXT NOT NULL DEFAULT '',
-        segment_text TEXT NOT NULL DEFAULT '',
-        created_at TEXT NOT NULL DEFAULT ''
-    )
-    """,
-    "CREATE INDEX IF NOT EXISTS idx_video_segments_video ON video_segments(video_id)",
-    # NB : idx_video_segments_user supprimé — video_segments n'a pas de
-    # colonne user_id ( cf. schema.py : l'isolation se fait via
-    # videos.user_id en jointure ). Tentative de création sur une
-    # colonne absente → ProgrammingError au startup.
 ]
 
 # Mission Identité — migrations ADDITIVES idempotentes (§6/§7) :
