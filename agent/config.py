@@ -47,12 +47,20 @@ class AgentConfig:
     """Configuration complète de l'agent tuteur."""
 
     # Modèles LiveKit Inference — `LIVEKIT_*` gagne sur `LIVEKIT_AGENT_*`.
+    # Le TTS doit avoir un endpoint dans la région data EU ( voir
+    # `_TTS_FALLBACKS` dans session_factory.py ) : Rime y répond
+    # REGION_RESTRICTED et l'agent reste muet.
     stt_model: str = _env_any("deepgram/nova-3", "LIVEKIT_STT_MODEL", "LIVEKIT_AGENT_STT_MODEL")
     llm_model: str = _env_any(
         "google/gemini-2.5-flash", "LIVEKIT_LLM_MODEL", "LIVEKIT_AGENT_LLM_MODEL"
     )
-    tts_model: str = _env_any("rime/coda", "LIVEKIT_TTS_MODEL", "LIVEKIT_AGENT_TTS_MODEL")
-    tts_voice: str = _env_any("aurelie", "LIVEKIT_TTS_VOICE", "LIVEKIT_AGENT_TTS_VOICE")
+    tts_model: str = _env_any(
+        "deepgram/aura-2", "LIVEKIT_TTS_MODEL", "LIVEKIT_AGENT_TTS_MODEL"
+    )
+    # Vide = voix par défaut du fournisseur. `language` (ci-dessous) pilote
+    # déjà la langue ; nommer une voix d'un autre fournisseur (ex. une voix
+    # Rime avec un modèle Deepgram) fait échouer la synthèse.
+    tts_voice: str = _env_any("", "LIVEKIT_TTS_VOICE", "LIVEKIT_AGENT_TTS_VOICE")
 
     # Langue
     language: str = _env_any("fr", "LIVEKIT_STT_LANGUAGE", "LIVEKIT_AGENT_LANGUAGE")

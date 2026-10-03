@@ -52,10 +52,13 @@ services:
         value: deepgram/nova-3
       - key: LIVEKIT_AGENT_LLM_MODEL
         value: google/gemini-2.5-flash
+      # TTS : l'agent est en eu-central, donc la requête part vers la
+      # région data `eu` — Rime n'y a pas d'endpoint (REGION_RESTRICTED,
+      # l'agent reste muet). Deepgram Aura-2 est servi en EU et parle `fr`.
       - key: LIVEKIT_AGENT_TTS_MODEL
-        value: rime/coda
+        value: deepgram/aura-2
       - key: LIVEKIT_AGENT_TTS_VOICE
-        value: aurelie
+        value: ""
       - key: LIVEKIT_AGENT_LANGUAGE
         value: fr
       # Secrets : `sync: false` = saisis à la main dans le dashboard,

@@ -31,9 +31,16 @@ class PipelineBuildError(RuntimeError):
 
 
 #: Replis vérifiés dans le catalogue Inference (identifiants jamais inventés).
+#:
+#: Les replis TTS doivent être **servis dans la région data de l'agent**.
+#: L'agent est déployé en `eu-central` → les requêtes partent vers la région
+#: data `eu`, où Rime n'a aucun endpoint : `rime/*` y répond
+#: `REGION_RESTRICTED` et l'agent reste muet. On ne garde donc que des
+#: modèles ayant un endpoint EU ( voir la table « EU endpoint » de la doc
+#: LiveKit Inference ).
 _LLM_FALLBACKS = ["google/gemini-2.5-flash", "openai/gpt-4o-mini"]
 _STT_FALLBACKS = ["deepgram/nova-3", "deepgram/nova-2", "assemblyai/universal-streaming-multilingual"]
-_TTS_FALLBACKS = ["rime/coda", "cartesia/sonic-3", "deepgram/aura-2"]
+_TTS_FALLBACKS = ["deepgram/aura-2", "cartesia/sonic-3"]
 
 
 def _known_models(enum_name: str) -> set[str]:
