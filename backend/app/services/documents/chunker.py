@@ -171,3 +171,92 @@ def chunk_text(
         if joined:
             chunks.append(joined)
     return chunks
+
+
+# ----------------------------------------------------------------------
+# Chunking du CORPUS de connaissance ( découpage par titres ).
+#
+# Règle mission : un titre Markdown ( ##…#### ) démarre une section ; si
+# la section dépasse `max_chars` caractères, elle est découpée en FENÊTRES
+# GLISSANTES de `max_chars` avec chevauchement `overlap_chars` ( secours
+# 800 / 100 ). Les blocs de code restent ATOMIQUES ( jamais coupés ).
+# ----------------------------------------------------------------------
+
+DEFAULT_MD_MAX_CHARS = 800
+DEFAULT_MD_OVERLAP_CHARS = 100
+
+
+def _window_chars(
+    text: str, max_chars: int, overlap_chars: int
+) -> list[str]:
+    """Fenêtres glissantes par MOTS respectant max_chars / overlap_chars.
+
+    On avance d'environ (max_chars - overlap_chars) caractères entre deux
+    fenêtres ; le repli sur les mots précédents matérialise le
+    chevauchement. Un mot seul plus long que max_chars n'est jamais coupé.
+    """
+    words = text.split()
+    if not words:
+        return []
+    step = max(1, max_chars - overlap_chars)
+    out: list[str] = []
+    start = 0
+    n = len(words)
+    while start < n:
+        size = 0
+        end = start
+        while end < n and size + len(words[end]) + 1 <= max_chars:
+            size += len(words[end]) + 1
+            end += 1
+        if end == start:  # mot unique trop long → au moins un mot
+            end = start + 1
+        piece = " ".join(words[start:end]).strip()
+        if piece:
+            out.append(piece)
+        if end >= n:
+            break
+        consumed = 0
+        new_start = start
+        while new_start < end and consumed < step:
+            consumed += len(words[new_start]) + 1
+            new_start += 1
+        start = new_start if new_start > start else start + 1
+    return out
+
+
+def chunk_markdown(
+    text: str,
+    *,
+    max_chars: int = DEFAULT_MD_MAX_CHARS,
+    overlap_chars: int = DEFAULT_MD_OVERLAP_CHARS,
+) -> list[str]:
+    """Découpe un Markdown de corpus par TITRES ( secours 800 / 100 ).
+
+    Chaque section ( titre `##` + corps ) devient un chunk si elle tient
+    dans `max_chars` ; sinon elle est découpée en fenêtres glissantes de
+    `max_chars` avec chevauchement `overlap_chars`. Les blocs de code
+    ``` sont atomiques ( via `_split_units` ). Jamais de chunk vide.
+    """
+    if not text or not text.strip():
+        return []
+    units = _split_units(text)
+    sections: list[list[str]] = []
+    current: list[str] = []
+    for unit, _is_code, is_heading in units:
+        if is_heading and current:
+            sections.append(current)
+            current = []
+        current.append(unit)
+    if current:
+        sections.append(current)
+
+    chunks: list[str] = []
+    for section in sections:
+        joined = "\n\n".join(section).strip()
+        if not joined:
+            continue
+        if len(joined) <= max_chars:
+            chunks.append(joined)
+        else:
+            chunks.extend(_window_chars(joined, max_chars, overlap_chars))
+    return [c for c in chunks if c.strip()]

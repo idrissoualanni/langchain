@@ -161,6 +161,11 @@ backend/app/graph/nodes/agenda.py
 backend/app/graph/subgraphs/video/agent.py
 ```
 
+**Exception tracée (2026-10-04).** `backend/requirements.txt` a été édité sur **demande
+explicite** (« met a jour le requirement ») pour ajouter `mammoth` (conversion Word
+`.docx` → Markdown du pipeline d'ingestion knowledge, `services/knowledge/convert.py`).
+Toute autre ajout/retrait de dépendance reste soumis à la règle.
+
 ---
 
 ## 6. Retour arrière
@@ -192,3 +197,92 @@ présence doit être justifiée dans `ENV.md`.
 ⚠️ **Un scan statique ne peut pas le prouver.** `TAVILY_API_KEY` a zéro référence dans
 le dépôt et fonctionne, parce que le SDK la lit. Pour établir quelles variables sont
 réellement consommées, il faut un **suivi d'exécution** de `os.environ` — pas un grep.
+
+---
+
+## 8. Base de connaissance : source, gating, auteur, migrations additives
+
+La base de connaissance de cours obéit à des règles **opposables**.
+
+### 8.1 Source de vérité
+
+- La source de vérité est **Neon** : `knowledge_sections` (corpus vectorisé),
+  `knowledge_files` (bucket des pages sources), `subject_definitions` (matières).
+  **Aucun dossier Markdown d'exécution** n'est lu au runtime — la mission « aucune
+  base de connaissance codée en dur dans le projet » reste en vigueur.
+- Le format d'**import** est une page Markdown à **en-tête YAML** (frontmatter :
+  `subject`, `topic`, `title`, `author`, `source`), validée par le schéma Pydantic
+  `ChunkFrontmatter`. Les définitions de matières sont validées par `SubjectDefinitionIn`.
+- Pipeline d'ingestion : PDF/Word → Markdown (`convert.py`), découpage par titres
+  avec **secours 800 caractères / chevauchement 100** (`chunk_markdown`), embedding,
+  upsert. Recherche **hybride** : `tsvector` (index **GIN**) + cosinus (index **HNSW**).
+
+### 8.2 Gating de validation (fail-closed)
+
+- Une matière porte un **statut** : `draft` / `review` / `validated` / `archived`
+  (défaut `draft`). **Seul `validated` rend la matière visible de l'agent** — ni
+  routing, ni tools, ni corpus. Le gating est appliqué par le registry
+  (`load_subject_definitions(only_validated=True)`), avec un garde-fou redondant
+  dans `knowledge_retriever.search_knowledge`.
+- L'admin voit **tout** le catalogue (`only_validated=False`) et change le statut via
+  `PATCH /api/admin/subjects/{id}/status`.
+
+### 8.3 Auteur (métadonnée obligatoire)
+
+- Toute source et tout chunk porte un **`auteur`** : colonnes `subject_definitions.author`
+  et `knowledge_sections.author`. Les défauts vides sont tolérés mais l'auteur doit être
+  renseigné à l'import (frontmatter ou paramètre `author`).
+
+### 8.4 Migrations additives et réconciliation
+
+- ⚠️ **Le Neon de staging PARTAGE le projet de la prod.** Toute migration est
+  **additive et idempotente** (`ADD COLUMN IF NOT EXISTS`, index `IF NOT EXISTS`) et
+  **jamais destructive**. Aucune colonne/table n'est renommée ni supprimée.
+- **Grandfathering du statut.** L'ajout de `status` **ne doit pas** gater les matières
+  existantes : la migration ajoute la colonne NULLABLE, passe l'existant à `validated`,
+  PUIS pose le défaut `draft` (+ `NOT NULL`). Le seed autoritaire
+  (`scripts/migrate_knowledge_neon.py`) écrit `validated` à la création et ne touche
+  JAMAIS un statut déjà décidé par l'admin sur un ré-import.
+- La **réconciliation** (`reconcile_subject_sources`) est la SEULE opération
+  destructive : elle est **scopée à un sujet** et déclenchée explicitement
+  (`POST /api/admin/knowledge/corpus/reconcile`). Un ensemble vide purge le sujet.
+- Les tests d'intégration DB (`backend/tests/test_knowledge_db.py`) sont **opt-in**
+  (`DATABASE_URL` + `KNOWLEDGE_DB_TESTS=1`) et purgent un `subject_id` unique en
+  teardown — jamais la donnée existante.
+
+### 8.5 Voie d'accès du LLM au corpus
+
+- La voie **par défaut** reste l'injection automatique du context builder
+  (`knowledge_retriever`).
+- Le tool **`search_knowledge`** (famille `knowledge`) est la voie **explicite et
+  auditée** du modèle vers le corpus ; il ne sert que les matières validées.
+### 8.6 Reranking (second etage de tri)
+
+- Toute recherche corpus suit deux etages : **generation** (hybride cosine HNSW +
+  lexical tsvector, `store.search_hybrid`) puis **reranking**
+  (`backend/app/services/knowledge/rerank.py`).
+- Le reranker est **interchangeable** (`Reranker` Protocol + `get_reranker` /
+  `set_reranker`) : defaut = heuristique locale deterministe (signaux couverture,
+  titre, phrase). Un reranker LLM / cross-encoder se branche sans toucher au
+  retriever ni au tool.
+- Le pool de candidats est genere **plus large** que le `top_k` demande : le
+  reranking a besoin de marge pour re-classer (`limit * 4`).
+- `normalize_query` est importe **paresseusement** dans rerank.py : l importer au
+  niveau module creerait un cycle (rerank -> context.__init__ -> builder ->
+  knowledge_retriever -> rerank).
+
+### 8.7 Propositions de connaissance (approbation admin)
+
+- Le tool **`propose_knowledge`** (famille `knowledge`) permet a l agent de
+  soumettre un complement de cours. La proposition est ecrite dans
+  `knowledge_proposals` avec `status = 'pending'`.
+- **Une proposition n entre JAMAIS dans le corpus sans decision admin** : ni la
+  recherche, ni les outils, ni le retrieval ne la voient.
+- L admin decide via `POST /api/admin/knowledge/proposals/{id}/decide` :
+  - `approve=true` -> vectorisation + upsert dans `knowledge_sections`, puis
+    `status = 'approved'` ;
+  - `approve=false` -> `status = 'rejected'`, rien n entre au corpus.
+- Si l embedding echoue a l approbation, la proposition **reste `pending`** ( HTTP
+  503 ) : on n arbitre jamais une proposition qui n a pas pu etre indexee.
+- Les tests sont offline (`tests/test_knowledge_rerank.py`,
+  `tests/test_knowledge_proposal.py`) : store monkeypatche, aucune base requise.

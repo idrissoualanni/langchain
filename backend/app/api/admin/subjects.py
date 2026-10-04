@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from app.auth.resolver import CurrentUser, require_admin
 from app.logging.events import log_event
+from app.schemas.knowledge import SubjectStatusUpdate
 from app.services.knowledge import store as knowledge_store
 
 router = APIRouter(prefix="/api/admin/subjects", tags=["admin-subjects"])
@@ -33,11 +34,16 @@ class DefinitionPutRequest(BaseModel):
 
 
 def _parse_yaml(yaml_text: str) -> dict:
-    """Parse + valide le YAML contre SubjectConfig ( import tardif :
-    le registry importe ce module transitivement, éviter un cycle )."""
+    """Parse + valide le YAML contre SubjectDefinitionIn ( Pydantic ).
+
+    Import tardif : le registry importe ce module transitivement, éviter
+    un cycle. La validation Pydantic ( spec « validé par un schéma
+    Pydantic » ) vérifie id/name requis, types connus et statut ∈
+    SUBJECT_STATUSES ; les clés YAML supplémentaires sont tolérées.
+    """
     import yaml as pyyaml
 
-    from app.schemas.subject import SubjectConfig
+    from app.schemas.subject import SubjectDefinitionIn
 
     try:
         data = pyyaml.safe_load(yaml_text) or {}
@@ -52,7 +58,7 @@ def _parse_yaml(yaml_text: str) -> dict:
             detail="Le YAML doit contenir au moins un champ 'id'",
         )
     try:
-        SubjectConfig.from_dict(data)
+        SubjectDefinitionIn(**data)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -65,25 +71,34 @@ def _parse_yaml(yaml_text: str) -> dict:
 def admin_list_subject_definitions(
     current_user: CurrentUser = Depends(require_admin),
 ) -> dict:
-    """Liste des définitions de matières stockées dans Neon."""
-    from app.schemas.subject import SubjectConfig
+    """Liste des définitions de matières ( TOUTES, y compris non validées ).
 
-    raw = knowledge_store.load_subject_definitions()
+    Chaque entrée porte son statut de validation et son auteur — l'admin
+    voit donc le catalogue complet, alors que l'agent ne reçoit que les
+    matières `validated` ( gating registry ).
+    """
+    from app.schemas.subject import SubjectDefinitionIn
+
+    raw = knowledge_store.load_subject_definitions(only_validated=False)
+    meta = {m["subject_id"]: m for m in knowledge_store.load_subject_meta()}
     subjects = []
     for subject_id, yaml_text in sorted(raw.items()):
         name = subject_id
+        valid = True
         try:
             data = __import__("yaml").safe_load(yaml_text) or {}
             name = data.get("name") or subject_id
-            SubjectConfig.from_dict(data)
-            valid = True
+            SubjectDefinitionIn(**data)
         except Exception:  # noqa: BLE001
             valid = False
+        m = meta.get(subject_id, {})
         subjects.append(
             {
                 "subject_id": subject_id,
                 "name": name,
                 "valid": valid,
+                "status": m.get("status", "draft"),
+                "author": m.get("author", ""),
             }
         )
     return {"subjects": subjects, "total": len(subjects)}
@@ -94,8 +109,8 @@ def admin_get_subject_definition(
     subject_id: str,
     current_user: CurrentUser = Depends(require_admin),
 ) -> dict:
-    """YAML brut d'une matière."""
-    raw = knowledge_store.load_subject_definitions()
+    """YAML brut d'une matière ( y compris non validée — admin )."""
+    raw = knowledge_store.load_subject_definitions(only_validated=False)
     if subject_id not in raw:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -149,7 +164,7 @@ def admin_delete_subject_definition(
 ) -> dict:
     """Retire une matière du registry ( les sections knowledge Neon
     restent en place — ré-importable en re-seedant le YAML )."""
-    raw = knowledge_store.load_subject_definitions()
+    raw = knowledge_store.load_subject_definitions(only_validated=False)
     if subject_id not in raw:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -174,6 +189,50 @@ def admin_delete_subject_definition(
         extra={"operation": "admin_subject_delete", "subject": subject_id},
     )
     return {"success": True, "deleted": subject_id}
+
+
+@router.patch("/{subject_id}/status")
+def admin_set_subject_status(
+    subject_id: str,
+    data: SubjectStatusUpdate,
+    current_user: CurrentUser = Depends(require_admin),
+) -> dict:
+    """Valide / rejette une matière ( + auteur optionnel ).
+
+    Le statut pilote le GATING : seul `validated` rend la matière
+    visible de l'agent ( routing, tools, corpus ). Le registry est
+    invalidé pour prise en compte immédiate, sans redémarrage.
+    """
+    if subject_id not in knowledge_store.load_subject_definitions(
+        only_validated=False
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Matière {subject_id} introuvable",
+        )
+    updated = knowledge_store.set_subject_status(
+        subject_id, data.status, data.author
+    )
+
+    from app.subjects import registry
+
+    registry.invalidate()
+    log_event(
+        "ADMIN_SUBJECT_STATUS",
+        message=f"Statut matière | {subject_id} → {data.status}",
+        extra={
+            "operation": "admin_subject_status",
+            "subject": subject_id,
+            "status": data.status,
+        },
+    )
+    return {
+        "success": True,
+        "subject_id": subject_id,
+        "status": data.status,
+        "author": data.author,
+        "updated": updated,
+    }
 
 
 __all__ = ["router"]

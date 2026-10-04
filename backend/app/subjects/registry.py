@@ -29,7 +29,11 @@ def _load_from_neon() -> dict[str, SubjectConfig] | None:
     try:
         from app.services.knowledge import store as knowledge_store
 
-        raw = knowledge_store.load_subject_definitions()
+        # only_validated=True : GATING fail-closed — une matière dont
+        # status <> 'validated' n'est JAMAIS servie à l'agent ( ni
+        # routing, ni tools, ni corpus ). L'admin passe par
+        # load_subject_meta() / only_validated=False pour tout voir.
+        raw = knowledge_store.load_subject_definitions(only_validated=True)
     except Exception as exc:  # noqa: BLE001
         log_event(
             "SUBJECT_REGISTRY_NEON_ERROR",

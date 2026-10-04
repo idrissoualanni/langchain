@@ -58,6 +58,11 @@ livekit-plugins-silero>=1.8.2
 sqlalchemy
 beautifulsoup4
 pymupdf          # extraction PDF ( app/rag/documents.py — import fitz )
+# mammoth : conversion Word .docx → Markdown pour l'ingestion du corpus
+# de connaissance ( app/services/knowledge/convert.py ). Pur Python, sans
+# dépendance système ( contrairement à pandoc ). Édition de ce fichier
+# autorisée explicitement par la demande « met a jour le requirement ».
+mammoth
 
 # PostgreSQL ( Neon ) — obligatoire des que DATABASE_URL est definie.
 # psycopg 3 en mode binaire : pas de compilation ( contrairement a psycopg2 ).

@@ -398,7 +398,9 @@ semantic_terms:
     - chords harmony notes together
 """
 
-_kn_store71.upsert_subject_definition("v71_test_music", _V71_YAML)
+_kn_store71.upsert_subject_definition(
+    "v71_test_music", _V71_YAML, status="validated"
+)
 
 try:
     from app.subjects import registry as reg

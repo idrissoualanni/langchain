@@ -216,11 +216,91 @@ def search_semantic(
     return results
 
 
+def search_hybrid(
+    subject_id: str,
+    query: str,
+    limit: int = 3,
+    semantic_weight: float = 0.6,
+) -> list[dict]:
+    """Recherche HYBRIDE ( sémantique HNSW + lexical tsvector/GIN ).
+
+    Combine, pour les mêmes candidates, la similarité cosinus
+    ( `embedding <=> q`, index HNSW ) et le rang lexical
+    (`ts_rank_cd(content_tsv, plainto_tsquery('french', q))`, index
+    GIN). Score = w_sem·cosine + (1-w_sem)·lexical_normalisé.
+
+    Les candidates sont d'abord bornées par l'index vectoriel ( top 3×
+    limit ), puis re-classées par score hybride et filtrées au seuil
+    min_score(). Provider KO / table vide → [] ( jamais d'exception,
+    comme `search_semantic` ).
+
+    Retour [{topic, title, content, source, author, relevance}].
+    """
+    q = (query or "").strip()
+    if not q:
+        return []
+    try:
+        vector = _embed(q)
+    except Exception as exc:  # noqa: BLE001
+        log_event(
+            "KNOWLEDGE_EMBED_ERROR",
+            level="WARNING",
+            message=f"Embedding requête impossible (hybride): {exc}",
+            extra={"operation": "knowledge_hybrid", "subject": subject_id},
+        )
+        return []
+
+    qv = _to_vector_literal(vector)
+    with _engine().connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT topic_slug, title, content, source_label, author, "
+                "1 - (embedding <=> CAST(:qv AS vector)) AS semantic, "
+                "ts_rank_cd(content_tsv, plainto_tsquery('french', :q)) "
+                "AS lexical "
+                "FROM knowledge_sections "
+                "WHERE subject_id = :sid "
+                "ORDER BY embedding <=> CAST(:qv AS vector) "
+                "LIMIT :k"
+            ),
+            {"sid": subject_id, "qv": qv, "q": q, "k": max(1, int(limit)) * 3},
+        ).fetchall()
+
+    if not rows:
+        return []
+    max_lex = max((float(r[6] or 0.0) for r in rows), default=0.0) or 1.0
+    threshold = min_score()
+    scored: list[tuple[float, tuple]] = []
+    for r in rows:
+        semantic = float(r[5] or 0.0)
+        lexical = float(r[6] or 0.0) / max_lex
+        score = semantic_weight * semantic + (1.0 - semantic_weight) * lexical
+        scored.append((score, r))
+    scored.sort(key=lambda t: t[0], reverse=True)
+
+    out: list[dict] = []
+    for score, r in scored[: max(1, int(limit))]:
+        if score < threshold:
+            continue
+        out.append(
+            {
+                "topic": r[0],
+                "title": r[1] or r[0],
+                "content": r[2] or "",
+                "source": r[3] or subject_id,
+                "author": r[4] or "",
+                "relevance": round(score, 4),
+            }
+        )
+    return out
+
+
 def upsert_section(
     subject_id: str,
     title: str,
     content: str,
     source_label: str | None = None,
+    author: str = "",
 ) -> dict:
     """Crée ou remplace une section ( admin ) — vectorisation à l'écriture.
 
@@ -255,9 +335,9 @@ def upsert_section(
             text(
                 "INSERT INTO knowledge_sections "
                 "(subject_id, topic_slug, title, content, embedding, "
-                " source_sha, created_at, source_label) "
+                " source_sha, created_at, source_label, author) "
                 "VALUES (:sid, :slug, :title, :content, "
-                " CAST(:qv AS vector), :sha, :created, :label) "
+                " CAST(:qv AS vector), :sha, :created, :label, :author) "
                 "RETURNING id"
             ),
             {
@@ -271,6 +351,7 @@ def upsert_section(
                 ).hexdigest(),
                 "created": __import__("time").strftime("%Y-%m-%dT%H:%M:%S"),
                 "label": source_label or f"admin/{subject_id}",
+                "author": author or "",
             },
         ).scalar_one()
 
@@ -401,14 +482,139 @@ def get_file(path: str) -> str | None:
     return row[0] if row else None
 
 
+def _parse_pg_vector(value) -> list[float]:
+    """pgvector → list[float].
+
+    Selon le driver, une colonne `vector` revient tantôt en `str`
+    ('[0.1,0.2]'), tantôt déjà en séquence : on gère les deux.
+    """
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return [float(x) for x in value]
+    s = str(value).strip()
+    if s.startswith("[") and s.endswith("]"):
+        s = s[1:-1]
+    if not s:
+        return []
+    return [float(x) for x in s.split(",") if x.strip()]
+
+
+def list_chunk_vectors(
+    subject_id: str | None = None,
+    limit: int = 2000,
+) -> list[dict]:
+    """Vecteurs des sections ( pour la visualisation 3D admin ).
+
+    Retourne, borné à `limit`, [{id, subject_id, topic_slug, title,
+    source_label, author, embedding}]. Les sections sans vecteur sont
+    exclues (`embedding IS NOT NULL`). Jamais d'exception : la viz ne
+    doit pas casser l'admin ( liste vide en cas d'erreur ).
+    """
+    sql = (
+        "SELECT id, subject_id, topic_slug, title, source_label, author, "
+        "embedding FROM knowledge_sections WHERE embedding IS NOT NULL"
+    )
+    params: dict = {"k": int(max(1, limit))}
+    if subject_id:
+        sql += " AND subject_id = :sid"
+        params["sid"] = subject_id
+    sql += " ORDER BY id LIMIT :k"
+    with _engine().connect() as conn:
+        rows = conn.execute(text(sql), params).fetchall()
+    return [
+        {
+            "id": r[0],
+            "subject_id": r[1],
+            "topic_slug": r[2],
+            "title": r[3] or r[2],
+            "source_label": r[4] or "",
+            "author": r[5] or "",
+            "embedding": _parse_pg_vector(r[6]),
+        }
+        for r in rows
+    ]
+
+
+def reconcile_subject_sources(
+    subject_id: str,
+    live_sources: set[str],
+) -> dict:
+    """Supprime les sections/fichiers dont la source n'existe plus.
+
+    `live_sources` = ensemble des `source_label` ENCORE présents ( issus
+    des fichiers réellement fournis ). Toute section du sujet absente de
+    cet ensemble est supprimée, ainsi que les fichiers du bucket
+    `knowledge_files` dont le `path` n'y figure pas. Un ensemble VIDE
+    purge l'intégralité du sujet ( utilisé pour retirer une matière ).
+
+    Retourne {subject_id, live_sources, deleted_sections, deleted_files}.
+    Opération DESTRUCTIVE mais SCOPÉE à un seul sujet — jamais globale.
+    """
+    live = {str(s) for s in live_sources}
+    with _engine().begin() as conn:
+        if live:
+            deleted_sections = conn.execute(
+                text(
+                    "DELETE FROM knowledge_sections "
+                    "WHERE subject_id = :sid "
+                    "AND NOT (source_label = ANY(:live))"
+                ),
+                {"sid": subject_id, "live": list(live)},
+            ).rowcount
+            deleted_files = conn.execute(
+                text(
+                    "DELETE FROM knowledge_files "
+                    "WHERE subject_id = :sid "
+                    "AND NOT (path = ANY(:live))"
+                ),
+                {"sid": subject_id, "live": list(live)},
+            ).rowcount
+        else:
+            deleted_sections = conn.execute(
+                text("DELETE FROM knowledge_sections WHERE subject_id = :sid"),
+                {"sid": subject_id},
+            ).rowcount
+            deleted_files = conn.execute(
+                text("DELETE FROM knowledge_files WHERE subject_id = :sid"),
+                {"sid": subject_id},
+            ).rowcount
+
+    result = {
+        "subject_id": subject_id,
+        "live_sources": len(live),
+        "deleted_sections": int(deleted_sections or 0),
+        "deleted_files": int(deleted_files or 0),
+    }
+    log_event(
+        "KNOWLEDGE_RECONCILE",
+        message=(
+            f"Réconciliation | subject={subject_id} | "
+            f"supprimées={result['deleted_sections']} sections, "
+            f"{result['deleted_files']} fichiers"
+        ),
+        extra={"operation": "knowledge_reconcile", "subject": subject_id},
+    )
+    return result
+
+
 # ==================================================================
 # Définitions de matières — YAML sources dans Neon
 # ==================================================================
 
-def upsert_subject_definition(subject_id: str, yaml_text: str) -> bool:
+def upsert_subject_definition(
+    subject_id: str,
+    yaml_text: str,
+    status: str | None = None,
+    author: str | None = None,
+) -> bool:
     """Stocke ( ou remplace ) un YAML de définition de matière.
 
-    Idempotent par sha256. Retour True si écrit, False si inchangé.
+    Idempotent par sha256. `status`/`author` sont OPTIONNELS : absents
+    (None), le statut et l'auteur existants sont PRÉSERVÉS — un
+    ré-import de contenu ne doit jamais réinitialiser la validation
+    admin ( fail-closed : un nouveau sujet reste 'draft' ).
+    Retour True si écrit, False si inchangé.
     """
     import hashlib
     import time as _time
@@ -416,36 +622,337 @@ def upsert_subject_definition(subject_id: str, yaml_text: str) -> bool:
     sha = hashlib.sha256(yaml_text.encode("utf-8")).hexdigest()
     with _engine().begin() as conn:
         row = conn.execute(
-            text("SELECT sha256 FROM subject_definitions WHERE subject_id = :s"),
+            text(
+                "SELECT sha256, status, author FROM subject_definitions "
+                "WHERE subject_id = :s"
+            ),
             {"s": subject_id},
         ).first()
-        if row is not None and row[0] == sha:
+        cur_status = row[1] if row is not None else "draft"
+        cur_author = row[2] if row is not None else ""
+        new_status = status if status is not None else (cur_status or "draft")
+        new_author = author if author is not None else (cur_author or "")
+        if (
+            row is not None
+            and row[0] == sha
+            and new_status == cur_status
+            and new_author == cur_author
+        ):
             return False
         conn.execute(
             text(
-                "INSERT INTO subject_definitions (subject_id, yaml, sha256, updated_at) "
-                "VALUES (:s, :y, :sha, :u) "
+                "INSERT INTO subject_definitions "
+                "(subject_id, yaml, sha256, status, author, updated_at) "
+                "VALUES (:s, :y, :sha, :st, :a, :u) "
                 "ON CONFLICT (subject_id) DO UPDATE SET "
                 "yaml = EXCLUDED.yaml, sha256 = EXCLUDED.sha256, "
+                "status = EXCLUDED.status, author = EXCLUDED.author, "
                 "updated_at = EXCLUDED.updated_at"
             ),
             {
                 "s": subject_id,
                 "y": yaml_text,
                 "sha": sha,
+                "st": new_status,
+                "a": new_author,
                 "u": _time.strftime("%Y-%m-%dT%H:%M:%S"),
             },
         )
     return True
 
 
-def load_subject_definitions() -> dict[str, str]:
-    """Tous les YAML de matières : {subject_id: yaml_text}."""
+def set_subject_status(
+    subject_id: str, status: str, author: str | None = None
+) -> bool:
+    """Change le statut de validation ( + auteur optionnel ) d'une matière.
+
+    Retour True si une ligne a été mise à jour. Le gating ( sujet non
+    validé = invisible de l'agent ) est appliqué en aval par le registry.
+    """
+    with _engine().begin() as conn:
+        if author is None:
+            n = conn.execute(
+                text(
+                    "UPDATE subject_definitions SET status = :st "
+                    "WHERE subject_id = :s"
+                ),
+                {"st": status, "s": subject_id},
+            ).rowcount
+        else:
+            n = conn.execute(
+                text(
+                    "UPDATE subject_definitions SET status = :st, author = :a "
+                    "WHERE subject_id = :s"
+                ),
+                {"st": status, "a": author, "s": subject_id},
+            ).rowcount
+    return bool(n)
+
+
+def load_subject_definitions(only_validated: bool = True) -> dict[str, str]:
+    """YAML des matières : {subject_id: yaml_text}.
+
+    `only_validated=True` ( défaut, fail-closed ) ne retourne QUE les
+    matières `status='validated'` — c'est le contrat consommé par le
+    registry : un sujet non validé n'est jamais servi à l'agent.
+    L'admin passe `only_validated=False` pour voir tout le catalogue.
+    """
+    sql = "SELECT subject_id, yaml FROM subject_definitions"
+    if only_validated:
+        sql += " WHERE status = 'validated'"
+    sql += " ORDER BY 1"
+    with _engine().connect() as conn:
+        rows = conn.execute(text(sql)).fetchall()
+    return {r[0]: r[1] for r in rows}
+
+
+def load_subject_meta() -> list[dict]:
+    """Métadonnées de TOUTES les matières ( admin ) — sans le YAML.
+
+    Retourne [{subject_id, status, author, sha256, updated_at}] trié par
+    identifiant. Sert la liste admin ( qui affiche le statut/auteur ).
+    """
     with _engine().connect() as conn:
         rows = conn.execute(
-            text("SELECT subject_id, yaml FROM subject_definitions ORDER BY 1")
+            text(
+                "SELECT subject_id, status, author, sha256, updated_at "
+                "FROM subject_definitions ORDER BY 1"
+            )
         ).fetchall()
-    return {r[0]: r[1] for r in rows}
+    return [
+        {
+            "subject_id": r[0],
+            "status": r[1] or "draft",
+            "author": r[2] or "",
+            "sha256": r[3],
+            "updated_at": r[4],
+        }
+        for r in rows
+    ]
+
+
+def get_subject_status(subject_id: str) -> str | None:
+    """Statut de validation d'une matière, ou None si la matière est absente.
+
+    Distinct de `is_subject_validated` : permet de distinguer « pas de
+    matière » ( None ) de « matière non validée » ( "draft"… ) — utile
+    au garde-fou du retriever ( ne pas bloquer un corpus hors registry ).
+    """
+    if not subject_id:
+        return None
+    with _engine().connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT status FROM subject_definitions WHERE subject_id = :s"
+            ),
+            {"s": subject_id},
+        ).first()
+    return (row[0] or "draft") if row else None
+
+
+def is_subject_validated(subject_id: str) -> bool:
+    """Le sujet est-il validé ( status='validated' ) ? Fail-closed."""
+    return get_subject_status(subject_id) == "validated"
+
+
+# ==================================================================
+# Propositions de connaissance — soumises par l'agent, décidées admin
+# ==================================================================
+
+PROPOSAL_STATUSES = ("pending", "approved", "rejected")
+
+_PROPOSAL_COLUMNS = (
+    "id, subject_id, title, content, author, proposed_by, reason, "
+    "status, created_at, decided_at, decided_by"
+)
+
+
+def _proposal_row_to_dict(r) -> dict:
+    return {
+        "id": int(r[0]),
+        "subject_id": r[1],
+        "title": r[2],
+        "content": r[3] or "",
+        "author": r[4] or "",
+        "proposed_by": r[5] or "",
+        "reason": r[6] or "",
+        "status": r[7] or "pending",
+        "created_at": r[8] or "",
+        "decided_at": r[9] or "",
+        "decided_by": r[10] or "",
+    }
+
+
+def create_proposal(
+    subject_id: str,
+    title: str,
+    content: str,
+    author: str = "",
+    proposed_by: str = "",
+    reason: str = "",
+) -> dict:
+    """Enregistre une PROPOSITION de connaissance ( status='pending' ).
+
+    La proposition N'EST PAS ajoutée au corpus ( elle n'est donc jamais
+    retournée par la recherche ) tant qu'un admin ne l'a pas approuvée
+    via `decide_proposal`. Retourne {id, subject_id, title, status}.
+    """
+    import time as _time
+
+    if not (subject_id or "").strip() or not (title or "").strip():
+        raise ValueError("subject_id et title sont requis")
+    if not (content or "").strip():
+        raise ValueError("Le contenu de la proposition est vide")
+
+    with _engine().begin() as conn:
+        row = conn.execute(
+            text(
+                "INSERT INTO knowledge_proposals "
+                "(subject_id, title, content, author, proposed_by, reason, "
+                " status, created_at) "
+                "VALUES (:sid, :t, :c, :a, :pb, :r, 'pending', :created) "
+                "RETURNING id"
+            ),
+            {
+                "sid": subject_id.strip(),
+                "t": title.strip(),
+                "c": content.strip(),
+                "a": author or "",
+                "pb": proposed_by or "",
+                "r": reason or "",
+                "created": _time.strftime("%Y-%m-%dT%H:%M:%S"),
+            },
+        ).scalar_one()
+
+    log_event(
+        "KNOWLEDGE_PROPOSAL_CREATED",
+        message=f"Proposition | {subject_id}/{title}",
+        extra={
+            "operation": "knowledge_proposal",
+            "subject": subject_id,
+            "proposal_id": int(row),
+        },
+    )
+    return {
+        "id": int(row),
+        "subject_id": subject_id.strip(),
+        "title": title.strip(),
+        "status": "pending",
+    }
+
+
+def list_proposals(status: str | None = None) -> list[dict]:
+    """Liste les propositions ( toutes, ou filtrées par statut )."""
+    sql = f"SELECT {_PROPOSAL_COLUMNS} FROM knowledge_proposals"
+    params: dict = {}
+    if status:
+        sql += " WHERE status = :st"
+        params["st"] = status
+    sql += " ORDER BY id DESC"
+    with _engine().connect() as conn:
+        rows = conn.execute(text(sql), params).fetchall()
+    return [_proposal_row_to_dict(r) for r in rows]
+
+
+def get_proposal(proposal_id: int) -> dict | None:
+    """UNE proposition par id ( None si absente )."""
+    with _engine().connect() as conn:
+        row = conn.execute(
+            text(
+                f"SELECT {_PROPOSAL_COLUMNS} FROM knowledge_proposals "
+                "WHERE id = :i"
+            ),
+            {"i": int(proposal_id)},
+        ).first()
+    return _proposal_row_to_dict(row) if row else None
+
+
+def decide_proposal(
+    proposal_id: int, approve: bool, decided_by: str = ""
+) -> dict:
+    """Approuve ou rejette une proposition ( admin ).
+
+    APPROUVER → vectorise et insère la section dans `knowledge_sections`
+    ( upsert par titre ), PUIS passe la proposition à 'approved'. Si
+    l'embedding échoue, la proposition RESTE 'pending' ( on n'arbitre
+    jamais une proposition qu'on n'a pas pu indexer ).
+
+    Retourne {ok, id, status, section_id}. ok=False si la proposition
+    est absente ou déjà décidée.
+    """
+    import time as _time
+
+    prop = get_proposal(proposal_id)
+    if prop is None:
+        return {"ok": False, "error": "not_found", "id": int(proposal_id)}
+    if prop["status"] != "pending":
+        return {
+            "ok": False,
+            "error": "already_decided",
+            "id": int(proposal_id),
+            "status": prop["status"],
+        }
+
+    section_id: int | None = None
+    if approve:
+        try:
+            result = upsert_section(
+                subject_id=prop["subject_id"],
+                title=prop["title"],
+                content=prop["content"],
+                source_label=f"proposal/{proposal_id}",
+                author=prop["author"],
+            )
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "ok": False,
+                "error": "embedding_failed",
+                "detail": str(exc),
+                "id": int(proposal_id),
+            }
+        section_id = result["id"]
+
+    new_status = "approved" if approve else "rejected"
+    with _engine().begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE knowledge_proposals "
+                "SET status = :st, decided_at = :d, decided_by = :by "
+                "WHERE id = :i"
+            ),
+            {
+                "st": new_status,
+                "d": _time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "by": decided_by or "",
+                "i": int(proposal_id),
+            },
+        )
+
+    log_event(
+        "KNOWLEDGE_PROPOSAL_DECIDED",
+        message=f"Proposition {proposal_id} → {new_status}",
+        extra={
+            "operation": "knowledge_proposal_decide",
+            "proposal_id": int(proposal_id),
+            "status": new_status,
+        },
+    )
+    return {
+        "ok": True,
+        "id": int(proposal_id),
+        "status": new_status,
+        "section_id": section_id,
+    }
+
+
+def delete_proposal(proposal_id: int) -> bool:
+    """Supprime une proposition ( admin ). True si supprimée."""
+    with _engine().begin() as conn:
+        n = conn.execute(
+            text("DELETE FROM knowledge_proposals WHERE id = :i"),
+            {"i": int(proposal_id)},
+        ).rowcount
+    return bool(n)
 
 
 def _slugify(text_value: str) -> str:
@@ -468,13 +975,26 @@ __all__ = [
     "get_section",
     "match_section",
     "search_semantic",
+    "search_hybrid",
     "upsert_section",
     "list_sections",
     "delete_section",
     "put_file",
     "list_files",
     "get_file",
+    "list_chunk_vectors",
+    "reconcile_subject_sources",
     "upsert_subject_definition",
     "load_subject_definitions",
+    "load_subject_meta",
+    "set_subject_status",
+    "get_subject_status",
+    "is_subject_validated",
+    "create_proposal",
+    "list_proposals",
+    "get_proposal",
+    "decide_proposal",
+    "delete_proposal",
+    "PROPOSAL_STATUSES",
     "min_score",
 ]

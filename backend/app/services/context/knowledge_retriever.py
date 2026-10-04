@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from app.services.context.query_norm import normalize_query
 from app.services.knowledge import store
+from app.services.knowledge.rerank import rerank
 from app.schemas.context import SearchResult
 from app.logging.events import log_event
 
@@ -92,10 +93,48 @@ def search_knowledge(
     except Exception:  # noqa: BLE001 — l'ACL ne doit jamais casser la
         pass  # recherche ( fail-safe : tables absentes, DB down… )
 
+    # ---- Gating validation admin ( ceinture + bretelles §17 ) ----
+    # Le registry exclut déjà les matières non validées ; on revérifie
+    # ici car search_knowledge peut être appelé avec un subject_id direct
+    # ( tool, admin ). Seul un statut EXISTANT et ≠ 'validated' bloque —
+    # une matière absente ( None ) n'est pas bloquée par ce garde-fou
+    # ( corpus hors registry, tests ). Fail-safe : toute erreur DB est
+    # ignorée pour ne jamais casser la recherche.
     try:
-        hits = store.search_semantic(
-            subject_id, query or (topic or ""), limit=limit
+        status = store.get_subject_status(subject_id)
+        if status is not None and status != "validated":
+            log_event(
+                "KNOWLEDGE_SUBJECT_NOT_VALIDATED",
+                level="WARNING",
+                message=(
+                    f"Corpus {subject_id} non validé (status={status}) — "
+                    "recherche refusée"
+                ),
+                extra={
+                    "operation": "knowledge_search",
+                    "subject": subject_id,
+                    "status": STATUS_UNAVAILABLE,
+                },
+            )
+            return {
+                "status": STATUS_UNAVAILABLE,
+                "query": q_norm,
+                "results": [],
+                "items": [],
+                "searched_sources": 0,
+            }
+    except Exception:  # noqa: BLE001
+        pass
+
+    try:
+        # 1. Génération d'un POOL de candidates ( hybride HNSW + tsvector )
+        #    plus large que le top demandé — le reranking a besoin de marge.
+        query_text = query or (topic or "")
+        candidates = store.search_hybrid(
+            subject_id, query_text, limit=max(limit * 4, 8)
         )
+        # 2. RERANKING ( signaux lexicaux fins ) → top_k final.
+        hits = rerank(query_text, candidates, top_k=limit)
         has_corpus = store.has_subject_corpus(subject_id)
     except Exception as exc:
         # Base injoignable : unavailable explicite ( jamais un
@@ -127,7 +166,10 @@ def search_knowledge(
             content=h["content"],
             relevance=h["relevance"],
             source_type="local_knowledge",
-            metadata={"section": h["topic"]},
+            metadata={
+                "section": h["topic"],
+                "author": h.get("author", ""),
+            },
         )
         for h in hits
     ]

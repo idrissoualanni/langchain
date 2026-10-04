@@ -53,6 +53,12 @@ def _fake_has_corpus(subject_id):
 
 
 _kn_store.search_semantic = _fake_search_semantic
+# Contrat V6.5+ : knowledge_retriever appelle désormais search_hybrid
+# ( cosinus + tsvector ). Le corpus de test étant en mémoire, on branche
+# la même doublure ; get_subject_status renvoie None ( pas de gating hors
+# base — garde-fou fail-safe du retriever ).
+_kn_store.search_hybrid = _fake_search_semantic
+_kn_store.get_subject_status = lambda sid: None
 _kn_store.has_subject_corpus = _fake_has_corpus
 _kn_store.get_section = lambda sid, slug: next(
     (
@@ -198,10 +204,11 @@ model:
 with _eng5.begin() as _c:
     _c.execute(
         _t5(
-            "INSERT INTO subject_definitions (subject_id, yaml, sha256, updated_at) "
-            "VALUES ('astronomy', :y, :sha, :u) "
+            "INSERT INTO subject_definitions (subject_id, yaml, sha256, status, author, updated_at) "
+            "VALUES ('astronomy', :y, :sha, 'validated', 'test', :u) "
             "ON CONFLICT (subject_id) DO UPDATE SET "
             "yaml = EXCLUDED.yaml, sha256 = EXCLUDED.sha256, "
+            "status = EXCLUDED.status, author = EXCLUDED.author, "
             "updated_at = EXCLUDED.updated_at"
         ),
         {

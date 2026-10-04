@@ -218,8 +218,8 @@ def main() -> int:
                 conn.execute(
                     text(
                         "INSERT INTO subject_definitions "
-                        "(subject_id, yaml, sha256, updated_at) "
-                        "VALUES (:s, :y, :sha, :u) "
+                        "(subject_id, yaml, sha256, status, author, updated_at) "
+                        "VALUES (:s, :y, :sha, 'validated', :a, :u) "
                         "ON CONFLICT (subject_id) DO UPDATE SET "
                         "yaml = EXCLUDED.yaml, sha256 = EXCLUDED.sha256, "
                         "updated_at = EXCLUDED.updated_at"
@@ -228,6 +228,7 @@ def main() -> int:
                         "s": sid,
                         "y": raw,
                         "sha": sha,
+                        "a": data.get("author", "") or "",
                         "u": time.strftime("%Y-%m-%dT%H:%M:%S"),
                     },
                 )

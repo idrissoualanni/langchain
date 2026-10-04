@@ -6,6 +6,7 @@
 # Les services (moteurs, ranking, assembly) ne sont JAMAIS ici.
 from app.tools.coding import code_tools
 from app.tools.documents import document_tools
+from app.tools.knowledge import knowledge_tools
 from app.tools.learning import learning_tools
 from app.tools.memory import memory_tools
 from app.tools.pedagogical import pedagogical_tools
@@ -18,6 +19,7 @@ all_tools = (
     + learning_tools
     + code_tools
     + document_tools
+    + knowledge_tools
 )
 
 __all__ = [
@@ -27,5 +29,6 @@ __all__ = [
     "learning_tools",
     "code_tools",
     "document_tools",
+    "knowledge_tools",
     "all_tools",
 ]

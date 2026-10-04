@@ -44,6 +44,21 @@ TOOL_DESCRIPTIONS: tuple[ToolDescription, ...] = (
         how="query court et précis ; cite les sources retournées dans ta réponse, ne les invente jamais.",
         response_type="search",
     ),
+    # ── Connaissance de cours (corpus validé) ────────────────────
+    ToolDescription(
+        name="search_knowledge",
+        family="knowledge",
+        when="Besoin d'un extrait PRÉCIS du cours d'une matière (définition, détail) au-delà du contexte déjà injecté.",
+        how="subject = identifiant de matière (ex: python) ; query ciblé ; cite les extraits et leur auteur, ne les invente jamais.",
+        response_type="search",
+    ),
+    ToolDescription(
+        name="propose_knowledge",
+        family="knowledge",
+        when="L'agent identifie un complément de cours fiable et manquant (définition, exemple, précision) qu'il veut soumettre.",
+        how="subject = matière existante ; title court ; content Markdown ; reason. La proposition n'entre au corpus qu'APRÈS validation admin.",
+        response_type="text",
+    ),
     # ── Mémoire (profil + faits) ─────────────────────────────────
     ToolDescription(
         name="get_user_profile",

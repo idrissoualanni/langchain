@@ -291,6 +291,7 @@ def _get_rules_for_kb(kb_id: str) -> list[AccessRuleResponse]:
 
 from pydantic import ConfigDict  # noqa: E402
 
+from app.schemas.knowledge import ProposalDecision  # noqa: E402
 from app.services.knowledge import store as knowledge_store  # noqa: E402
 
 
@@ -303,6 +304,7 @@ class SectionUpsertRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     content: str = Field(min_length=1)
     source_label: str | None = Field(default=None, max_length=200)
+    author: str = Field(default="", max_length=200)
 
 
 class SectionUpsertResponse(BaseModel):
@@ -348,6 +350,7 @@ def admin_upsert_section(
             title=data.title,
             content=data.content,
             source_label=data.source_label,
+            author=data.author,
         )
     except ValueError as exc:
         raise HTTPException(
@@ -388,6 +391,8 @@ import re
 import unicodedata
 import hashlib
 import time
+
+from app.logging.events import log_event
 
 
 def _strip_accents(value: str) -> str:
@@ -480,84 +485,137 @@ async def admin_upload_knowledge_file(
     file: UploadFile = File(...),
     subject_id: str | None = None,
     source_label: str | None = None,
+    author: str = "",
     current_user: CurrentUser = Depends(require_admin),
 ) -> FileUploadResponse:
-    """Upload un fichier ( .md / .txt ) → parsing sections + vectorisation.
+    """Upload un fichier ( .md / .txt / .pdf / .docx ) → ingestion complète.
 
-    - Le fichier est stocké dans le bucket `knowledge_files` ( Neon )
-    - Chaque section « ## Titre » devient une entrée dans `knowledge_sections`
-      avec embedding ( recherche sémantique immédiate )
-    - Si subject_id n'est pas fourni, il est déduit du chemin / définitions YAML
+    - Conversion PDF/Word → Markdown, en-tête YAML ( frontmatter ), puis
+      découpage par titres ( secours 800 car. / chevauchement 100 ) ;
+    - Chaque chunk est vectorisé à l'écriture ( recherche immédiate ) ;
+    - Le contenu Markdown est stocké dans le bucket `knowledge_files` ( clé
+      = source_label, cohérente avec la réconciliation ) ;
+    - subject_id déduit des définitions YAML si non fourni.
     """
-    # --- Validation type de fichier ---
-    allowed_ct = {"text/markdown", "text/plain", "text/x-markdown"}
+    from pathlib import Path
+
+    from app.services.knowledge.convert import ConvertError
+    from app.services.knowledge.ingest import KnowledgeIngestor
+    from app.services.knowledge.store import put_file
+
     filename = file.filename or "upload.md"
-    if file.content_type not in allowed_ct and not filename.endswith((".md", ".txt")):
+    ext = Path(filename).suffix.lower()
+    if ext not in (".md", ".markdown", ".txt", ".rst", ".pdf", ".docx"):
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="Type de fichier non supporté ( .md ou .txt uniquement )",
+            detail="Type non supporté ( .md / .txt / .rst / .pdf / .docx )",
         )
 
-    # --- Lecture contenu ---
-    content_bytes = await file.read()
-    try:
-        content = content_bytes.decode("utf-8")
-    except UnicodeDecodeError:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Fichier non-UTF-8",
-        )
-
-    if not content.strip():
+    raw = await file.read()
+    if not raw:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Fichier vide",
         )
 
-    # --- Stockage dans le bucket knowledge_files ---
-    sha = hashlib.sha256(content_bytes).hexdigest()
-    file_path = filename
-    from app.services.knowledge.store import put_file
-    put_file(file_path, subject_id or "auto", content)
-
-    # --- Résolution subject_id ---
+    # subject_id déduit des définitions YAML si non fourni.
     resolved_subject = subject_id
     if not resolved_subject:
         definitions_map = await _load_definitions_map()
-        resolved_subject = _subject_for_path(file_path, definitions_map)
+        resolved_subject = _subject_for_path(
+            filename.removesuffix(ext), definitions_map
+        )
 
-    # --- Parsing en sections + upsert ( vectorisation ) ---
-    created_sections = []
-    for topic_slug, title, section_content in _split_sections(content):
-        if not section_content.strip():
-            continue
-        try:
-            result = knowledge_store.upsert_section(
-                subject_id=resolved_subject,
-                title=title,
-                content=section_content,
-                source_label=source_label or f"upload/{file_path}",
-            )
-            created_sections.append({
-                "id": result["id"],
-                "topic_slug": result["topic_slug"],
-                "title": result["title"],
-            })
-        except Exception as exc:
-            # On log mais on continue pour les autres sections
-            log_event(
-                "KNOWLEDGE_UPLOAD_SECTION_FAILED",
-                level="WARNING",
-                message=f"Section upload failed: {topic_slug} ({exc})",
-                extra={"file": file_path, "topic": topic_slug},
-            )
+    try:
+        result = KnowledgeIngestor().ingest_page(
+            filename=filename,
+            raw=raw,
+            author=author,
+            subject_id=resolved_subject,
+            content_type=file.content_type,
+            source_label=source_label,
+        )
+    except ConvertError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        )
+
+    # Bucket ( contenu Markdown restituable ) — clé = source_label pour la
+    # cohérence avec reconcile_subject_sources. Best effort : n'échoue pas
+    # l'ingestion si le bucket est indisponible.
+    try:
+        from app.services.knowledge.convert import to_markdown
+
+        md = to_markdown(filename, raw, file.content_type)
+        put_file(result["source_label"], result["subject_id"], md)
+    except Exception as exc:  # noqa: BLE001
+        log_event(
+            "KNOWLEDGE_BUCKET_PUT_FAILED",
+            level="WARNING",
+            message=f"Bucket knowledge non écrit : {exc}",
+            extra={"file": filename},
+        )
 
     return FileUploadResponse(
-        file_path=file_path,
-        subject_id=resolved_subject,
-        sections_created=len(created_sections),
-        sections=created_sections,
+        file_path=result["source_label"],
+        subject_id=result["subject_id"],
+        sections_created=result["sections_created"],
+        sections=result["sections"],
     )
+
+
+# ==================================================================
+# VISUALISATION 3D des chunks vectorisés ( admin ) — projection PCA
+# ==================================================================
+
+@router.get("/chunks/viz")
+def admin_chunks_viz(
+    subject_id: str | None = None,
+    limit: int = 2000,
+    current_user: CurrentUser = Depends(require_admin),
+) -> dict:
+    """Projette les embeddings du corpus en 3D ( PCA ) pour l'admin.
+
+    Retourne {projection, points:[{id,x,y,z,subject_id,topic_slug,title,
+    author,source_label}], edges:[{source,target,distance}],
+    count, dim, explained_variance}. Le rendu ( Three.js `Points` /
+    `Mesh` / `Line` ) vit côté frontend ; ce endpoint ne calcule que la
+    géométrie. Jamais d'exception : graphe vide si rien à projeter.
+    """
+    from app.services.knowledge import viz
+
+    return viz.get_chunk_viz(subject_id=subject_id, limit=limit)
+
+
+# ==================================================================
+# RÉCONCILIATION — suppression des sources disparues ( admin )
+# ==================================================================
+
+class ReconcileRequest(BaseModel):
+    """Réconciliation : liste des sources ENCORE présentes d'un sujet."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject_id: str = Field(min_length=1, max_length=64)
+    live_sources: list[str] = Field(default_factory=list)
+
+
+@router.post("/corpus/reconcile")
+def admin_reconcile_corpus(
+    data: ReconcileRequest,
+    current_user: CurrentUser = Depends(require_admin),
+) -> dict:
+    """Supprime les sections/bucket dont la source n'existe plus.
+
+    `live_sources` = labels des pages encore présentes pour la matière.
+    Toute section du sujet absente de cette liste est supprimée ( ainsi
+    que les fichiers du bucket correspondants ). Une liste VIDE purge la
+    matière entière. Destructif mais SCOPÉ au sujet fourni.
+    """
+    result = knowledge_store.reconcile_subject_sources(
+        data.subject_id, set(data.live_sources)
+    )
+    return result
 
 
 # ==================================================================
@@ -616,6 +674,70 @@ def admin_get_knowledge_file(
         content_preview=content[:2000],
         size_bytes=len(content.encode("utf-8")),
     )
+
+
+# ==================================================================
+# PROPOSITIONS de connaissance — soumises par l'agent, décidées admin
+# ==================================================================
+
+class ProposalListResponse(BaseModel):
+    proposals: list[dict]
+    total: int
+
+
+@router.get("/proposals", response_model=ProposalListResponse)
+def admin_list_proposals(
+    status: str | None = None,
+    current_user: CurrentUser = Depends(require_admin),
+) -> ProposalListResponse:
+    """Liste les propositions de connaissance ( filtre statut optionnel ).
+
+    Une proposition n'est PAS encore dans le corpus : elle devient
+    cherchable seulement après approbation admin.
+    """
+    proposals = knowledge_store.list_proposals(status)
+    return ProposalListResponse(proposals=proposals, total=len(proposals))
+
+
+@router.post("/proposals/{proposal_id}/decide")
+def admin_decide_proposal(
+    proposal_id: int,
+    data: ProposalDecision,
+    current_user: CurrentUser = Depends(require_admin),
+) -> dict:
+    """Approuve ( vectorise + insère au corpus ) ou rejette une proposition.
+
+    Approbation → la section rejoint `knowledge_sections` ( embedding ) et
+    devient cherchable ; un échec d'embedding laisse la proposition
+    'pending' ( 503 ).
+    """
+    result = knowledge_store.decide_proposal(
+        proposal_id, approve=data.approve, decided_by=current_user.user_id
+    )
+    if not result.get("ok"):
+        err = result.get("error")
+        if err == "not_found":
+            code = status.HTTP_404_NOT_FOUND
+        elif err == "embedding_failed":
+            code = status.HTTP_503_SERVICE_UNAVAILABLE
+        else:
+            code = status.HTTP_409_CONFLICT
+        raise HTTPException(status_code=code, detail=result)
+    return result
+
+
+@router.delete("/proposals/{proposal_id}")
+def admin_delete_proposal(
+    proposal_id: int,
+    current_user: CurrentUser = Depends(require_admin),
+) -> dict:
+    """Supprime définitivement une proposition ( admin )."""
+    if not knowledge_store.delete_proposal(proposal_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Proposition {proposal_id} introuvable",
+        )
+    return {"success": True, "deleted": proposal_id}
 
 
 __all__ = ["router"]

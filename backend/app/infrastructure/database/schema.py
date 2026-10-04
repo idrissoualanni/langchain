@@ -162,6 +162,7 @@ _TABLES = [
         embedding       vector(__DIM__),
         source_sha      TEXT NOT NULL,
         source_label    TEXT,
+        author          TEXT NOT NULL DEFAULT '',
         created_at      TEXT NOT NULL
     )
     """,
@@ -175,6 +176,18 @@ _TABLES = [
     # no-op, donc la colonne est ajoutée à part ( additive, nullable ).
     "ALTER TABLE knowledge_sections "
     "ADD COLUMN IF NOT EXISTS source_label TEXT",
+    # Auteur de la source ( métadonnée demandée ) — additif, défaut ''.
+    "ALTER TABLE knowledge_sections "
+    "ADD COLUMN IF NOT EXISTS author TEXT NOT NULL DEFAULT ''",
+    # Recherche lexicale pleine — colonne générée ( la forme 2-args
+    # to_tsvector('french', …) est IMMUTABLE, requise pour GENERATED )
+    # + index GIN. Additif : recalculée pour les lignes existantes.
+    "ALTER TABLE knowledge_sections "
+    "ADD COLUMN IF NOT EXISTS content_tsv tsvector "
+    "GENERATED ALWAYS AS (to_tsvector('french', "
+    "coalesce(title,'') || ' ' || coalesce(content,''))) STORED",
+    "CREATE INDEX IF NOT EXISTS idx_knowledge_sections_tsv "
+    "ON knowledge_sections USING gin(content_tsv)",
     # UPSERT de l'indexer : ON CONFLICT (subject_id, topic_slug) exige
     # une contrainte UNIQUE explicite ( sinon "no unique or exclusion
     # constraint matching the ON CONFLICT specification" ).
@@ -210,9 +223,57 @@ _TABLES = [
         subject_id  TEXT PRIMARY KEY,
         yaml        TEXT NOT NULL,
         sha256      TEXT NOT NULL,
+        status      TEXT NOT NULL DEFAULT 'draft',
+        author      TEXT NOT NULL DEFAULT '',
         updated_at  TEXT NOT NULL
     )
     """,
+    # Additif ( table préexistante ) : statut de validation admin +
+    # auteur. Un sujet dont status <> 'validated' n'est JAMAIS servi
+    # à l'agent ( gating au niveau du registry, cf. AGENTS.md ).
+    #
+    # ⚠️ MISE À JOUR SANS RUPTURE : on ajoute d'abord la colonne NULLABLE
+    # ( pas de défaut ), on GRANDFATHÈRE les matières existantes en
+    # 'validated' ( sinon l'agent perdrait TOUTES ses matières d'un coup
+    # au redéploiement ), PUIS on pose le défaut 'draft' ( fail-closed
+    # pour les NOUVELLES matières ) et la contrainte NOT NULL.
+    "ALTER TABLE subject_definitions "
+    "ADD COLUMN IF NOT EXISTS status TEXT",
+    "UPDATE subject_definitions SET status = 'validated' "
+    "WHERE status IS NULL",
+    "ALTER TABLE subject_definitions "
+    "ALTER COLUMN status SET DEFAULT 'draft'",
+    "ALTER TABLE subject_definitions "
+    "ALTER COLUMN status SET NOT NULL",
+    "ALTER TABLE subject_definitions "
+    "ADD COLUMN IF NOT EXISTS author TEXT NOT NULL DEFAULT ''",
+
+    # ---------------------------------------------------------------
+    # Propositions de connaissance — soumises par l'AGENT, APPROUVÉES
+    # par l'admin. Une proposition n'entre PAS dans le corpus tant
+    # qu'elle n'est pas approuvée ( status='pending' par défaut ) :
+    # l'approbation déclenche l'upsert d'une section vectorisée
+    # ( cf. store.decide_proposal ). Table ADDITIVE, jamais détruite.
+    # ---------------------------------------------------------------
+    """
+    CREATE TABLE IF NOT EXISTS knowledge_proposals (
+        id           BIGSERIAL PRIMARY KEY,
+        subject_id   TEXT NOT NULL,
+        title        TEXT NOT NULL,
+        content      TEXT NOT NULL,
+        author       TEXT NOT NULL DEFAULT '',
+        proposed_by  TEXT NOT NULL DEFAULT '',
+        reason       TEXT NOT NULL DEFAULT '',
+        status       TEXT NOT NULL DEFAULT 'pending',
+        created_at   TEXT NOT NULL,
+        decided_at   TEXT NOT NULL DEFAULT '',
+        decided_by   TEXT NOT NULL DEFAULT ''
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_knowledge_proposals_status "
+    "ON knowledge_proposals(status)",
+    "CREATE INDEX IF NOT EXISTS idx_knowledge_proposals_subject "
+    "ON knowledge_proposals(subject_id)",
 
     # ---------------------------------------------------------------
     # ACL knowledge bases — registry + règles d'accès PERSISTÉS ( les

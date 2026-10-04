@@ -15,6 +15,9 @@ import { KnowledgeAccessPanel } from "./KnowledgeAccessPanel";
 import { KnowledgeCorpusPanel } from "./KnowledgeCorpusPanel";
 import { SubjectDefinitionsPanel } from "./SubjectDefinitionsPanel";
 import { KnowledgeFileUploadPanel } from "./KnowledgeFileUploadPanel";
+import { SubjectValidationPanel } from "./SubjectValidationPanel";
+import { KnowledgeChunkVizPanel } from "./KnowledgeChunkVizPanel";
+import { KnowledgeProposalsPanel } from "./KnowledgeProposalsPanel";
 import { apiRequest } from "@/api/request";
 
 interface KnowledgeBase {
@@ -362,7 +365,16 @@ export function KnowledgePage() {
       <KnowledgeCorpusPanel />
       <SubjectDefinitionsPanel />
 
-      {/* Fichiers sources — upload .md/.txt → parsing auto + preview bucket */}
+      {/* Validation admin des matières ( statut + auteur ) — pilote le gating */}
+      <SubjectValidationPanel />
+
+      {/* Visualisation 3D des chunks vectorisés ( PCA + Three.js ) */}
+      <KnowledgeChunkVizPanel />
+
+      {/* Propositions de connaissance soumises par l’agent — approbation admin */}
+      <KnowledgeProposalsPanel />
+
+      {/* Fichiers sources — upload .md/.txt/.pdf/.docx → parsing + ingestion */}
       <KnowledgeFileUploadPanel />
     </div>
   );
