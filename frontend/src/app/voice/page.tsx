@@ -273,6 +273,19 @@ export default function VoicePage() {
   // ( renouvellement géré par useLiveKitToken )
 
   // Démarre l'agent ( dispatch ) dès que la room est connue.
+  //
+  // ⚠️ NE PAS supprimer : le bouton voix déclenche déjà le dispatch avant
+  // de naviguer ici. Ce bloc couvre les DEUX autres arrivées, où aucun
+  // bouton n'a été cliqué :
+  //   - URL directe  /voice ( lien, partage, favori )
+  //   - onglet restauré par le navigateur après fermeture
+  // Dans ces cas, sans ce bloc, le participant rejoint une room SANS
+  // agent : il entend le silence et aucun message ne l'explique.
+  //
+  // Le backend est idempotent ( /agent/start réutilise un dispatch
+  // vivant ) : quand le bouton a déjà démarré l'agent, cet appel ne
+  // crée PAS de second agent, il renvoie { reused: true }.
+  //
   // thread_id : transmis au worker via le metadata du dispatch — sans
   // lui, le transcript de la session n'est JAMAIS persisté dans le
   // thread ( thread_id_from_metadata ne le trouve pas ). Lu dans le
@@ -333,9 +346,40 @@ export default function VoicePage() {
     fetchMemory();
   }, []);
 
+  // Arrêt du dispatch quand la page est QUITTÉE, quel qu'en soit le motif.
+  //
+  // ⚠️ Pourquoi un `keepalive` :
+  // le `fetch` du cleanup est NORMALEMENT annulé dès que la page quitte le
+  // domaine — sans `keepalive`, fermer l'onglet ou cliquer un lien coupe la
+  // requête EN VOL, et le dispatch reste actif côté LiveKit Cloud. Résultat :
+  // un agent orphelin qui reste connecté à une room vide et consomme de
+  // l'inference ( STT + LLM + TTS facturés ) jusqu'au timeout de session.
+  //
+  // `keepalive: true` autorise le navigateur à achever ce petit POST de
+  // suppression au moment du déchargement. C'est le seul mécanisme qui
+  // survit à la fermeture de l'onglet.
+  //
+  // Limite honnête : ce mécanisme est FIABLE pour un onglet unique, mais
+  // un `kill` brutal de l'OS ou une perte réseau peuvent l'empêcher. Le
+  // backend reste la seule autorité — voir la section « agent orphelin »
+  // du plan de déploiement LiveKit ( docs/LIVEKIT_DEPLOYMENT.md ).
+  useEffect(() => {
+    return () => {
+      void apiFetch("/api/livekit/agent/stop", {
+        method: "POST",
+        keepalive: true,
+      }).catch(() => {
+        /* Le déchargement interrompt de toute façon l'exécution ici :
+           l'appel reste une tentative au mieux. */
+      });
+    };
+  }, []);
+
   const handleDisconnect = () => {
     // Arrêt honnête : on stoppe le dispatch avant de quitter, pour ne
     // pas laisser un agent orphelin consommer de l'inference.
+    // Le cleanup ci-dessus couvre les AUTRES départs (fermeture d'onglet,
+    // navigation latérale) : cet appel n'est que le chemin explicite.
     apiFetch("/api/livekit/agent/stop", { method: "POST" }).finally(() =>
       navigate("/assistant"),
     );

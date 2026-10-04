@@ -8,7 +8,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { apiFetch } from "@/api/base";
+import { ApiError, apiFetch } from "@/api/base";
+
+/** Nombre de reprises après un échec TRANSITOIRE ( réseau / 5xx ).
+ *
+ *  Borné à 3 : au-delà, la panne n'est plus transitoire et le hook arrête
+ *  de temporiser — l'UI affiche l'erreur, ce qui vaut mieux qu'une
+ *  boucle de requêtes invisible pendant des heures. */
+const MAX_TRANSIENT_RETRIES = 3;
+
+/** Délai avant reprise après un échec transitoire ( ms ). */
+const TRANSIENT_RETRY_MS = 15_000;
 
 export interface LiveKitTokenResponse {
   token: string;
@@ -53,6 +63,11 @@ export function useLiveKitToken() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Compteur de reprises transitoires — une REF, pas un état : il est lu
+  // et écrit DANS la fonction async refresh(), et un useState y créerait
+  // une closure périmée (chaque rendu repartirait de la valeur capturée).
+  const retryRef = useRef(0);
+
   // Référence stable sur le token courant : le listener visibilitychange
   // ne peut pas dépendre de l'état ( sinon re-souscription à chaque
   // renouvellement ) — il lit la valeur via cette ref.
@@ -76,6 +91,9 @@ export function useLiveKitToken() {
           roomName: res.room_name,
         });
         setError(null);
+        // Succès → le compteur de reprises repart de zéro : les 3
+        // tentatives tolérées valent pour 3 échecs CONSÉCUTIFS.
+        retryRef.current = 0;
 
         // Renouveler 5 min avant l'expiration ( défaut 50 min si exp illisible ).
         const exp = expOf(res.token);
@@ -83,7 +101,40 @@ export function useLiveKitToken() {
         timer = setTimeout(refresh, delay);
       } catch (e) {
         if (!alive) return;
-        setError(e instanceof Error ? e.message : "Erreur inconnue");
+        const msg = e instanceof Error ? e.message : "Erreur inconnue";
+        setError(msg);
+
+        // ⚠️ Une session perdue ne se répare PAS en temporisant.
+        //
+        // Le cookie de session suit le JWT ( 15 min ) et se renouvelle en
+        // silence. Si cette requête échoue, ce n'est PAS l'expiration du
+        // token LiveKit : le renouvellement n'a lieu qu'après un SUCCÈS,
+        // donc aucun timer n'est armé à ce moment. Retenter dans 50 min
+        // produirait un échec MUET — l'écran « Session vocale indisponible »
+        // reste affiché sans rien signaler pendant tout ce temps.
+        //
+        // On distingue les deux causes :
+        //   ApiError 401/403 → session perdue → on SURVIT, pas de retry
+        //                     ( le remède est la reconnexion, pas temporiser )
+        //   réseau / 5xx    → transitoire           → on retente, borné
+        const permanent =
+          e instanceof ApiError && (e.status === 401 || e.status === 403);
+        if (!permanent) {
+          // Reprise bornée : le compteur est remis à zéro au succès, donc
+          // 3 échecs CONSÉCUTIFS déclenchent l'arrêt, pas 3 échecs par jour.
+          const next = retryRef.current + 1;
+          retryRef.current = next;
+          if (next <= MAX_TRANSIENT_RETRIES) {
+            // L'erreur est visible tout de suite, MAIS la session repart
+            // seule : le hook n'abandonne pas au premier incident réseau.
+            setError(msg);
+            timer = setTimeout(refresh, TRANSIENT_RETRY_MS);
+          } else {
+            setError(
+              `${msg} — échec réseau, abandon après ${MAX_TRANSIENT_RETRIES} tentatives. Recharge la page.`,
+            );
+          }
+        }
       } finally {
         if (alive) setLoading(false);
       }

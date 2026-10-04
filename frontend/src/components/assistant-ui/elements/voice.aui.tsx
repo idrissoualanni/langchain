@@ -20,9 +20,25 @@ function VoiceButton() {
     try {
       if (!started) {
         setConnecting(true);
+        // Le dispatch est déclenché ICI, pas par la page /voice.
+        //
+        // Pourquoi : le bouton ET la page appelaient tous deux
+        // /agent/start ( ce bloc + l'effet de montage de VoicePage ).
+        // Le backend est idempotent ( il réutilise un dispatch vivant ),
+        // donc le second appel ne crée pas un second agent — mais il
+        // coûte un aller-retour LiveKit et, surtout, il rend la
+        // responsabilité du dispatch ambiguë : deux endroits le lancent,
+        // deux endroits peuvent l'oublier.
+        //
+        // On garde UN SEUL point de déclenchement : le bouton. La page se
+        // contente de se connecter à la room. Si le dispatch manque
+        // ( navigation directe sur /voice, onglet restauré ), il est créé
+        // par le même appel — le participant et l'agent se retrouvent dans
+        // la même room, condition nécessaire pour que l'agent l'entende.
+        //
         // apiFetch retourne le JSON déjà parsé et LÈVE une ApiError
-        // ( status + message ) sur toute réponse non-2xx : on ne gère donc
-        // plus un objet Response ici.
+        // ( status + message ) sur toute réponse non-2xx : on ne gère
+        // donc plus un objet Response ici.
         await apiFetch("/api/livekit/agent/start", { method: "POST" });
         setStarted(true);
         navigate("/voice");

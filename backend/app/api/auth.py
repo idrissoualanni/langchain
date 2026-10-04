@@ -33,7 +33,7 @@
 import time
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from app.auth.resolver import (
     AUTH_COOKIE_NAME,
@@ -81,13 +81,58 @@ def _remaining_seconds(claims: dict) -> int:
     return max(0, int(exp - time.time()))
 
 
-@router.post("/session", response_model=SessionStatus)
-def create_session(payload: SessionExchange, response: Response) -> SessionStatus:
+#: Message UNIQUE de refus (AGENTS.md §2 : « message générique »).
+#:
+#: Il couvre indistinctement un JSON malformé, un champ absent, un token
+#: vide et une signature invalide. Un seul message ne permet pas de
+#: distinguer les cas par sondage, et n'en dit pas plus long sur ce que
+#: le validateur aurait entendu.
+_GENERIC_REJECT = "Token invalide ou expiré"
+
+
+@router.post(
+    "/session",
+    response_model=SessionStatus,
+    # Le corps est lu à la main (voir create_session) : on réécrit donc la
+    # schéma OpenAPI pour que la documentation reste juste.
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {"application/json": {"schema": SessionExchange.model_json_schema()}},
+        }
+    },
+)
+async def create_session(request: Request, response: Response) -> SessionStatus:
     """Vérifie le JWT puis le dépose en cookie HttpOnly.
 
     Le JWT n'est JAMAIS renvoyé dans le corps de la réponse : il ne
     fait qu'entrer pour ressortir en `Set-Cookie`, inaccessible au JS.
+
+    POURQUOI LE CORPS EST LU À LA MAIN
+
+    En laissant FastAPI valider `SessionExchange` en paramètre de route,
+    un corps malformé renvoyait `422` avec le DÉTAIL du validateur
+    Pydantic (`loc`, `msg`, `input`, `ctx`) — deux fois la structure
+    attendue, donc un oracle sur ce que l'endpoint a tenté de lire.
+    AGENTS.md §2 exige `401` + message générique sur une requête
+    malformée : le refus doit être indiscernable, quelle que soit sa cause.
+
+    Ici, TOUT ce que Pydantic refuse (JSON invalide, champ absent,
+    token vide) devient le même `401 _GENERIC_REJECT`, exactement comme
+    une signature invalide. Rien ne fuit, rien ne s'énumère.
     """
+    try:
+        payload = SessionExchange.model_validate_json(await request.body() or b"")
+    except ValidationError:
+        log_event(
+            "AUTH_SESSION_MALFORMED",
+            message=(
+                "Corps /api/auth/session refuse par le validateur — "
+                "rejet 401 generique, aucun detail renvoye"
+            ),
+        )
+        raise HTTPException(status_code=401, detail=_GENERIC_REJECT)
+
     try:
         claims = verify_neon_token(payload.token)
     except HTTPException:
@@ -109,7 +154,7 @@ def create_session(payload: SessionExchange, response: Response) -> SessionStatu
         )
         raise HTTPException(
             status_code=401,
-            detail="Token invalide ou expiré",
+            detail=_GENERIC_REJECT,
         )
 
     if not claims.get("sub"):

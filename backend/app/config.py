@@ -435,32 +435,51 @@ if _looks_masked(LIVEKIT_API_SECRET):
 
 
 # ------------------------------------------------------------------
-# LiveKit Agents — modèles du tuteur vocal ( worker app.infrastructure.livekit.agent )
+# LiveKit Agents — modèles du tuteur vocal
 # ------------------------------------------------------------------
-# Tous via LiveKit Inference : mêmes LIVEKIT_API_KEY / SECRET que le
-# reste du projet, aucune clé provider à gérer. Les noms doivent
-# exister dans livekit.agents.inference ( STTModels / LLMModels /
-# TTSModels ) — un nom invalide lève à la première inference.
-# ⚠️ Le défaut a été corrigé : « google/gemma-4-31b-it » n'existe PAS
-# dans le catalogue Inference (le worker démarre, s'enregistre, puis
-# échoue silencieusement au premier tour de parole — visible seulement
-# dans les logs du job). Liste vérifiée contre livekit-agents 1.8.x :
-# openai/gpt-4o-mini, google/gemini-2.5-flash, moonshotai/kimi-k2.5…
-LIVEKIT_AGENT_STT_MODEL = _env_or_default(
-    "LIVEKIT_AGENT_STT_MODEL", "deepgram/nova-3"
-)
-LIVEKIT_AGENT_LLM_MODEL = _env_or_default(
-    "LIVEKIT_AGENT_LLM_MODEL", "openai/gpt-4o-mini"
-)
-LIVEKIT_AGENT_TTS_MODEL = _env_or_default(
-    "LIVEKIT_AGENT_TTS_MODEL", "rime/coda"
-)
-# Voice ID provider ( UUID Cartesia, nom Inworld… ). Vide = la voix par
-# défaut côté Inference ; on ne transmet alors pas le paramètre — un ID
-# inventé ferait échouer la première synthèse.
-# "aurelie" : voix Rime testée en conditions réelles.
-LIVEKIT_AGENT_TTS_VOICE = _env_or_default("LIVEKIT_AGENT_TTS_VOICE", "aurelie")
-LIVEKIT_AGENT_LANGUAGE = _env_or_default("LIVEKIT_AGENT_LANGUAGE", "fr")
+# ⚠️ PLUS DE CONFIGURATION ICI — SUPPRIMÉE LE 2026-10-04.
+#
+# Ces cinq constantes ( LIVEKIT_AGENT_{STT,LLM,TTS}_MODEL,
+# LIVEKIT_AGENT_TTS_VOICE, LIVEKIT_AGENT_LANGUAGE ) étaient lues par le
+# worker LiveKit rendu sur Render. Ce worker a été SUPPRIMÉ ( commit
+# 9c2f811 : « l'agent vocal vit sur LiveKit Cloud, le worker Render est
+# supprimé » ) et son module supprimé avec lui. Aucun code ne les lisait
+# encore — vérifié : `LIVEKIT_AGENT_TTS_MODEL` n'apparaissait que dans
+# sa propre définition.
+#
+# POURQUOI LES SUPPRIMER, ET PAS CORRIGER LE DÉFAUT :
+#
+# Leur défaut TTS était `rime/coda` + la voix `aurelie`, ce qui NE MARCHE
+# PAS : l'agent est déployé en eu-central, donc les requêtes partent vers
+# la région data `eu`, où Rime n'a aucun endpoint. LiveKit répond
+# REGION_RESTRICTED et l'agent reste MUET — sans la moindre erreur visible
+# côté application.
+#
+# Le vrai danger n'était pas le défaut, mais le fait que ces noms
+# contrôlaient ENCORE l'agent indirectement : `agent/config.py:58` lit
+#
+#     _env_any("deepgram/aura-2", "LIVEKIT_TTS_MODEL", "LIVEKIT_AGENT_TTS_MODEL")
+#
+# autrement dit LIVEKIT_AGENT_TTS_MODEL est un REPLI de la configuration
+# vivante. Poser cette variable dans les secrets LiveKit Cloud — au nom
+# pourtant documenté par render.yaml — suffisait à renvoyer `rime/coda`
+# à l'agent et à le rendre muet. Un défaut « inoffensif » ici était un
+# déclencheur de panne à distance.
+#
+# OÙ VIT MAINTENANT LA VRAIE CONFIGURATION :
+#
+#   agent/.env.local   → LIVEKIT_STT_MODEL, LIVEKIT_LLM_MODEL,
+#                        LIVEKIT_TTS_MODEL, LIVEKIT_STT_LANGUAGE,
+#                        LIVEKIT_TTS_VOICE, LIVEKIT_AGENT_NAME…
+#   lues par          → agent/config.py (contexte de build LiveKit Cloud)
+#
+# ⚠️ CONVENTION : l'agent lit `LIVEKIT_*` (préfixe nu). NE PAS réintroduire
+# `LIVEKIT_AGENT_*` : ce préfixe appartenait au worker Render supprimé et il
+# est aujourd'hui un leurre, puisque rien ici ne le lit.
+#
+# Les REGLES restent dans agent/config.py et agent/session_factory.py,
+# seules sources consommées. Voir docs/LIVEKIT_DEPLOYMENT.md §5.1 pour le
+# piège TTS/REGION_RESTRICTED.
 
 # ------------------------------------------------------------------
 # Transcription STT — Deepgram (feature独立ée, hors LiveKit)
