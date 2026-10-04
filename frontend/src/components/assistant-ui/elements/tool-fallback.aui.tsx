@@ -7,6 +7,7 @@ import {
   ChevronDownIcon,
   LoaderIcon,
   XCircleIcon,
+  type LucideIcon,
 } from "lucide-react";
 import {
   toolApprovalAcceptsText,
@@ -90,7 +91,13 @@ function ToolFallbackRoot({
 
 type ToolStatus = ToolCallMessagePartStatus["type"];
 
-const statusIconMap: Record<ToolStatus, React.ElementType> = {
+// `LucideIcon` et non `React.ElementType` : `@react-three/fiber` Complete l'en
+// global `JSX.IntrinsicElements` avec les elements three ( mesh, group… ).
+// `React.ElementType` est un large union de composants ET de ces elements
+// intrinseques ; le prop `className` s'y infere alors en `never` et l'usage
+// de <Icon …> echoue en TS2322. `LucideIcon` decrit precisement le contrat
+// accepte ici ( props SVG, dont className ).
+const statusIconMap: Record<ToolStatus, LucideIcon> = {
   running: LoaderIcon,
   complete: CheckIcon,
   incomplete: XCircleIcon,
