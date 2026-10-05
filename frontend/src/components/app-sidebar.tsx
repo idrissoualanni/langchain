@@ -18,6 +18,7 @@ import {
   User,
   Video,
   Mic,
+  Dumbbell,
 } from 'lucide-react';
 import { NeonUserMenu } from '../auth/NeonUserMenu';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -152,6 +153,9 @@ export function AppSidebar() {
                 />
                 <NavEntry
                   item={{ to: '/admin/knowledge', label: 'Savoir', icon: BookOpenText }}
+                />
+                <NavEntry
+                  item={{ to: '/admin/exercises', label: 'Exercices', icon: Dumbbell }}
                 />
                 <NavEntry
                   item={{ to: '/admin/observability', label: 'Observabilité', icon: Gauge }}

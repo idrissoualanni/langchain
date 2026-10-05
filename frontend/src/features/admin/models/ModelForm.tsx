@@ -33,6 +33,7 @@ export function ModelForm({ initialData, onSubmit, onCancel, isEditing = false }
     model_name: '',
     gateway_model: '',
     enabled: true,
+    rigor_level: 'Balanced',
     context_window: null,
     max_output_tokens: null,
     metadata: {},
@@ -267,6 +268,30 @@ export function ModelForm({ initialData, onSubmit, onCancel, isEditing = false }
                     value={formData.max_output_tokens || ''}
                     onChange={(e) => setFormData(prev => ({ ...prev, max_output_tokens: parseInt(e.target.value) || null }))}
                   />
+                </div>
+              </div>
+              <div className="space-y-4">
+                <Label>Niveau de Rigueur Pédagogique</Label>
+                <Select
+                  value={formData.rigor_level}
+                  onValueChange={(value: 'Lax' | 'Balanced' | 'Strict') => setFormData(prev => ({ ...prev, rigor_level: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choisir le niveau de rigueur" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Lax">Lax (Guidage maximum, tolérant)</SelectItem>
+                    <SelectItem value="Balanced">Balanced (Équilibre entre aide et exigence)</SelectItem>
+                    <SelectItem value="Strict">Strict (Exigences élevées, minimal d'aide)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="p-3 rounded-lg bg-muted/50 flex gap-3 items-start text-sm text-muted-foreground">
+                  <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                  <p>
+                    {formData.rigor_level === 'Lax' && "Le modèle sera très indulgent et guidera l'utilisateur pas à pas vers la solution."}
+                    {formData.rigor_level === 'Balanced' && "Le modèle posera des questions pour faire réfléchir l'utilisateur avant de donner des indices."}
+                    {formData.rigor_level === 'Strict' && "Le modèle sera exigeant et n'acceptera que des réponses précises et complètes."}
+                  </p>
                 </div>
               </div>
               <div className="space-y-4">

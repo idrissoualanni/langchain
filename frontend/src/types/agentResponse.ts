@@ -16,6 +16,7 @@ export type AgentResponseType =
   | 'hint'
   | 'code'
   | 'diagram'
+  | 'illustration'
   | 'search'
   | 'clarification'
   | 'error';

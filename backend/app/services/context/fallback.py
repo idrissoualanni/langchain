@@ -219,11 +219,11 @@ def _decide(
             ),
         }
         return FallbackDecision(
-            action="use_general_tutor",
+            action="generate_mini_course",
             reason=(
                 f"Knowledge local insuffisant et "
                 f"{reason_map.get(web_status, 'web inutilisable')} "
-                "— tuteur général transparent."
+                "— génération d'un mini-cours de secours."
             ),
             source_status=(
                 f"supported/{knowledge_status}/web_{web_status}"
@@ -265,6 +265,13 @@ def fallback_note_for_prompt(decision: FallbackDecision) -> str:
             "avec tes connaissances générales, signale "
             "honnêtement que ce contenu ne provient pas d'une "
             "base de cours vérifiée."
+        ),
+        "generate_mini_course": (
+            "NOTE DU SYSTÈME — " + decision.reason + " Le corpus de "
+            "cours est vide ou insuffisant pour ce point. Génère une "
+            "fiche de synthèse temporaire (mini-cours) basée sur tes "
+            "connaissances, en précisant qu'elle est en attente de "
+            "validation administrative."
         ),
         "ask_clarification": (
             "NOTE DU SYSTÈME — " + decision.reason

@@ -40,7 +40,7 @@ TOOL_DESCRIPTIONS: tuple[ToolDescription, ...] = (
     ToolDescription(
         name="recherche_web",
         family="search",
-        when="Question hors base de cours, actualité, ou complément quand aucune connaissance de cours n'a été trouvée.",
+        when="Question hors base de cours, actualité, ou complément quand aucune connaissance de cours n'a été trouvée. INTERDIT lors de la génération d'exercices ou de l'évaluation d'une réponse.",
         how="query court et précis ; cite les sources retournées dans ta réponse, ne les invente jamais.",
         response_type="search",
     ),
@@ -174,11 +174,11 @@ TOOL_DESCRIPTIONS: tuple[ToolDescription, ...] = (
         response_type="text",
     ),
     ToolDescription(
-        name="create_diagram",
+        name="create_illustration",
         family="pedagogical",
-        when="Une structure/processus gagne à être DESSINÉ (flux algo, classes, machine à états, BDD, chronologie). Voie privilégiée sur le bloc markdown.",
-        how="chart = code mermaid BRUT SANS fence, mot-clé en 1ʳᵉ ligne, ≤15 nœuds ; caption courte. Activité NON interactive : n'attends pas de réponse, n'évalue pas dessus, et n'écris PAS de bloc ```mermaid dans le même tour.",
-        response_type="diagram",
+        when="Une structure, un processus ou une comparaison gagne à être ILLUSTRÉ (flux algo, classes, BDD, chronologie via 'diagram' ; synthèses, comparaisons via 'table'). Voie privilégiée sur le bloc markdown.",
+        how="illustration_type = 'diagram' ou 'table' ; content = code mermaid brut (sans fence, ≤15 nœuds) pour diagram, ou données structurées pour table ; caption courte. Activité NON interactive.",
+        response_type="illustration",
     ),
     # ── Apprentissage (progression) ──────────────────────────────
     ToolDescription(

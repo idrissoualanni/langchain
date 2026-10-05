@@ -66,7 +66,7 @@ def response_from_text(
         # V6.7 : un diagramme est une activité NON interactive —
         # le tool pose awaiting_answer=False ; il ne faut JAMAIS
         # faire attendre l'étudiant sur une simple visualisation.
-        if activity.get("activity_type") == "diagram":
+        if activity.get("activity_type") == "illustration":
             waiting = False
         else:
             waiting = status in (
@@ -112,19 +112,20 @@ def response_from_activity(
     a_status = activity.get("status") or "idle"
     a_type = activity.get("activity_type")
 
-    # Diagramme (V6.7 tool create_diagram) : activité NON interactive
-    # (awaiting_answer=False) → contrat public type="diagram",
-    # data.chart = code mermaid BRUT validé côté serveur (§19).
-    if a_type == "diagram":
+    # Illustration (V7.0 tool create_illustration) : activité NON interactive
+    # (awaiting_answer=False) → contrat public type="illustration",
+    # data.content = code mermaid ou données tableau.
+    if a_type == "illustration":
         return AgentResponse(
-            type="diagram",
+            type="illustration",
             status="completed",
             message=message,
             data=_sanitize_data(
                 {
                     "activity_id": activity.get("activity_id", ""),
                     "activity_status": a_status,
-                    "chart": activity.get("chart", ""),
+                    "sub_type": activity.get("sub_type", "diagram"),
+                    "content": activity.get("content", ""),
                     "caption": activity.get("caption", ""),
                 }
             ),

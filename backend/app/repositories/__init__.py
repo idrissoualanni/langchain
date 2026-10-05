@@ -22,6 +22,7 @@ from app.repositories import (
     memory,
     threads,
     users,
+    exercises,
 )
 
 __all__ = [
@@ -32,4 +33,5 @@ __all__ = [
     "memory",
     "threads",
     "users",
+    "exercises",
 ]

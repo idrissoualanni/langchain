@@ -12,6 +12,7 @@ export interface ModelConfig {
   model_name: string;
   gateway_model?: string;
   enabled: boolean;
+  rigor_level: 'Lax' | 'Balanced' | 'Strict';
   context_window?: number | null;
   max_output_tokens?: number | null;
   capabilities?: ModelCapabilities;

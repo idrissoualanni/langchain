@@ -17,11 +17,12 @@ providers:
     type: "ollama"
     display_name: "Ollama"
     enabled: true
+    rigor_level: "Balanced"
     # Base URL : soit via env OLLAMA_HOST, soit valeur par défaut
     base_url_env: "OLLAMA_HOST"
     base_url_default: "http://localhost:11434"
     # Ollama utilise /v1 pour l'API OpenAI-compatible
-    api_path: "/v1"
+    api_path: ""
     # Auth : header Authorization: Bearer <key> (optionnel pour Ollama)
     auth:
       type: "bearer"
@@ -48,6 +49,7 @@ providers:
     type: "openai_compatible"
     display_name: "Cloudflare Workers AI"
     enabled: true
+    rigor_level: "Balanced"
     # URL de base : soit explicite, soit construite depuis CF_ACCOUNT_ID
     base_url_env: "CF_AI_BASE_URL"
     base_url_template: "https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/v1"
@@ -81,6 +83,7 @@ providers:
     type: "openai_compatible"
     display_name: "OpenAI"
     enabled: false  # Désactivé par défaut, activer via env
+    rigor_level: "Strict"
     base_url_env: "OPENAI_BASE_URL"
     base_url_default: "https://api.openai.com/v1"
     api_path: ""
@@ -111,6 +114,7 @@ providers:
     type: "anthropic"
     display_name: "Anthropic"
     enabled: false
+    rigor_level: "Strict"
     base_url_env: "ANTHROPIC_BASE_URL"
     base_url_default: "https://api.anthropic.com"
     api_path: ""

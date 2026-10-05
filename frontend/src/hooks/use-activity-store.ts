@@ -141,6 +141,7 @@ interface ActivityStore {
   activities: Activity[];
   activeActivityId: string | null;
   panelOpen: boolean;
+  notifications: { id: string; message: string; type: 'info' | 'success' | 'warning'; read: boolean }[];
 
   /** Insère ou remplace (par id) une activité. */
   upsertActivity: (activity: Activity) => void;
@@ -150,12 +151,19 @@ interface ActivityStore {
   setActive: (id: string | null) => void;
   /** Ouvre/ferme le panneau, ou bascule sans argument. */
   togglePanel: (open?: boolean) => void;
+  /** Ajoute une notification de cours validé. */
+  addNotification: (notification: { message: string; type?: 'info' | 'success' | 'warning' }) => void;
+  /** Marque une notification comme lue. */
+  markNotificationRead: (id: string) => void;
+  /** Efface toutes les notifications. */
+  clearNotifications: () => void;
 }
 
 export const useActivityStore = create<ActivityStore>((set) => ({
   activities: [],
   activeActivityId: null,
   panelOpen: false,
+  notifications: [],
 
   upsertActivity: (activity) =>
     set((s) => {
@@ -176,6 +184,23 @@ export const useActivityStore = create<ActivityStore>((set) => ({
 
   togglePanel: (open) =>
     set((s) => ({ panelOpen: open ?? !s.panelOpen })),
+
+  addNotification: ({ message, type = 'info' }) =>
+    set((s) => ({
+      notifications: [
+        { id: nextId('notif-'), message, type, read: false },
+        ...s.notifications,
+      ],
+    })),
+
+  markNotificationRead: (id) =>
+    set((s) => ({
+      notifications: s.notifications.map((n) =>
+        n.id === id ? { ...n, read: true } : n
+      ),
+    })),
+
+  clearNotifications: () => set({ notifications: [] }),
 }));
 
 /** Crée l'activité optimiste déposée par le bouton Activité. */

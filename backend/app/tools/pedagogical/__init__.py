@@ -1,6 +1,7 @@
 # Tools pédagogiques — exposés au LLM (exercices, quiz, évaluation,
 # diagrammes).
-from app.tools.pedagogical.diagram import create_diagram
+from app.tools.pedagogical.illustration import create_illustration as create_diagram
+from app.tools.pedagogical.exercise_library import search_exercise_library
 from app.tools.pedagogical.pedagogical import (
     assess_understanding,
     create_exercise,
@@ -12,7 +13,7 @@ from app.tools.pedagogical.pedagogical import (
     propose_review,
 )
 
-pedagogical_tools = [*pedagogical_tools, create_diagram]
+pedagogical_tools = [*pedagogical_tools, create_diagram, search_exercise_library]
 
 __all__ = [
     "assess_understanding",
@@ -24,4 +25,5 @@ __all__ = [
     "give_hint",
     "pedagogical_tools",
     "propose_review",
+    "search_exercise_library",
 ]

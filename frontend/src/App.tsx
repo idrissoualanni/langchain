@@ -5,6 +5,7 @@ import {
   Routes,
 } from 'react-router-dom';
 import { AppSidebar } from './components/app-sidebar';
+import { CourseNotificationToast } from './components/layout/CourseNotificationToast';
 import { lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
@@ -37,6 +38,7 @@ const ProvidersPage = lazy(() => import('./features/admin/providers/ProvidersPag
 const TracesPage = lazy(() => import('./features/admin/traces/TracesPage').then((m) => ({ default: m.TracesPage })));
 const ModelsPage = lazy(() => import('./features/admin/models/ModelsPage').then((m) => ({ default: m.ModelsPage })));
 const KnowledgePage = lazy(() => import('./features/admin/knowledge/KnowledgePage').then((m) => ({ default: m.KnowledgePage })));
+const ExerciseLibraryPage = lazy(() => import('./features/admin/exercises/ExerciseLibraryPage').then((m) => ({ default: m.ExerciseLibraryPage })));
 const ObservabilityPage = lazy(() => import('./features/admin/observability/ObservabilityPage').then((m) => ({ default: m.ObservabilityPage })));
 const McpInspectorPage = lazy(() => import('./features/admin/mcp/McpInspectorPage').then((m) => ({ default: m.McpInspectorPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage })));
@@ -205,6 +207,7 @@ function AppShell() {
           <Suspense fallback={<div className="p-6"><LoadingState label="Chargement de la page…" /></div>}>
             <Routes>
           <Route index element={<Navigate to="/assistant" replace />} />
+          <CourseNotificationToast />
 
           {/* Auth : plus ici — l'arbre PUBLIC est monté avant le shell
               ( voir AppRoutes ). Une page de connexion n'a rien à faire
@@ -356,6 +359,14 @@ function AppShell() {
             element={
               <AdminGate>
                 <KnowledgePage />
+              </AdminGate>
+            }
+          />
+          <Route
+            path="/admin/exercises"
+            element={
+              <AdminGate>
+                <ExerciseLibraryPage />
               </AdminGate>
             }
           />

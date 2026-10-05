@@ -290,6 +290,8 @@ def response_node(state, config=None) -> dict:
     le comportement historique (non-régression).
     """
     from app.services.agent.normalizer import normalize_response
+    from app.tools.knowledge.knowledge import propose_knowledge
+    from app.schemas.context import FallbackDecision
 
     message = _last_ai_message(state)
     activity = state.get("learning_activity") or None
@@ -312,6 +314,49 @@ def response_node(state, config=None) -> dict:
         search_used=search_used,
         fallback=fallback,
     )
+
+    # Flux de Secours "Mini-Cours" :
+    # Si l'action de fallback était generate_mini_course, on déclenche
+    # une proposition automatique de connaissance.
+    if fallback and fallback.action == "generate_mini_course":
+        user_id = _user_id(state)
+        thread_id = _thread_id(config)
+        routing = state.get("routing_result") or {}
+        subj = routing.get("subject")
+        topic = routing.get("topic")
+
+        # On extrait le contenu généré du dernier message AI
+        # pour le proposer comme base de connaissance.
+        if message:
+            try:
+                # On utilise l'outil propose_knowledge via son implémentation
+                # (on ne l'appelle pas comme un tool LLM ici, mais comme une fonction)
+                # On nettoye un peu le message pour enlever les "NOTE DU SYSTÈME"
+                content = message
+                if "NOTE DU SYSTÈME" in content:
+                    content = content.split("NOTE DU SYSTÈME")[-1].strip()
+
+                propose_knowledge.invoke({
+                    "subject": subj,
+                    "title": f"Synthèse : {topic or subj}",
+                    "content": content,
+                    "reason": "Généré automatiquement comme mini-cours de secours suite à un manque de ressources dans le corpus."
+                })
+                log_event(
+                    "MINI_COURSE_PROPOSED",
+                    message=f"Mini-cours proposé automatiquement pour {subj}/{topic}",
+                    user_id=user_id,
+                    thread_id=thread_id
+                )
+            except Exception as exc:
+                log_event(
+                    "MINI_COURSE_PROPOSAL_FAILED",
+                    level="ERROR",
+                    message=f"Échec proposition mini-cours : {exc}",
+                    user_id=user_id,
+                    thread_id=thread_id
+                )
+
     return {"agent_response": response.model_dump()}
 
 

@@ -63,6 +63,7 @@ ACTIVITY_TRANSITIONS: dict[str, tuple[str, ...]] = {
         # boucle de compréhension → la fermer
         "continue_activity", "complete_activity",
         "review", "deepen",
+        "evaluate",
     ),
     "completed": (
         # activité finie → stratégie neuve possible (§33)

@@ -190,6 +190,7 @@ class FallbackDecision(BaseModel):
         "use_web_search",
         "ask_clarification",
         "use_general_tutor",
+        "generate_mini_course",
         "continue_without_external_search",
     ] = Field(
         description="Action de fallback décidée (matrice §6)"

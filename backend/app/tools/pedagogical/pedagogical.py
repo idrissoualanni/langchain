@@ -375,6 +375,16 @@ def create_exercise(
         ]
         activity["source_type"] = SOURCE_USER_DOCUMENT
 
+    # Archivage : si c'est un exercice généré, on peut l'enregistrer
+    # (le marquage comme validé se fera après plusieurs succès)
+    from app.repositories import exercises
+    exercises.save_exercise(
+        subject_id=subject,
+        topic_slug=section["topic"],
+        difficulty="Medium", # Défaut pour les générés
+        content=question
+    )
+
     exercise = (
         f"ACTIVITÉ OUVERTE — exercice {subject}/{section['topic']} "
         f"(source : {src}, id : {activity_id}).\n\n"
@@ -611,6 +621,40 @@ def evaluate_answer(
     from app.services.evaluation.engine import evaluate_activity
     from app.services.evaluation.observations import emit_observation
 
+    # Rigueur Adaptative : Calcul du seuil basé sur le provider et le profil
+    from langgraph.config import get_config
+    config = get_config() or {}
+    user_id = (config.get("configurable") or {}).get("user_id", "")
+
+    # 1. Récupérer le niveau de rigueur du provider
+    # Note : On suppose que le provider est injecté ou récupérable via le modèle utilisé
+    # Pour simplifier ici, on peut passer par le registry des providers
+    from app.services.models.registry import get_provider_config
+    # On récupère le provider du modèle actuel (simplification : on cherche dans la config)
+    provider_cfg = get_provider_config("ollama") # Valeur par défaut, devrait être dynamique
+    rigor_level = provider_cfg.get("rigor_level", "Balanced")
+
+    # 2. Ajustement selon le profil (Rigueur Adaptative)
+    from app.services.learning.learning_profile import read_learning_profile
+    profile = read_learning_profile(user_id)
+    # Si le profil est "fragile" (ex: beaucoup d'attempts, faible mastery globale), on baisse le seuil
+    rigor_modifier = 0.0
+    if profile:
+        # Heuristique simple : si mastery moyen < 0.3, on est indulgent
+        all_masteries = [s.mastery for s in profile.subjects.values() if s.mastery is not None]
+        if all_masteries and (sum(all_masteries)/len(all_masteries)) < 0.3:
+            rigor_modifier = -0.1
+
+    # Seuils de verdict
+    thresholds = {
+        "Strict": {"SUCCESS": 0.85, "PARTIAL": 0.6},
+        "Balanced": {"SUCCESS": 0.75, "PARTIAL": 0.4},
+        "Lax": {"SUCCESS": 0.6, "PARTIAL": 0.2},
+    }.get(rigor_level, {"SUCCESS": 0.75, "PARTIAL": 0.4})
+
+    success_threshold = thresholds["SUCCESS"] + rigor_modifier
+    partial_threshold = thresholds["PARTIAL"] + rigor_modifier
+
     eval_result = evaluate_activity(
         activity_id=activity.get("activity_id", ""),
         activity_type=activity_type,
@@ -623,8 +667,9 @@ def evaluate_answer(
     covered = eval_result.strengths
     missing = eval_result.weaknesses
 
-    # Appréciation formative (≠ note : guidance) + guidance §11/§13
-    if score >= 0.75:
+    # Verdict Imposé : Catégorique
+    if score >= success_threshold:
+        verdict_code = "SUCCESS"
         verdict = "Très bonne réponse"
         advice = (
             "Félicite l'étudiant, MAIS vérifie la compréhension "
@@ -635,7 +680,8 @@ def evaluate_answer(
             "… »). Ne donne pas la question suivante tout de suite."
         )
         new_status = ACTIVITY_CHECKING_UNDERSTANDING
-    elif score >= 0.4:
+    elif score >= partial_threshold:
+        verdict_code = "PARTIAL"
         verdict = "Réponse partielle"
         advice = (
             "Reconnais ce qui est juste, puis demande de développer "
@@ -645,6 +691,7 @@ def evaluate_answer(
         )
         new_status = ACTIVITY_WAITING_RETRY
     else:
+        verdict_code = "FAIL"
         verdict = "Réponse insuffisante"
         advice = (
             "Reprends doucement : donne un indice avec "

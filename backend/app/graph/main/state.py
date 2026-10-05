@@ -60,6 +60,7 @@ class CustomAgentState(MessagesState):
     #                       produit par le node RESPONSE, lu par le
     #                       runner (fallback au comportement historique
     #                       si absent).
+    #   rigor_level       : Niveau de rigueur actuel (Lax, Balanced, Strict).
     routing_result: dict = Field(default_factory=dict)
     knowledge: dict = Field(default_factory=dict)
     web: dict = Field(default_factory=dict)
@@ -67,6 +68,7 @@ class CustomAgentState(MessagesState):
     built_context: dict = Field(default_factory=dict)
     learning_decision: dict = Field(default_factory=dict)
     agent_response: dict = Field(default_factory=dict)
+    rigor_level: str = Field(default="Balanced")
 
 
 class MainState(CustomAgentState):
@@ -134,6 +136,11 @@ class MainState(CustomAgentState):
         default="",
         description="Bloc system prompt injecté par retrieve_context. "
         "TRANSIENT — calculé à chaque tour.",
+    )
+    mini_course_generated: bool = Field(
+        default=False,
+        description="Indique si un mini-cours a été généré pour ce tour. "
+        "TRANSIENT.",
     )
     # --- REFACTOR TRIM : indicateurs de trimming
     _trim_needed: bool = Field(
