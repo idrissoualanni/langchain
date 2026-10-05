@@ -75,46 +75,6 @@ models:
     supports_structured_output: false
     supports_tools: true
     supports_vision: false
-  disabled-test-model:
-    display_name: Disabled Test
-    enabled: false
-    model: test
-    provider: ollama
-    supports_audio: false
-    supports_structured_output: false
-    supports_tools: false
-    supports_vision: false
-  openai-gpt-4o:
-    context_window: 128000
-    display_name: GPT-4o (OpenAI)
-    enabled: false
-    max_output_tokens: 4096
-    model: gpt-4o
-    provider: openai
-    supports_audio: false
-    supports_structured_output: true
-    supports_tools: true
-    supports_vision: true
-  openai-gpt-4o-mini:
-    context_window: 128000
-    display_name: GPT-4o Mini (OpenAI)
-    enabled: false
-    max_output_tokens: 4096
-    model: gpt-4o-mini
-    provider: openai
-    supports_audio: false
-    supports_structured_output: true
-    supports_tools: true
-    supports_vision: true
-  test-model:
-    display_name: Test Model
-    enabled: true
-    model: gemma2:9b
-    provider: ollama
-    supports_audio: false
-    supports_structured_output: false
-    supports_tools: false
-    supports_vision: false
   vision-default:
     context_window: null
     display_name: GPT-OSS 20B ( vision )

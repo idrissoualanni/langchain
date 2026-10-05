@@ -16,9 +16,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical, Pencil, Trash2, Play } from "lucide-react";
+import { MoreVertical, Pencil, Trash2, Play, Settings } from "lucide-react";
 import type { ModelConfig } from "@/types";
 import { ModelCapabilityBadge } from "./ModelCapabilityBadge";
+import { Link } from "react-router-dom";
 
 interface ModelTableProps {
   models: ModelConfig[];
@@ -101,6 +102,12 @@ export function ModelTable({
                   <DropdownMenuItem onClick={() => onEdit(model)}>
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/admin/providers" className="flex w-full items-center">
+                      <Settings className="mr-2 h-4 w-4" />
+                      Manage Providers
+                    </Link>
                   </DropdownMenuItem>
                   {onSetDefault && (
                     <DropdownMenuItem onClick={() => onSetDefault(model.id)}>

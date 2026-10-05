@@ -68,3 +68,4 @@ lancer-tests.cmd
 # rendrait invisibles au lieu de manquants.
 /.env.local
 .env*
+.claude

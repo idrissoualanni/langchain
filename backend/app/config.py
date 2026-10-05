@@ -65,7 +65,6 @@ def log_safe(value) -> str:
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
-MODEL_NAME = os.getenv("MODEL_OLLAMA", "qwen2.5")
 
 
 # ------------------------------------------------------------------

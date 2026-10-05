@@ -26,7 +26,6 @@ from langgraph.types import RetryPolicy
 from app.services.memory.memory import get_store
 from app.config import (
     AGENT_RECURSION_LIMIT,
-    MODEL_NAME,
     MODEL_RETRY_ATTEMPTS,
 )
 from app.services.agent.middleware import build_middleware_stack
@@ -58,7 +57,7 @@ def get_agent(model=None):
     """Singleton agent — initialisé au startup FastAPI (lifespan).
 
     "model" : modele optionnel (ModelSelector assistant-ui).
-    None/"" ou modele par defaut -> instance par defaut (MODEL_NAME).
+    None/"" ou modele par defaut -> instance par defaut.
 
     Mission §7 — provider client restreint : un choix client n'est
     accepté QUE s'il correspond à un modèle ENREGISTRÉ (id ou nom
@@ -69,12 +68,11 @@ def get_agent(model=None):
 
     if model:
         model = str(model).strip()
-        if model and model != MODEL_NAME:
-            from app.services.models.registry import (
-                find_model_config,
-                get_default_model_id,
-            )
-
+        from app.services.models.registry import (
+            find_model_config,
+            get_default_model_id,
+        )
+        if model and model != get_default_model_id():
             registered = find_model_config(model)
             if registered is None or not registered.enabled:
                 log_event(
@@ -280,7 +278,8 @@ def _build_agent(model_name):
     # Store longue durée officiel — User Memory cross-thread (§6)
     store = get_store()
 
-    effective = model_name or MODEL_NAME
+    from app.services.models.registry import get_default_model_id
+    effective = model_name or get_default_model_id()
     backend = "PostgreSQL (Neon)" if is_postgres_persistence() else "SQLite"
     if model_name is not None:
         log_event(
@@ -290,7 +289,7 @@ def _build_agent(model_name):
     else:
         log_event(
             "DATABASE_INIT",
-            message=f"Checkpointer on {backend} | model={MODEL_NAME}",
+            message=f"Checkpointer on {backend} | model={effective}",
         )
 
     subgraph = _build_subgraph_agent(model_name)

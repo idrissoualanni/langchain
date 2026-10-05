@@ -104,9 +104,10 @@ def get_llm_for_purpose(
             raise ModelGatewayError(
                 "MODEL_GATEWAY_ENABLED=true mais LITELLM_BASE_URL absent"
             )
-        return _get_litellm_llm(
+        return _get_openai_compatible_llm(
             config,
             base_url=litellm_base_url,
+            api_key=os.getenv("LITELLM_API_KEY", ""),
             temperature=temperature,
             max_tokens=max_tokens,
         )
@@ -118,23 +119,23 @@ def get_llm_for_purpose(
     )
 
 
-def _get_litellm_llm(
+def _get_openai_compatible_llm(
     config: Any,
     base_url: str,
+    api_key: str,
     temperature: float = 0.0,
     max_tokens: int | None = None,
 ) -> BaseChatModel:
-    """Instancie un LLM via LiteLLM Proxy (OpenAI-compatible)."""
+    """Instancie un LLM via un endpoint OpenAI-compatible (LiteLLM, Cloudflare, etc.)."""
     from langchain_openai import ChatOpenAI
 
-    api_key = os.getenv("LITELLM_API_KEY", "")
     if not api_key:
         raise ModelGatewayError(
-            "LITELLM_API_KEY absent — clé requise pour le provider distant"
+            "Clé API manquante pour le provider OpenAI-compatible"
         )
 
-    # Modèle à passer à LiteLLM : soit gateway_model, soit model_name
-    model = config.gateway_model or config.model_name
+    # Modèle à passer : soit gateway_model (pour LiteLLM), soit model_name
+    model = getattr(config, "gateway_model", None) or config.model_name
 
     return ChatOpenAI(
         model=model,
@@ -169,7 +170,18 @@ def _get_direct_llm_from_provider(
     
     # Résoudre URL et headers depuis le provider
     base_url = resolve_base_url(provider)
-    if provider.api_path:
+    # `api_path` ne s'applique qu'aux clients OpenAI-compatible : ils y
+    # concatènent eux-mêmes le chemin (`{base_url}/chat/completions`).
+    #
+    # Le client NATIF Ollama ( ChatOllama -> ollama.AsyncClient ) construit
+    # LUI-MÊME sa route (`{host}/api/chat`). Préfixer `/v1` produisait donc
+    # `{host}/v1/api/chat` → 404 « path /v1/api/chat not found », et TOUT
+    # run d'agent mourait avec « Le run agent a échoué ».
+    #
+    # À noter : `check_ollama_health()` appelle `client.list()` (`/api/tags`),
+    # qui répond 200 — la sonde `/api/health` restait donc verte pendant que
+    # la génération était cassée. Vert ne voulait pas dire « agent fonctionnel ».
+    if provider.api_path and provider_type != "ollama":
         base_url = base_url.rstrip("/") + provider.api_path
     
     headers = resolve_auth_headers(provider)

@@ -9,8 +9,9 @@ from typing import Any
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.config import MODEL_NAME, OLLAMA_HOST, ollama_headers
+from app.config import OLLAMA_HOST, ollama_headers
 from app.schemas.model_capabilities import list_configured_models
+from app.services.models.registry import get_default_model_id
 
 router = APIRouter(prefix="/api/models", tags=["models"])
 
@@ -28,88 +29,31 @@ class ModelsResponse(BaseModel):
     active_model: str
 
 
-def _list_ollama_models() -> list[dict[str, Any]]:
-    """Tags Ollama — liste brute. Silencieux si indisponible."""
-    try:
-        import ollama
-
-        client = ollama.Client(
-            host=OLLAMA_HOST,
-            headers=ollama_headers() or {},
-        )
-        response = client.list()
-        models = []
-        for entry in (response.models or []):
-            raw = getattr(entry, "model", None) or ""
-            if not raw:
-                continue
-            # taille lisible si dispo (ex: "4.7 GB")
-            size = getattr(entry, "size", None)
-            models.append(
-                {"id": raw, "name": raw, "size": size}
-            )
-        return models
-    except Exception:
-        return []
-
-
 @router.get("", response_model=ModelsResponse)
 def api_list_models() -> ModelsResponse:
     """Modèles disponibles + modèle actif (ModelSelector assistant-ui).
 
     Source : `models.yaml` (Model Capability Registry, §38) — la
-    liste reflète les modèles CONFIGURÉS (source déclarative),
-    mappés sur leur nom réel Ollama. Repli sur les tags Ollama si
-    le YAML ne déclare aucun modèle (jamais de liste vide).
+    liste reflète STRICTEMENT les modèles CONFIGURÉS et activés.
     """
     configured = list_configured_models()
+    active_id = get_default_model_id()
 
-    # Dédoublonnage par id (source YAML), tri stable alphabétique
-    seen: dict[str, dict[str, Any]] = {}
-    for c in configured:
-        if c["id"] not in seen:
-            seen[c["id"]] = {
-                "id": c["id"],
-                "name": c["id"],
-                "description": f"{c['provider']} · configuré",
-            }
-
-    # YAML vide → repli sur les tags Ollama (comportement historique)
-    if not seen:
-        raw = _list_ollama_models()
-        for m in raw:
-            if m["id"] not in seen:
-                seen[m["id"]] = {
-                    "id": m["id"],
-                    "name": m["id"],
-                    "description": _size_label(m.get("size")),
-                }
-
-    ids = sorted(seen.keys())
     models = [
         ModelInfo(
-            id=entry["id"],
-            name=entry["name"],
-            description=entry.get("description", ""),
-            active=(entry["id"] == MODEL_NAME),
+            id=c["id"],
+            name=c["id"],
+            description=f"{c['provider']} · configuré",
+            active=(c["id"] == active_id),
         )
-        for entry in (seen[i] for i in ids)
+        for c in configured
+        if c.get("enabled", True)
     ]
 
-    # Le modèle actif doit toujours être sélectionnable, même si
-    # Ollama ne répond pas (sinon le ModelSelector serait vide).
-    if MODEL_NAME not in seen:
-        models.insert(
-            0,
-            ModelInfo(
-                id=MODEL_NAME,
-                name=MODEL_NAME,
-                description="modèle actif",
-                active=True,
-            ),
-        )
+    # Trier par activité (actif en premier), puis par id
+    models.sort(key=lambda m: (not m.active, m.id))
 
-    return ModelsResponse(models=models, active_model=MODEL_NAME)
+    return ModelsResponse(models=models, active_model=active_id)
 
 
 def _size_label(size: Any) -> str:

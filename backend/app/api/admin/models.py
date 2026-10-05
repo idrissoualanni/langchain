@@ -9,8 +9,10 @@
 # Sécurité : réservé aux admins (vérification ADMIN_EXTERNAL_IDS)
 from __future__ import annotations
 
+import time
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from typing import Any
 
 from app.auth.resolver import CurrentUser, require_admin
 from app.services.models.registry import (
@@ -72,16 +74,27 @@ class ModelTestRequest(BaseModel):
 
 class ModelTestResponse(BaseModel):
     """Réponse de test d'un modèle."""
-    
+
     success: bool
     model_id: str
     response: str = ""
     error: str = ""
+    metrics: dict[str, Any] = Field(default_factory=dict)
 
+
+class ModelSpecs(BaseModel):
+    """Informations techniques d'un modèle."""
+    id: str
+    provider: str
+    model_name: str
+    context_window: int | None
+    max_output_tokens: int | None
+    capabilities: ModelCapabilities
+    metadata: dict
 
 class ModelListResponse(BaseModel):
     """Réponse liste des modèles."""
-    
+
     models: list[ModelConfig]
     default_model: str
 
@@ -201,23 +214,33 @@ def admin_test_model(
     current_user: CurrentUser = Depends(require_admin),
 ) -> ModelTestResponse:
     """Teste une configuration de modèle (admin only).
-    
+
     Ne renvoie JAMAIS les secrets (API keys, etc.).
     """
     try:
+        start_time = time.perf_counter()
         llm = create_llm_from_config(
             model_id=model_id,
             temperature=data.temperature,
             max_tokens=data.max_tokens,
         )
-        
+
         # Appel simple pour tester
         response = llm.invoke(data.prompt)
-        
+        end_time = time.perf_counter()
+
+        # Extraction des métriques si disponibles (LangChain response metadata)
+        metrics = {}
+        if hasattr(response, "response_metadata"):
+            metrics = response.response_metadata
+
+        metrics["duration_seconds"] = end_time - start_time
+
         return ModelTestResponse(
             success=True,
             model_id=model_id,
             response=str(response.content)[:500],  # Tronqué pour sécurité
+            metrics=metrics,
         )
     except Exception as e:
         return ModelTestResponse(
@@ -225,6 +248,30 @@ def admin_test_model(
             model_id=model_id,
             error=str(e)[:200],  # Message d'erreur tronqué
         )
+
+
+@router.get("/{model_id}/specs", response_model=ModelSpecs)
+def admin_get_model_specs(
+    model_id: str,
+    current_user: CurrentUser = Depends(require_admin),
+) -> ModelSpecs:
+    """Récupère les spécifications techniques d'un modèle (admin only)."""
+    config = get_model_config(model_id)
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Model {model_id} not found",
+        )
+
+    return ModelSpecs(
+        id=config.id,
+        provider=config.provider,
+        model_name=config.model_name,
+        context_window=config.context_window,
+        max_output_tokens=config.max_output_tokens,
+        capabilities=config.capabilities,
+        metadata=config.metadata,
+    )
 
 
 @router.get("/{model_id}", response_model=ModelConfig)

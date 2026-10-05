@@ -33,6 +33,7 @@ import { AssistantUIRuntimeProvider } from './assistant-ui/AssistantRuntimeProvi
 // Lazy — code-splitting (§28) : LiveKit/Mermaid/Admin ne bloquent plus le First Paint
 const LogsPage = lazy(() => import('./pages/LogsPage').then((m) => ({ default: m.LogsPage })));
 const AdminDashboardPage = lazy(() => import('./app/admin/page'));
+const ProvidersPage = lazy(() => import('./features/admin/providers/ProvidersPage').then((m) => ({ default: m.ProvidersPage })));
 const TracesPage = lazy(() => import('./features/admin/traces/TracesPage').then((m) => ({ default: m.TracesPage })));
 const ModelsPage = lazy(() => import('./features/admin/models/ModelsPage').then((m) => ({ default: m.ModelsPage })));
 const KnowledgePage = lazy(() => import('./features/admin/knowledge/KnowledgePage').then((m) => ({ default: m.KnowledgePage })));
@@ -323,6 +324,14 @@ function AppShell() {
             element={
               <AdminGate>
                 <AdminDashboardPage />
+              </AdminGate>
+            }
+          />
+          <Route
+            path="/admin/providers"
+            element={
+              <AdminGate>
+                <ProvidersPage />
               </AdminGate>
             }
           />

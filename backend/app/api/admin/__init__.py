@@ -8,6 +8,7 @@ from app.api.admin.observability import router as observability_router
 from app.api.admin.dashboard import router as dashboard_router
 from app.api.admin.users import router as users_router
 from app.api.admin.mcp import router as mcp_router
+from app.api.admin.providers import router as providers_router
 
 __all__ = [
     "models_router",
@@ -18,4 +19,5 @@ __all__ = [
     "dashboard_router",
     "users_router",
     "mcp_router",
+    "providers_router",
 ]
