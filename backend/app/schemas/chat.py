@@ -14,7 +14,7 @@ class ChatRequest(BaseModel):
     thread_id: str
     message: str = Field(..., min_length=1, max_length=10_000)
     # Mission Assistant UI (ModelSelector) : modèle Ollama optionnel.
-    # None/absent → modèle par défaut (MODEL_NAME, env). Aucun autre
+    # None/absent → modèle par défaut (registry models.yaml). Aucun autre
     # comportement backend ne dépend de ce champ.
     model: str | None = Field(default=None, max_length=100)
     # Composer (@mentions → termes) : hint de workflow optionnel. Validé

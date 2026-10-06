@@ -7,7 +7,6 @@ from fastapi import APIRouter, Response
 
 from app.schemas import HealthResponse
 from app.config import (
-    MODEL_NAME,
     check_ollama_health,
     check_database_health,
     langsmith_settings,
@@ -17,6 +16,7 @@ from app.config import (
 )
 from app.auth.resolver import auth_mode, jwks_reachable
 from app.infrastructure.observability.langsmith_client import get_langsmith_client
+from app.services.models.registry import get_default_model_id, get_model_config
 
 
 def langfuse_sdk_available() -> bool:
@@ -42,13 +42,18 @@ def api_health() -> HealthResponse:
     """Statut des composants : Ollama, LangGraph, base Neon."""
     # Vérification légère sans importer le graph complet
     langgraph_ok = True  # On suppose OK si l'app démarre
-    
+
+    # Modèle défaut : registry models.yaml (source de vérité §6-§7) —
+    # l'ancienne variable d'env MODEL_NAME a été supprimée.
+    default_id = get_default_model_id()
+    default_cfg = get_model_config(default_id) if default_id else None
+
     return HealthResponse(
         status="ok" if langgraph_ok else "degraded",
         ollama=check_ollama_health(),
         langgraph=langgraph_ok,
         database=check_database_health(),
-        model=MODEL_NAME,
+        model=default_cfg.model_name if default_cfg else "",
     )
 
 

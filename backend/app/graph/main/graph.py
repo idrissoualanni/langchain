@@ -46,7 +46,7 @@ from app.services.models.retry import is_transient_error
 _agent = None
 
 # Mission Assistant UI (ModelSelector) : cache d'agents par modele.
-# L'instance par defaut (MODEL_NAME de l'env) reste _agent ; les
+# L'instance par defaut (modele defaut du registry models.yaml) reste _agent ; les
 # autres modeles selectionnes via le ModelSelector obtiennent leur
 # propre instance, avec le MEME checkpointer/store (persistance
 # inchangee). Cablage uniquement - aucune logique pedagogique (§63).

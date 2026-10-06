@@ -62,9 +62,8 @@ def log_safe(value) -> str:
 
 
 # ------------------------------------------------------------------
-# Modèles et Intelligence Artificielle
+# Ollama
 # ------------------------------------------------------------------
-MODEL_NAME = os.getenv("MODEL_NAME", "claude-3-5-sonnet")
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")

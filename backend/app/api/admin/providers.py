@@ -3,7 +3,7 @@ from typing import Any
 from pydantic import BaseModel
 import httpx
 
-from app.api.deps import get_current_admin
+from app.auth.resolver import require_admin as get_current_admin
 from app.services.models.provider_registry import (
     list_providers,
     get_provider_config,
