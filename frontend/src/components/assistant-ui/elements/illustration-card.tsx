@@ -14,7 +14,6 @@ interface IllustrationCardProps {
 
 export const IllustrationCard = memo(({
   id,
-  type,
   title,
   children,
   className

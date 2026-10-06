@@ -30,7 +30,8 @@ describe('IllustrationCard', () => {
         <div>Content</div>
       </IllustrationCard>
     );
-    const container = screen.getByText('Content').closest('div').parentElement?.parentElement;
+    const container = screen.getByText('Content').closest('div')?.parentElement?.parentElement;
+    expect(container).not.toBeNull();
     expect(container).toHaveClass(customClass);
   });
 });

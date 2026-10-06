@@ -1,7 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ModelForm } from './ModelForm';
-import { describe, it, expect, vi } from 'vitest';
-import { describe as describeVitest } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock apiRequest
 vi.mock('@/api/request', () => ({
@@ -77,7 +76,7 @@ describe('ModelForm', () => {
       display_name: 'Test Model',
       provider: 'ollama',
       model_name: 'llama3',
-      rigor_level: 'Strict',
+      rigor_level: 'Strict' as const,
     };
 
     render(<ModelForm

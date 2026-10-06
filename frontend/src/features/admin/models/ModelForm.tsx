@@ -281,7 +281,7 @@ export function ModelForm({ initialData, onSubmit, onCancel, isEditing = false }
                 <Label>Niveau de Rigueur Pédagogique</Label>
                 <Select
                   value={formData.rigor_level}
-                  onValueChange={(value: 'Lax' | 'Balanced' | 'Strict') => setFormData(prev => ({ ...prev, rigor_level: value }))}
+                  onValueChange={(value: string) => setFormData(prev => ({ ...prev, rigor_level: value as 'Lax' | 'Balanced' | 'Strict' }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Choisir le niveau de rigueur" />

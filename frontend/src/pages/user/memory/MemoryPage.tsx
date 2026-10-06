@@ -1,4 +1,3 @@
-import React from 'react';
 import { PersonaDashboard } from '@/features/user/memory/PersonaDashboard';
 import { MemorySearchBar } from '@/features/user/memory/MemorySearchBar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

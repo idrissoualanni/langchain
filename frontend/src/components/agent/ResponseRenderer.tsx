@@ -87,7 +87,7 @@ export function ResponseRenderer({
     case 'illustration':
       return (
         <IllustrationCard
-          id={response.id || 'illustration-default'}
+          id="illustration-default"
           type={(data as any).type || 'image'}
           title={(data as any).title}
         >

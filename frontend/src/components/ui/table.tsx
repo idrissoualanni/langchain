@@ -43,7 +43,7 @@ export const TableRow = ({
 export const TableHead = ({
   className,
   ...props
-}: React.HTMLAttributes<HTMLTableCellElement>) => (
+}: React.ThHTMLAttributes<HTMLTableCellElement>) => (
   <th
     className={cn(
       "h-12 px-4 text-left align-middle font-medium text-muted-foreground",
@@ -56,6 +56,6 @@ export const TableHead = ({
 export const TableCell = ({
   className,
   ...props
-}: React.HTMLAttributes<HTMLTableCellElement>) => (
+}: React.TdHTMLAttributes<HTMLTableCellElement>) => (
   <td className={cn("p-4 align-middle", className)} {...props} />
 );

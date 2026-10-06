@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { useState, useEffect, useMemo } from 'react';
+import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Text, Float, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Badge } from '@/components/ui/badge';
 import { BrainCircuit } from 'lucide-react';
@@ -96,9 +95,9 @@ function DependencyEdge({
   const lineGeometry = useMemo(() => new THREE.BufferGeometry().setFromPoints(points), [points]);
 
   return (
-    <line geometry={lineGeometry}>
+    <lineSegments geometry={lineGeometry}>
       <lineBasicMaterial color="#444" transparent opacity={0.4} />
-    </line>
+    </lineSegments>
   );
 }
 

@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useState, type FormEvent } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
-import { Search, Brain, Database, List } from 'lucide-react';
+import { Search, Database } from 'lucide-react';
 
 interface MemorySearchItem {
   content: string;
@@ -18,7 +18,7 @@ export function MemorySearchBar() {
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
-  async function handleSearch(e?: React.FormEvent) {
+  async function handleSearch(e?: FormEvent) {
     if (e) e.preventDefault();
     if (!query.trim()) return;
 

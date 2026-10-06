@@ -2,10 +2,9 @@ import { useEffect, useState } from "react";
 import { Bell, X, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useActivityStore } from "@/hooks/use-activity-store";
-import { cn } from "@/lib/utils";
 
 export function CourseNotificationToast() {
-  const { notifications, markNotificationRead, clearNotifications } = useActivityStore();
+  const { notifications, markNotificationRead } = useActivityStore();
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
