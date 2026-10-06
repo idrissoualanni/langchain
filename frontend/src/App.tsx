@@ -64,6 +64,7 @@ const SettingsModelPage = lazy(() => import('./pages/settings/SettingsModelPage'
 const SettingsNotificationsPage = lazy(() => import('./pages/settings/SettingsNotificationsPage').then((m) => ({ default: m.SettingsNotificationsPage })));
 const SettingsSessionsPage = lazy(() => import('./pages/settings/SettingsSessionsPage').then((m) => ({ default: m.SettingsSessionsPage })));
 const SettingsDataPage = lazy(() => import('./pages/settings/SettingsDataPage').then((m) => ({ default: m.SettingsDataPage })));
+const MemoryPage = lazy(() => import('./pages/user/memory/MemoryPage').then((m) => ({ default: m.MemoryPage })));
 
 /** Écran d'attente commun aux gardes : ni contenu connecté, ni
  *  redirection tant qu'une réponse est en suspens. */
@@ -283,6 +284,14 @@ function AppShell() {
             element={
               <Protected>
                 <DocumentsPage />
+              </Protected>
+            }
+          />
+          <Route
+            path="/memory"
+            element={
+              <Protected>
+                <MemoryPage />
               </Protected>
             }
           />

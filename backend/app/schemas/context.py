@@ -431,6 +431,8 @@ class UserContextInfo(BaseModel):
 
     text: str = ""
     facts_count: int = 0
+    profile: dict = Field(default_factory=dict, description="Core persona profile (name, description)")
+
 
 
 class ThreadContextInfo(BaseModel):

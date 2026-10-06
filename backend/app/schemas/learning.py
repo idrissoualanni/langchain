@@ -46,6 +46,10 @@ class TopicLearningState(BaseModel):
         default_factory=list,
         description="Points faibles observés (liés à CE topic, §30)",
     )
+    cognitive_blocks: list[str] = Field(
+        default_factory=list,
+        description="Blocages cognitifs ou misconceptions identifiées",
+    )
     last_assessed_at: str | None = Field(
         default=None,
         description="Dernière observation intégrée (ISO 8601 UTC)",

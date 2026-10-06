@@ -10,7 +10,6 @@
 from langchain_core.tools import tool
 
 from app.services.memory.memory import (
-    get_facts,
     list_facts,
     save_fact,
     search_facts,
@@ -47,7 +46,7 @@ def get_learner_facts(
     if not user_id:
         return [{"error": "user_id manquant dans la config"}]
 
-    facts = get_facts(user_id, category=category, limit=limit)
+    facts = list_facts(user_id, category=category, limit=limit)
     return facts
 
 

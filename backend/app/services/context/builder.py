@@ -619,6 +619,7 @@ def build_context(
     user = UserContextInfo(
         text=user_ctx_raw.get("text", ""),
         facts_count=user_ctx_raw.get("facts_count", 0),
+        profile=profile if profile else {"name": None, "description": None},
     )
 
     # --- 6. THREAD STATE (léger — métadonnées, §32) ---

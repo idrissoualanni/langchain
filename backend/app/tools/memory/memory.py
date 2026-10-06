@@ -13,9 +13,7 @@ from langchain_core.tools import tool
 
 from app.services.memory.memory import (
     delete_fact,
-    get_facts,
     list_facts,
-    patch_profile,
     read_profile,
     save_fact,
     search_facts,
@@ -95,7 +93,7 @@ def update_user_profile(
     if description is not None:
         fields["description"] = description
 
-    result = patch_profile(user_id, fields)
+    result = write_profile(user_id, fields)
     return result
 
 
@@ -130,7 +128,7 @@ def get_learner_facts(
     if not user_id:
         return [{"error": "user_id manquant dans la config"}]
 
-    return get_facts(user_id, category=category, limit=limit)
+    return list_facts(user_id, category=category, limit=limit)
 
 
 @tool

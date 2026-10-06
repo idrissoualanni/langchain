@@ -9,7 +9,7 @@
 # ces tools sauf pour drill-down ou mise à jour explicite.
 from langchain_core.tools import tool
 
-from app.services.memory.memory import patch_profile, read_profile
+from app.services.memory.memory import write_profile, read_profile
 
 
 @tool
@@ -79,7 +79,7 @@ def update_user_profile(
     if description is not None:
         fields["description"] = description
 
-    result = patch_profile(user_id, fields)
+    result = write_profile(user_id, fields)
     return result
 
 

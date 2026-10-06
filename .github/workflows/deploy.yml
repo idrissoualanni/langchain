@@ -1,0 +1,100 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  ci-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pytest pytest-asyncio
+
+      - name: Run Backend Tests
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_TEST }}
+        run: |
+          pytest backend/tests
+
+  deploy-staging:
+    needs: ci-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Staging
+        run: |
+          curl -X POST https://api.render.com/v1/deploys \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"serviceId": "${{ secrets.RENDER_SERVICE_ID_STAGING }}"}'
+
+      - name: Verify Staging Health
+        run: |
+          echo "Waiting for staging to be live..."
+          MAX_RETRIES=12
+          COUNT=0
+          while [ $COUNT -lt $MAX_RETRIES ]; do
+            STATUS=$(curl -s https://${{ secrets.RENDER_STAGING_URL }}/api/health)
+            if [[ "$STATUS" == *"\"ollama\":true"* && "$STATUS" == *"\"langgraph\":true"* && "$STATUS" == *"\"database\":true"* ]]; then
+              echo "Staging is healthy!"
+              exit 0
+            fi
+            echo "Staging not ready yet... retrying in 30s"
+            sleep 30
+            COUNT=$((COUNT+1))
+          done
+          echo "Staging health check timed out"
+          exit 1
+
+  approve-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Manual Approval
+        run: echo "Approved for production"
+
+  deploy-production:
+    needs: approve-production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Production
+        run: |
+          curl -X POST https://api.render.com/v1/deploys \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"serviceId": "${{ secrets.RENDER_SERVICE_ID_PROD }}"}'
+
+      - name: Verify Production Health
+        run: |
+          echo "Waiting for production to be live..."
+          MAX_RETRIES=12
+          COUNT=0
+          while [ $COUNT -lt $MAX_RETRIES ]; do
+            STATUS=$(curl -s https://${{ secrets.RENDER_PROD_URL }}/api/health)
+            if [[ "$STATUS" == *"\"ollama\":true"* && "$STATUS" == *"\"langgraph\":true"* && "$STATUS" == *"\"database\":true"* ]]; then
+              echo "Production is healthy!"
+              exit 0
+            fi
+            echo "Production not ready yet... retrying in 30s"
+            sleep 30
+            COUNT=$((COUNT+1))
+          done
+          echo "Production health check timed out"
+          exit 1

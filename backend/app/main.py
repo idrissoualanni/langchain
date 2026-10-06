@@ -1,8 +1,11 @@
 # FastAPI — Agent Control Center backend
 import asyncio
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -25,6 +28,7 @@ from app.api import (
     threads,
     users,
 )
+from app.api.user import memory as user_memory
 from app.features.transcription.api import router as transcription_router
 from app.api.admin import (
     models_router as admin_models_router,
@@ -51,8 +55,16 @@ from app.core.rate_limit import setup_rate_limiting, limiter
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup : logging + DB + agent warm-up + loop registration."""
+    # Startup : logging + DB + agent warm-up + loop registration.
     setup_logging()
+
+    # Sentry initialization
+    sentry_sdk.init(
+        dsn=os.getenv("SENTRY_DSN"),
+        integrations=[FastApiIntegration()],
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+    )
     init_db()
     # Checkpointer + store LangGraph sur Neon (PostgreSQL) — SQLite
     # retiré. AVANT l'agent : le graphe demande son checkpointer à
@@ -235,6 +247,7 @@ app.include_router(storage.router)
 app.include_router(livekit.router)
 app.include_router(auth.router)
 app.include_router(agent_memory.router)
+app.include_router(user_memory.router)
 app.include_router(transcription_router)
 
 # Admin API — Model/Knowledge/Observability/Dashboard management (secured)

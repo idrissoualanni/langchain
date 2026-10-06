@@ -18,29 +18,31 @@ else:
 # Chemins
 # ------------------------------------------------------------------
 
-DATABASE_DIR = BACKEND_DIR / "database"
-DATABASE_DIR.mkdir(exist_ok=True)
-
 LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
-APP_DB_PATH = DATABASE_DIR / "app.db"
-CHECKPOINTS_DB_PATH = DATABASE_DIR / "checkpoints.db"
-# Mémoire longue durée LangGraph ( PostgresStore sur Neon ; la MÊME
-# base que le reste en PostgreSQL — voir persistence.py ).
-LONG_TERM_DB_PATH = DATABASE_DIR / "long_term_memory.db"
-# RAG documents + vecteurs ( SQLite local ; pgvector côté Neon ).
-RAG_DB_PATH = DATABASE_DIR / "user_documents.db"
 LOG_PATH = LOG_DIR / "agent.log"
 
+APP_DB_PATH = BASE_DIR / "database" / "app.db"
+CHECKPOINTS_DB_PATH = BASE_DIR / "database" / "checkpoints.db"
+RAG_DB_PATH = BASE_DIR / "database" / "rag.db"
+
+# Assurer l'existence du dossier db
+APP_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 
 # ------------------------------------------------------------------
-# Base de données — SQLAlchemy dual-dialect
+# Base de données — Neon PostgreSQL
 # ------------------------------------------------------------------
-# DATABASE_URL définie (Neon/PostgreSQL, déploiement Render) →
-# PostgreSQL partout. Absente → SQLite local (développement).
+# DATABASE_URL doit être définie (Neon/PostgreSQL).
+# L'application échoue explicitement si elle est absente.
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
-USE_POSTGRES = bool(DATABASE_URL)
+if not DATABASE_URL:
+    raise RuntimeError(
+        "ERREUR DE CONFIGURATION : DATABASE_URL est absente ou vide.\n"
+        "L'application exige une base de données Neon PostgreSQL pour fonctionner."
+    )
+USE_POSTGRES = True
 
 # Origines CORS autorisées (backend) — séparées par virgules.
 # Défaut : frontend dev Vite local (rien d'autre par défaut).
@@ -60,8 +62,9 @@ def log_safe(value) -> str:
 
 
 # ------------------------------------------------------------------
-# Ollama
+# Modèles et Intelligence Artificielle
 # ------------------------------------------------------------------
+MODEL_NAME = os.getenv("MODEL_NAME", "claude-3-5-sonnet")
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
@@ -139,8 +142,8 @@ if AUTH_MODE == "dev" and _is_remote_postgres(DATABASE_URL):
         "production (ligne users.external_user_id NULL).\n"
         "\n"
         "Deux corrections possibles, selon ce que vous voulez faire :\n"
-        "  - développer en local  → décommenter DATABASE_URL dans .env\n"
-        "    (l'app bascule alors sur SQLite) et le laisser vide ici ;\n"
+        "  - développer en local  → utiliser une base PostgreSQL locale,\n"
+        "    ou une branche de développement jetable, jamais la prod.\n"
         "  - tester le mode dev   → viser une base PostgreSQL locale,\n"
         "    ou une branche de développement jetable, jamais la prod.\n"
     )

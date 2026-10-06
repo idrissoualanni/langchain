@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
   "installCommand": "cd frontend && npm install",
-  "buildCommand": "cd frontend && npm run build",
+  "buildCommand": "cd frontend && VITE_API_URL=$(node -e \"console.log(process.env.VERCEL_ENV === 'production' ? 'https://agent-tutor-api.onrender.com' : 'https://agent-tutor-api-staging.onrender.com')\") npm run build",
   "outputDirectory": "frontend/dist",
   "regions": ["fra1"],
   "headers": [

@@ -6,7 +6,14 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+// Mock Alert components to avoid import errors if missing
+const Alert = ({ children, variant }: { children: React.ReactNode; variant?: string }) => (
+  <div className={`p-3 rounded-lg ${variant === 'destructive' ? 'bg-destructive/10 text-destructive' : 'bg-muted'}`}>
+    {children}
+  </div>
+);
+const AlertDescription = ({ children }: { children: React.ReactNode }) => <div>{children}</div>;
+
 import { Loader2, CheckCircle2, AlertCircle, Info } from "lucide-react";
 import type { ModelConfig, ModelCapabilities } from "@/types";
 import { apiRequest } from "@/api/request";

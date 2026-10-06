@@ -1,0 +1,26 @@
+name: Vercel Deployment
+
+on:
+  push:
+    branches:
+      - master
+      - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: >
+            ${{ github.ref == 'refs/heads/master' && '--prod' || '' }}
+        env:
+          # These should be mapped in Vercel dashboard or passed as build args
+          # if the frontend needs different API URLs per environment.
+          VITE_API_URL: ${{ github.ref == 'refs/heads/master' && 'https://agent-tutor-api.onrender.com' || 'https://agent-tutor-api-staging.onrender.com' }}

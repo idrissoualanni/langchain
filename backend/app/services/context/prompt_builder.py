@@ -174,6 +174,16 @@ def build_system_prompt(
             + context.user.text
         )
 
+    # --- CORE PERSONA (Profil identitaire de l'étudiant) ---
+    profile = context.user.profile
+    if profile and (profile.get("name") or profile.get("description")):
+        name = profile.get("name") or "Étudiant"
+        desc = profile.get("description") or ""
+        persona_lines = [f"## CORE PERSONA : {name}"]
+        if desc:
+            persona_lines.append(desc.strip())
+        parts.insert(0, "\n\n".join(persona_lines))
+
     # --- THREAD (léger — PAS l'historique, §32) ---
     if context.thread.text:
         parts.append("## Contexte courant\n\n" + context.thread.text)
