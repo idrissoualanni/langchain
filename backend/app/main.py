@@ -4,8 +4,6 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -58,13 +56,6 @@ async def lifespan(app: FastAPI):
     # Startup : logging + DB + agent warm-up + loop registration.
     setup_logging()
 
-    # Sentry initialization
-    sentry_sdk.init(
-        dsn=os.getenv("SENTRY_DSN"),
-        integrations=[FastApiIntegration()],
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0,
-    )
     init_db()
     # Checkpointer + store LangGraph sur Neon (PostgreSQL) — SQLite
     # retiré. AVANT l'agent : le graphe demande son checkpointer à
