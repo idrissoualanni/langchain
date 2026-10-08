@@ -5,7 +5,6 @@ import {
   Routes,
 } from 'react-router-dom';
 import { AppSidebar } from './components/app-sidebar';
-import { CourseNotificationToast } from './components/layout/CourseNotificationToast';
 import { lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
