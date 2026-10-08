@@ -48,9 +48,6 @@ frontend/playwright-report/
 frontend/coverage/
 .playwright-mcp/
 vitest-ui.png
-
-.opencode
-
 # Lanceur de tests Windows local (menu Vitest UI / Playwright).
 # Utile sur une machine, inutile pour les autres : un raccourci de poste
 # n'est pas du code du projet.
@@ -59,13 +56,9 @@ lancer-tests.cmd
 # Lien local Vercel CLI : contient l'ID du projet et de l'equipe.
 # Specifique a une machine et a un compte, jamais commite.
 .vercel
-
-# .env.local cree PAR LE CLI VERCEL ( jeton OIDC, ID projet ) — racine
-# uniquement. PAS un `.env*` global : frontend/.env.production est
-# volontairement TRACKE ( sans lui le build Vercel embarque
-# VITE_API_URL vide et tape l'origine Vercel au lieu de l'API ), et
-# backend/.env est le secret de la machine. Un motif large les
-# rendrait invisibles au lieu de manquants.
 /.env.local
 .env*
 .claude
+ENV.md
+.opencode/
+

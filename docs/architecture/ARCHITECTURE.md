@@ -1,10 +1,11 @@
 # ARCHITECTURE — Agent Tutor
 
-> Document de référence. Décrit **l'état réel du code au commit `bba8c36`** (2026-09-29).
-> Les décisions et leur justification sont dans [`DECISIONS.md`](DECISIONS.md).
-> Les contrats HTTP sont dans [`API.md`](API.md). Le plan de réalisation est dans [`ROADMAP.md`](ROADMAP.md).
+> Document de référence. Décrit l'état réel du code.
+> Les décisions et leur justification sont consignées dans les rapports de développement.
+> Les contrats HTTP sont définis dans les schémas d'API du backend.
 >
-> **Convention de lecture** : `[F]` = fait vérifié dans le code · `[P]` = planifié, pas encore implémenté · `[?]` = à confirmer.
+> **Lien vers la documentation complète** : [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md)
+
 
 ---
 

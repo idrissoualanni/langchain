@@ -1,0 +1,5 @@
+/.env.local
+.env*
+.env
+.env.local
+CLAUDE.local.md

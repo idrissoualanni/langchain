@@ -22,7 +22,7 @@ providers:
     base_url_env: "OLLAMA_HOST"
     base_url_default: "http://localhost:11434"
     # Ollama utilise /v1 pour l'API OpenAI-compatible
-    api_path: ""
+    api_path: "/v1"
     # Auth : header Authorization: Bearer <key> (optionnel pour Ollama)
     auth:
       type: "bearer"

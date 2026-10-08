@@ -37,6 +37,15 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # Variables factices au niveau job : `app.config` lève si DATABASE_URL
+    # est absente (8356b2d) et plusieurs étapes importent app.* — comme
+    # l'étape « Import smoke tests » ci-dessous, le build ne dépend
+    # d'aucun secret en CI.
+    env:
+      AUTH_MODE: neon
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      NEON_AUTH_BASE_URL: https://example.neon.tech
+      JWT_ALGORITHM: RS256
 
     steps:
       - name: Checkout
