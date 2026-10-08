@@ -207,12 +207,11 @@ function AppShell() {
         <div id="main-content" className="min-h-0 flex-1 overflow-y-auto">
           <Suspense fallback={<div className="p-6"><LoadingState label="Chargement de la page…" /></div>}>
             <Routes>
-          <Route index element={<Navigate to="/assistant" replace />} />
-          <CourseNotificationToast />
+              <Route index element={<Navigate to="/assistant" replace />} />
 
-          {/* Auth : plus ici — l'arbre PUBLIC est monté avant le shell
-              ( voir AppRoutes ). Une page de connexion n'a rien à faire
-              dans une sidebar dont le ThreadList appelle l'API. */}
+              {/* Auth : plus ici — l'arbre PUBLIC est monté avant le shell
+                  ( voir AppRoutes ). Une page de connexion n'a rien à faire
+                  dans une sidebar dont le ThreadList appelle l'API. */}
 
           <Route
 
