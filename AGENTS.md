@@ -21,7 +21,9 @@ Ces règles sont opposables à tout agent et toute intervention humaine. Toute d
 ### 4. Flux de Développement & Qualité
 - **Cycle de Vie** : `api/` $\rightarrow$ `services/` $\rightarrow$ `repositories/` $\rightarrow$ `infrastructure/database/`.
 - **Contrats** : Toute modification de route doit être reflétée dans `API.md`.
-- **Tests** : Tout bug corrigé doit être accompagné d'un test de reproduction.
+- **Branche d'Intégration** : `dev`. Un worktree par tâche sous `.worktrees/<tache>` (branche `task/<tache>`) ; merge dans `dev` uniquement après tests verts.
+- **AUCUN Push** : Aucun `git push` depuis ce poste. **AUCUN Déploiement** : Render, Vercel ou autre, jamais depuis ce poste.
+- **Tests** : Tests unitaires **et** d'intégration obligatoires avant merge ; tout bug corrigé doit être accompagné d'un test de reproduction. Détail dans `.opencode/rules/tests.md`.
 
 ---
 
@@ -37,6 +39,8 @@ Ces règles sont opposables à tout agent et toute intervention humaine. Toute d
 | **API** | Contrats & Intégration | Spécifications OpenAPI, validation Pydantic, MCP servers. |
 | **Debugging** | Qualité & Tests | Analyse de logs, tests unitaires/E2E, correction de bugs. |
 | **Changelog** | Historique & Docs | Suivi des versions, documentation des fonctionnalités. |
+| **Audit** | Sécurité & Qualité | Scans (dépendances, secrets, code), en-têtes HTTP/CORS, permissions, rapports fondés sur preuves. |
 
 ## ⚙️ Navigation
 L'architecture doit toujours pointer vers [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).
+L'orchestration des agents (rôles, entrées/sorties, délégation) est décrite dans [.opencode/ORCHESTRATION.md](.opencode/ORCHESTRATION.md).
