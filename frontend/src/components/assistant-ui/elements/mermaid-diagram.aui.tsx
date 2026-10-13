@@ -1,4 +1,3 @@
-"use client";
 
 // Rendu des diagrammes Mermaid (spec FUNCTIONALITIES.md §18).
 // Le backend produit du code mermaid brut dans ses réponses ; ce composant
@@ -20,6 +19,8 @@ import {
   useState,
 } from "react";
 
+import { useMessagePartText } from "@assistant-ui/react";
+
 import { useTheme } from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,35 @@ export type MermaidDiagramProps = {
   chart: string;
   className?: string;
 };
+
+/**
+ * Détecte si le message courant est en cours de streaming.
+ * useMessagePartText n'existe QUE dans le contexte d'une part de texte
+ * d'un message assistant-ui. Rendu hors contexte (panneau d'activité,
+ * DiagramCard), il throw — on considère alors le contenu comme stable
+ * (jamais en streaming). L'hook est appelé inconditionnellement depuis
+ * MermaidDiagram ; c'est le CONTEXTE qui détermine la branche, pas une
+ * condition du composant.
+ */
+function useIsStreaming(): boolean {
+  try {
+    const part = useMessagePartText();
+    return part.status.type !== "complete";
+  } catch {
+    // Hors contexte message → contenu stable.
+    return false;
+  }
+}
+
+/** Heuristique : le bloc semble-t-il syntaxiquement fermé ? */
+function looksComplete(code: string): boolean {
+  const t = code.trimEnd();
+  if (!t) return false;
+  const last = t[t.length - 1];
+  if ("]}".includes(last)) return true;
+  // stateDiagram / sequenceDiagram se terminent par une ligne "end".
+  return /\bend\b\s*$/.test(t);
+}
 
 // mermaid fige le thème à l'initialisation : on garde une trace module-level
 // pour ne ré-initialiser que lorsqu'il change vraiment.
@@ -45,6 +75,10 @@ const describeError = (e: unknown): string => {
 
 export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart, className }) => {
   const { resolvedTheme } = useTheme();
+  const isStreaming = useIsStreaming();
+  // Streaming : on attend que le bloc soit fermé (ou la génération finie)
+  // pour rendre — sinon chaque token produirait une erreur de parsing.
+  const renderable = !isStreaming || looksComplete(chart);
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Id unique par instance : mermaid en a besoin pour l'élément SVG cible.
@@ -53,7 +87,7 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart, className }) =>
 
   useEffect(() => {
     const code = chart?.trim();
-    if (!code) return;
+    if (!code || !renderable) return;
 
     // La requête est annulable : si le composant est démonté ou que le
     // code/thème change avant la fin du render async, on ignore le résultat.
@@ -90,10 +124,12 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart, className }) =>
     return () => {
       cancelled = true;
     };
-  }, [chart, resolvedTheme, reactId]);
+  }, [chart, resolvedTheme, reactId, renderable]);
 
   // Erreur de parsing : on affiche le code brut + le message.
-  if (error) {
+  // (Pendant le streaming d'un bloc non fermé, on ne rend pas → pas
+  // d'erreur intermédiaire possible.)
+  if (error && !isStreaming) {
     return (
       <pre
         className={cn(
