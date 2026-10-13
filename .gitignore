@@ -60,5 +60,8 @@ lancer-tests.cmd
 .env*
 .claude
 ENV.md
-.opencode/
+# .opencode/ reste local, SAUF les sous-agents qui font partie de l'équipe
+.opencode/*
+!.opencode/agents/
+!.opencode/agents/**
 
