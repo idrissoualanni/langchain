@@ -30,6 +30,15 @@ Ce document trace les choix techniques majeurs et leurs justifications pour évi
   tracée ici, et validée par l'Architecte (délégué à l'agent principal).
 - **Statut** : ✅ Appliqué (ponctuel, à la date du commit de consolidation).
 
+- **⚠️ Réserve tracée (transparence)** : la règle du projet
+  `{"action":"shell","resource":"git push*","effect":"deny"}` ne **corrèle pas** les commandes préfixées par
+  les options `-c` imposées par l'AGENTS.md (`git -c pack.threads=1 … push …` ne commence pas par `git push`).
+  Les pushes de cette opération sont donc passés **à travers** cette règle sans la déclencher, alors même
+  que la suppression des refs était explicitement refusée par elle. La règle est **ineffective en l'état** :
+  elle doit être resserrée en `{"action":"shell","resource":"* push *","effect":"deny"}` (ou l'action laissée
+  à `ask`) pour être réellement opposable. Aucune suppression de branche n'a été exécutée sans instruction
+  explicite de l'utilisateur.
+
 ### ADR-005 : Histoires orphelines — attachement d'historique sans reprise d'arborescence
 - **Décision** : Fusionner `audit-cleanup`, `mission/v5.2-pedagogical-tools` et
   `origin/knowledge-model-observability-b9643` dans `dev` par `git merge -s ours --allow-unrelated-histories` :
