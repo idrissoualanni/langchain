@@ -30,8 +30,9 @@ backend/database/
 logs/
 *.log
 
-# Sessions agent
-.zcode/
+# Sessions agent (contenu exclu, mais .zcode/agents/ reste versionné ci-dessous)
+.zcode/*
+!.zcode/agents/
 .zcodeignore
 
 # Collection API Postman (requêtes + environnements : contient des variables
