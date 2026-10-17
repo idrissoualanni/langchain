@@ -180,6 +180,13 @@ TOOL_DESCRIPTIONS: tuple[ToolDescription, ...] = (
         how="illustration_type = 'diagram' ou 'table' ; content = code mermaid brut (sans fence, ≤15 nœuds) pour diagram, ou données structurées pour table ; caption courte. Activité NON interactive.",
         response_type="illustration",
     ),
+    ToolDescription(
+        name="search_exercise_library",
+        family="pedagogical",
+        when="Chercher un exercice prêt dans la bibliothèque par matière/motif — alternative légère à create_exercise quand un exercice existant convient.",
+        how="subject + query court sur les titres/contenus d'exercices ; cite la source ; ne crée PAS d'activité (lecture seule).",
+        response_type="search",
+    ),
     # ── Apprentissage (progression) ──────────────────────────────
     ToolDescription(
         name="get_learning_profile",

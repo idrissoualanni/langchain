@@ -7,22 +7,53 @@ from app.services.memory.hybrid_retriever import HybridRetriever
 # --- Mocks for Embedding Provider ---
 
 class MockEmbeddingProvider:
+    """Embeddings creux : un bucket sémantique par famille de mots-clés.
+
+    Le cosinus entre deux vecteurs constants est TOUJOURS 1.0 (les
+    constantes s'annulent) : avec [0.1]*1536 pour tous les fruits,
+    le filtre min_score ne retiendrait rien et tous les faits
+    matcheraient. Chaque famille occupe donc un bucket distinct —
+    cosinus 1.0 si même bucket, 0.0 sinon, comme le pgvector.
+    """
+
+    BUCKETS = (
+        (("apple", "fruit", "pommes"), 10),
+        (("python", "coding"), 20),
+        (("paris", "city"), 30),
+    )
+
     def embed_text(self, text: str) -> list[float]:
-        if "apple" in text.lower() or "fruit" in text.lower() or "pommes" in text.lower():
-            return [0.1] * 1536
-        if "python" in text.lower() or "coding" in text.lower():
-            return [0.2] * 1536
-        if "paris" in text.lower() or "city" in text.lower():
-            return [0.3] * 1536
-        return [0.0] * 1536
+        vec = [0.0] * 1536
+        t = text.lower()
+        for keywords, idx in self.BUCKETS:
+            if any(k in t for k in keywords):
+                vec[idx] = 1.0
+                break
+        else:
+            vec[40] = 1.0
+        return vec
 
 @pytest.fixture(autouse=True)
 def mock_embedding_provider():
-    with patch("app.services.context.semantic.provider.get_embedding_provider") as mock:
+    # Patch sur le namespace du CONSOMMATEUR : cognitive_store fait
+    # `from ...provider import get_embedding_provider` (capture par
+    # valeur) — patcher le module source ne l'atteindrait pas.
+    #
+    # Le provider retient le dernier texte embarqué : c'est ainsi que
+    # les mocks de requête SQL retrouvent la query (retrieve_memories
+    # appelle embed_text(query) AVANT d'exécuter le SELECT).
+    state = {"last_query": None}
+    with patch("app.services.memory.cognitive_store.get_embedding_provider") as mock:
         mock_provider = MagicMock()
-        mock_provider.embed_text.side_effect = MockEmbeddingProvider().embed_text
+
+        def _embed(text):
+            state["last_query"] = text
+            return MockEmbeddingProvider().embed_text(text)
+
+        mock_provider.embed_text.side_effect = _embed
         mock_provider.name = "mock-provider"
         mock.return_value = mock_provider
+        mock.last_query = state
         yield mock
 
 @pytest.fixture(autouse=True)
@@ -53,7 +84,30 @@ FACTS_B = [
 
 class TestCognitiveMemoryIntegration:
 
-    def test_sovereignty(self):
+    @staticmethod
+    def _select_rows(user_data, query, min_score=0.5):
+        """Mock du SELECT pgvector : score cosinus via le provider mocké.
+
+        Filtre les faits par pertinence réelle (embedding de la requête
+        vs contenu) — simule `1 - (embedding <=> :embedding) >= min_score`.
+        """
+        from app.services.memory.cognitive_store import (
+            get_embedding_provider,
+        )
+        from app.services.context.semantic.provider import (
+            cosine_similarity,
+        )
+
+        provider = get_embedding_provider()
+        q_vec = provider.embed_text(query)
+        rows = []
+        for d in user_data:
+            score = cosine_similarity(q_vec, provider.embed_text(d["content"]))
+            if score >= min_score:
+                rows.append((d["content"], "{}", "fact", score))
+        return rows
+
+    def test_sovereignty(self, mock_embedding_provider):
         """Vérifier qu'un utilisateur ne peut pas lire/modifier la mémoire d'un autre utilisateur."""
         with patch("app.services.memory.cognitive_store.CognitiveStore._get_engine") as mock_get_engine:
             mock_engine = MagicMock()
@@ -72,8 +126,16 @@ class TestCognitiveMemoryIntegration:
                     return result
                 if "SELECT content" in query_str:
                     uid = params["user_id"]
-                    user_data = storage.get(uid, [])
-                    rows = [(d["content"], "{}", "fact", 0.9) for d in user_data]
+                    # La query est le dernier texte embarqué AVANT le SELECT
+                    # (retrieve_memories appelle embed_text(query) juste
+                    # avant le SQL ; _select_rows embarque les contenus
+                    # ensuite et écraserait last_query).
+                    query = mock_embedding_provider.last_query["last_query"]
+                    rows = self._select_rows(
+                        storage.get(uid, []),
+                        query,
+                        params["min_score"],
+                    )
                     result = MagicMock()
                     result.__iter__.return_value = rows
                     return result
@@ -96,7 +158,7 @@ class TestCognitiveMemoryIntegration:
                 assert "déteste les pommes" in res["content"]
                 assert "pommes et les fruits rouges" not in res["content"]
 
-    def test_semantic_hnsw_retrieval(self):
+    def test_semantic_hnsw_retrieval(self, mock_embedding_provider):
         """Vérifier que la récupération fonctionne par le SENS."""
         with patch("app.services.memory.cognitive_store.CognitiveStore._get_engine") as mock_get_engine:
             mock_engine = MagicMock()
@@ -115,8 +177,11 @@ class TestCognitiveMemoryIntegration:
                     return result
                 if "SELECT content" in query_str:
                     uid = params["user_id"]
-                    user_data = storage.get(uid, [])
-                    rows = [(d["content"], "{}", "fact", 0.9) for d in user_data]
+                    rows = self._select_rows(
+                        storage.get(uid, []),
+                        mock_embedding_provider.last_query["last_query"],
+                        params["min_score"],
+                    )
                     result = MagicMock()
                     result.__iter__.return_value = rows
                     return result
@@ -157,27 +222,48 @@ class TestCognitiveMemoryIntegration:
                 {"topic": "t5", "title": "f5", "content": facts[4], "source": "s", "relevance": 0.65},
             ]
             with patch("app.services.knowledge.store._engine") as mock_engine_store:
-                def side_effect(*args, **kwargs):
-                    class Conn:
-                        def execute(self, query, params=None):
-                            class Result:
-                                def __iter__(self):
-                                    # Return dummy vectors: t1,t2,t3 are same, t4,t5 are same
-                                    # This is a simplified mock
-                                    return [("t1", [0.2]*1536), ("t2", [0.2]*1536), ("t3", [0.2]*1536), ("t4", [0.5]*1536), ("t5", [0.5]*1536)]
-                                def scalar(self): return 1
-                            return Result()
-                        def __enter__(self): return self
-                        def __exit__(self, *args): pass
-                    return Conn()
-                mock_engine_store.return_value = side_effect
+                # _apply_mmr fait _engine().connect().execute()...
+                # Structure à DEUX niveaux : engine → connect() → execute().
+                # Vecteurs creux normalisés : t1/t2/t3 = bucket Python,
+                # t4/t5 = bucket froid. Produit scalaire = 1.0 si même
+                # bucket, 0.0 sinon — comme le cosinus pgvector. (Des
+                # vecteurs constants non normalisés donnaient un produit
+                # scalaire de 61.44 qui cassait le calcul MMR.)
+                def vec(bucket):
+                    v = [0.0] * 1536
+                    v[bucket] = 1.0
+                    return v
+                VECS = {"t1": vec(20), "t2": vec(20), "t3": vec(20),
+                        "t4": vec(30), "t5": vec(30)}
+
+                class _Result:
+                    def __iter__(self):
+                        return [(k, v) for k, v in VECS.items()]
+                    def fetchall(self):
+                        return [(k, v) for k, v in VECS.items()]
+                    def scalar(self):
+                        return 1
+
+                class _InnerConn:
+                    def execute(self, query, params=None):
+                        return _Result()
+                    def __enter__(self):
+                        return self
+                    def __exit__(self, *args):
+                        pass
+
+                class _EngineMock:
+                    def connect(self):
+                        return _InnerConn()
+
+                mock_engine_store.side_effect = lambda *a, **kw: _EngineMock()
                 results = retriever.retrieve("subj", "Python et météo", limit=2)
                 contents = [r["content"] for r in results]
                 assert any("Python" in c for c in contents)
                 assert any("froid" in c or "hiver" in c for c in contents)
                 assert len(results) == 2
 
-    def test_neon_persistence(self):
+    def test_neon_persistence(self, mock_embedding_provider):
         """Vérifier que les embeddings sont correctement stockés et récupérés via CognitiveStore."""
         with patch("app.services.memory.cognitive_store.CognitiveStore._get_engine") as mock_get_engine:
             mock_engine = MagicMock()
@@ -196,8 +282,11 @@ class TestCognitiveMemoryIntegration:
                     return result
                 if "SELECT content" in query_str:
                     uid = params["user_id"]
-                    user_data = storage.get(uid, [])
-                    rows = [(d["content"], "{}", "fact", 0.9) for d in user_data]
+                    rows = self._select_rows(
+                        storage.get(uid, []),
+                        mock_embedding_provider.last_query["last_query"],
+                        params["min_score"],
+                    )
                     result = MagicMock()
                     result.__iter__.return_value = rows
                     return result

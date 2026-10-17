@@ -943,9 +943,9 @@ def test_restart_persistence():
 
     # DB de checkpoint SOUS le workspace (backend/database) — la
     # sandbox de test interdit le TMP système.
-    from app.config import DATABASE_DIR
+    from app.config import APP_DB_PATH
 
-    db_path = DATABASE_DIR / "test_v52_restart.db"
+    db_path = APP_DB_PATH.parent / "test_v52_restart.db"
     if db_path.exists():
         db_path.unlink()
     conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -1096,96 +1096,99 @@ def test_cross_user():
     print("\n--- §51 cross-user (API) ---")
     from fastapi.testclient import TestClient
     from app.main import app
+    from unittest.mock import patch
     import uuid as _uuid
 
     client = TestClient(app)
 
     # Setup : 2 users, 1 thread chacun
-    # Mission Identité : les users sont provisionnés en mode dev
-    # ( dev_token = session simulée ) — chaque requête porte le
-    # token de SON user.
-    _u1 = client.post(
-        "/api/users", json={"name": "V52-A-" + _uuid.uuid4().hex[:6]}
-    ).json()
-    _u2 = client.post(
-        "/api/users", json={"name": "V52-B-" + _uuid.uuid4().hex[:6]}
-    ).json()
-    u1 = _u1["user_id"]
-    u2 = _u2["user_id"]
-    tok1 = {"Authorization": f"Bearer {_u1.get('dev_token', 'dev:' + u1)}"}
-    tok2 = {"Authorization": f"Bearer {_u2.get('dev_token', 'dev:' + u2)}"}
-    t1 = client.post(
-        f"/api/users/{u1}/threads", json={"name": "act-a"},
-        headers=tok1,
-    ).json()["thread_id"]
-    t2 = client.post(
-        f"/api/users/{u2}/threads", json={"name": "act-b"},
-        headers=tok2,
-    ).json()["thread_id"]
+    # Mission Identité : POST /api/users n'existe qu'en mode dev et
+    # AUTH_MODE est "neon" par défaut. On provisionne directement via
+    # users_db (comme le fait l'endpoint en mode dev) et on force le
+    # resolver en mode dev pour accepter les tokens dev:<user_id>.
+    with patch("app.auth.resolver.AUTH_MODE", "dev"):
+        from app.infrastructure.database import users as users_db
+        from app.infrastructure.database.connections import init_db
 
-    # u2 tente de lire l'activité du thread de u1 → 403
-    resp = client.get(
-        f"/api/threads/{t1}/activity", params={"user_id": u2},
-        headers=tok2,
-    )
-    check(
-        "51a: user B NE PEUT PAS lire l'activité du thread de user A (403)",
-        resp.status_code == 403,
-        resp.status_code,
-    )
+        init_db()
+        _u1 = users_db.create_user("V52-A-" + _uuid.uuid4().hex[:6])
+        _u2 = users_db.create_user("V52-B-" + _uuid.uuid4().hex[:6])
+        u1 = _u1["user_id"]
+        u2 = _u2["user_id"]
+        tok1 = {"Authorization": f"Bearer dev:{u1}"}
+        tok2 = {"Authorization": f"Bearer dev:{u2}"}
+        t1 = client.post(
+            f"/api/users/{u1}/threads", json={"name": "act-a"},
+            headers=tok1,
+        ).json()["thread_id"]
+        t2 = client.post(
+            f"/api/users/{u2}/threads", json={"name": "act-b"},
+            headers=tok2,
+        ).json()["thread_id"]
 
-    # u1 lit sa propre activité → 200
-    resp = client.get(
-        f"/api/threads/{t1}/activity", params={"user_id": u1},
-        headers=tok1,
-    )
-    check(
-        "51b: user A lit sa propre activité (200)",
-        resp.status_code == 200,
-        resp.status_code,
-    )
+        # u2 tente de lire l'activité du thread de u1 → 403
+        resp = client.get(
+            f"/api/threads/{t1}/activity", params={"user_id": u2},
+            headers=tok2,
+        )
+        check(
+            "51a: user B NE PEUT PAS lire l'activité du thread de user A (403)",
+            resp.status_code == 403,
+            resp.status_code,
+        )
 
-    # run-code cross-user → 403
-    resp = client.post(
-        f"/api/threads/{t1}/run-code",
-        json={"user_id": u2, "code": "print(1)"},
-        headers=tok2,
-    )
-    check(
-        "51c: user B NE PEUT PAS exécuter du code dans le thread de A (403)",
-        resp.status_code == 403,
-        resp.status_code,
-    )
+        # u1 lit sa propre activité → 200
+        resp = client.get(
+            f"/api/threads/{t1}/activity", params={"user_id": u1},
+            headers=tok1,
+        )
+        check(
+            "51b: user A lit sa propre activité (200)",
+            resp.status_code == 200,
+            resp.status_code,
+        )
 
-    # run-code légitime → 200 avec résultat réel
-    resp = client.post(
-        f"/api/threads/{t1}/run-code",
-        json={"user_id": u1, "code": "print(2 + 3)"},
-        headers=tok1,
-    )
-    body = resp.json()
-    check(
-        "51d: run-code légitime exécute réellement (stdout=5)",
-        resp.status_code == 200
-        and body.get("stdout", "").strip() == "5"
-        and body.get("exit_code") == 0,
-        body,
-    )
+        # run-code cross-user → 403
+        resp = client.post(
+            f"/api/threads/{t1}/run-code",
+            json={"user_id": u2, "code": "print(1)"},
+            headers=tok2,
+        )
+        check(
+            "51c: user B NE PEUT PAS exécuter du code dans le thread de A (403)",
+            resp.status_code == 403,
+            resp.status_code,
+        )
 
-    # code dangereux rejeté par la sécurité
-    resp = client.post(
-        f"/api/threads/{t1}/run-code",
-        json={
-            "user_id": u1,
-            "code": "import requests\nrequests.get('http://x')",
-        },
-        headers=tok1,
-    )
-    check(
-        "51e: code réseau REJETÉ par la sécurité (400)",
-        resp.status_code == 400,
-        resp.status_code,
-    )
+        # run-code légitime → 200 avec résultat réel
+        resp = client.post(
+            f"/api/threads/{t1}/run-code",
+            json={"user_id": u1, "code": "print(2 + 3)"},
+            headers=tok1,
+        )
+        body = resp.json()
+        check(
+            "51d: run-code légitime exécute réellement (stdout=5)",
+            resp.status_code == 200
+            and body.get("stdout", "").strip() == "5"
+            and body.get("exit_code") == 0,
+            body,
+        )
+
+        # code dangereux rejeté par la sécurité
+        resp = client.post(
+            f"/api/threads/{t1}/run-code",
+            json={
+                "user_id": u1,
+                "code": "import requests\nrequests.get('http://x')",
+            },
+            headers=tok1,
+        )
+        check(
+            "51e: code réseau REJETÉ par la sécurité (400)",
+            resp.status_code == 400,
+            resp.status_code,
+        )
 
 
 # ==================================================================

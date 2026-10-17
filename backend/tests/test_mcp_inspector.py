@@ -690,7 +690,7 @@ class TestSdkTimeoutContract:
 
         assert _is_timeout(asyncio.TimeoutError()) is True
         assert _is_timeout(_timeout_mcp_error()) is True
-        assert _is_timeout(McpError(ErrorData(code=-32601))) is False
+        assert _is_timeout(McpError(ErrorData(code=-32601, message="Method not found"))) is False
         assert _is_timeout(RuntimeError("boom")) is False
 
 
