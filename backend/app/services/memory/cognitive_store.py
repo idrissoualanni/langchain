@@ -108,7 +108,7 @@ class CognitiveStore:
             embedding_str = f"[{','.join(map(str, query_embedding))}]"
 
             with engine.connect() as conn:
-                query = text("""
+                sql = text("""
                     SELECT content, metadata, memory_type, 1 - (embedding <=> :embedding) as score
                     FROM user_cognitive_memories
                     WHERE user_id = :user_id
@@ -116,7 +116,7 @@ class CognitiveStore:
                     ORDER BY embedding <=> :embedding
                     LIMIT :limit
                 """)
-                result = conn.execute(query, {
+                result = conn.execute(sql, {
                     "user_id": user_id,
                     "embedding": embedding_str,
                     "min_score": min_score,

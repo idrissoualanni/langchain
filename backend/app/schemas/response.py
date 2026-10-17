@@ -47,6 +47,8 @@ AgentResponseType = Literal[
     "hint",           # indice progressif
     "code",           # activité de code (éditeur)
     "diagram",        # diagramme mermaid (data.chart = code brut)
+    "illustration",   # visuel non interactif (mermaid ou tableau —
+                      # normalizer: activity_type=illustration)
     "search",         # réponse s'appuyant sur la recherche
     "clarification",  # demande de précision
     "error",          # échec utilisateur-visible

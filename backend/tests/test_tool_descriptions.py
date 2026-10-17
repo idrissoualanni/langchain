@@ -60,6 +60,6 @@ def test_catalogue_injecte_dans_core_prompt() -> None:
     assert not not_in_prompt, (
         f"tools absents du prompt final: {sorted(not_in_prompt)}"
     )
-    assert "carte: diagram" in build_tool_catalog(), (
-        "le catalogue ne référence pas la carte diagram"
+    assert "carte: illustration" in build_tool_catalog(), (
+        "le catalogue ne référence pas la carte illustration"
     )

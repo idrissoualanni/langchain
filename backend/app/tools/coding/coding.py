@@ -142,9 +142,9 @@ def _sandbox_root() -> Path:
     - reste dans le périmètre du backend (pas de TMP système) ;
     - un répertoire par run, supprimé après exécution.
     """
-    from app.config import DATABASE_DIR
+    from app.config import APP_DB_PATH
 
-    root = DATABASE_DIR / "code_runs"
+    root = APP_DB_PATH.parent / "code_runs"
     root.mkdir(exist_ok=True)
     return root
 
