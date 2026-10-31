@@ -31,7 +31,7 @@ class ProviderUpdate(BaseModel):
     extra_headers: dict[str, str] | None = None
 
 @router.get("")
-async def get_providers(admin=Depends(get_current_admin)):
+def get_providers(admin=Depends(get_current_admin)):
     """Liste tous les providers configurés."""
     return list_providers(enabled_only=False)
 
@@ -84,7 +84,7 @@ async def get_available_models(provider_id: str, admin=Depends(get_current_admin
 
 
 @router.patch("/{provider_id}")
-async def update_provider(provider_id: str, update: ProviderUpdate, admin=Depends(get_current_admin)):
+def update_provider(provider_id: str, update: ProviderUpdate, admin=Depends(get_current_admin)):
     """Met à jour la configuration d'un provider."""
     provider = get_provider_config(provider_id)
     if not provider:

@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from starlette.concurrency import run_in_threadpool
 from fastapi.responses import Response
 
 from app.auth.resolver import CurrentUser, get_current_user
@@ -155,7 +156,10 @@ async def upload_object(
         )
 
     try:
-        result = put_object(
+        # S3 + base : appels synchrones, hors de la boucle d'événements
+        # (sinon chaque upload figeait tous les flux SSE en cours).
+        result = await run_in_threadpool(
+            put_object,
             user_id=user_id,
             kind=kind,
             filename=filename,
@@ -181,7 +185,9 @@ async def upload_object(
     # Documents : indexation RAG ( chunks + embeddings ).
     indexed = None
     if kind == "document" and mime.startswith(("text/", "application/pdf")):
-        indexed = _index_document(user_id, filename, mime, data)
+        indexed = await run_in_threadpool(
+            _index_document, user_id, filename, mime, data
+        )
 
     return {
         "object_id": result["object_id"],

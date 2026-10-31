@@ -33,6 +33,7 @@
 import time
 
 from fastapi import APIRouter, HTTPException, Request, Response
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, ValidationError
 
 from app.auth.resolver import (
@@ -134,7 +135,9 @@ async def create_session(request: Request, response: Response) -> SessionStatus:
         raise HTTPException(status_code=401, detail=_GENERIC_REJECT)
 
     try:
-        claims = verify_neon_token(payload.token)
+        # PyJWKClient télécharge la JWKS (HTTP synchrone) au premier appel
+        # et à chaque rotation de clé : hors de la boucle d'événements.
+        claims = await run_in_threadpool(verify_neon_token, payload.token)
     except HTTPException:
         # 503 explicite : la JWKS n'est pas configurée. On ne la masque
         # pas derrière un 401 — ce sont deux pannes différentes et

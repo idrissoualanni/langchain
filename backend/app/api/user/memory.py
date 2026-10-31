@@ -7,7 +7,7 @@ from app.services.memory.cognitive_store import cognitive_store
 router = APIRouter(prefix="/api/user/memory", tags=["user-memory"])
 
 @router.get("/learning-map")
-async def get_learning_map(current: CurrentUser = Depends(get_current_user)):
+def get_learning_map(current: CurrentUser = Depends(get_current_user)):
     """
     Retrieves the user's current mastery graph of concepts and their dependencies.
     """
@@ -18,7 +18,7 @@ async def get_learning_map(current: CurrentUser = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=f"Error retrieving learning map: {str(e)}")
 
 @router.post("/learning-map/update")
-async def update_mastery(
+def update_mastery(
     payload: Dict[str, Any] = Body(...),
     current: CurrentUser = Depends(get_current_user)
 ):
