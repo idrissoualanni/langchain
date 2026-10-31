@@ -45,16 +45,27 @@ describe('useCurrentUser — délai de /api/users/me', () => {
     vi.useRealTimers();
   });
 
-  it("bascule en erreur après 30 s au lieu d'un chargement infini", async () => {
+  it('attend au-delà du cold start Render (67 s) sans erreur', async () => {
+    const { result } = renderHook(() => useCurrentUser());
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(70_000);
+    });
+
+    expect(result.current.loading).toBe(true);
+    expect(result.current.error).toBeNull();
+  });
+
+  it("bascule en erreur après 90 s au lieu d'un chargement infini", async () => {
     const { result } = renderHook(() => useCurrentUser());
     expect(result.current.loading).toBe(true);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(90_000);
     });
 
     expect(result.current.loading).toBe(false);
     expect(result.current.internal).toBeNull();
-    expect(result.current.error).toMatch(/30 s/);
+    expect(result.current.error).toMatch(/90 s/);
   });
 });

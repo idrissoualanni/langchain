@@ -62,10 +62,10 @@ export const NeonUserContext = createContext<NeonUserData>({
 
 /** Délai maximal d'attente de GET /api/users/me avant de basculer en
  *  ERREUR. fetch n'a pas de timeout natif : sans borne, un cold start
- *  Render lent (~45 s observés) — ou un réseau noir — laissait l'UI
- *  en chargement éternel, sans rien dire. 30 s au-delà desquels on
- *  préfère afficher une erreur explicite à un spinner infini. */
-const ME_TIMEOUT_MS = 30_000;
+ *  Render lent (67 s mesurés le 2026-10-31 sur le plan free) — ou un
+ *  réseau noir — laissait l'UI en chargement éternel, sans rien dire.
+ *  90 s : au-delà du cold start, en deçà du spinner infini. */
+const ME_TIMEOUT_MS = 90_000;
 
 /** Traduit l'échec de /api/users/me en message UTILISABLE.
  *
