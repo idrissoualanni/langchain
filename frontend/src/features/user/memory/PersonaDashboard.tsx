@@ -67,7 +67,7 @@ export function PersonaDashboard({ userId }: PersonaDashboardProps) {
   async function handleSaveProfile() {
     setSaveLoading(true);
     try {
-      const updated = await apiFetch<UserProfile>('/api/users/${userId}/profile', {
+      const updated = await apiFetch<UserProfile>(`/api/users/${userId}/profile`, {
         method: 'PUT',
         body: JSON.stringify(editProfile),
       });

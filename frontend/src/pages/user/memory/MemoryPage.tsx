@@ -5,8 +5,16 @@ import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 export function MemoryPage() {
   // Mission Identité : l'identité vient de la session, jamais du client.
-  const { internal, loading } = useCurrentUser();
+  const { internal, loading, error } = useCurrentUser();
   const userId = internal?.user_id ?? '';
+
+  if (error) {
+    return (
+      <div className="max-w-6xl mx-auto p-6">
+        <p className="text-destructive">{error}</p>
+      </div>
+    );
+  }
 
   if (loading || !userId) {
     return (

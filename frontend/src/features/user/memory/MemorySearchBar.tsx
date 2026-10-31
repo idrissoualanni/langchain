@@ -5,17 +5,11 @@ import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Search, Database } from 'lucide-react';
 import { apiFetch } from '@/api/base';
-
-interface MemorySearchItem {
-  content: string;
-  metadata: any;
-  type: string;
-  score: number;
-}
+import type { MemoryFact } from '@/types/agent';
 
 export function MemorySearchBar({ userId }: { userId: string }) {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<MemorySearchItem[]>([]);
+  const [results, setResults] = useState<MemoryFact[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -26,7 +20,7 @@ export function MemorySearchBar({ userId }: { userId: string }) {
     setLoading(true);
     setHasSearched(true);
     try {
-      const data = await apiFetch<MemorySearchItem[]>(
+      const data = await apiFetch<MemoryFact[]>(
         `/api/users/${userId}/memory/search?q=${encodeURIComponent(query)}`
       );
       setResults(data);
@@ -64,8 +58,8 @@ export function MemorySearchBar({ userId }: { userId: string }) {
           {loading ? (
             <LoadingState label="Fouille du cerveau..." />
           ) : results.length > 0 ? (
-            results.map((res, i) => (
-              <Card key={i} className="overflow-hidden">
+            results.map((res) => (
+              <Card key={res.id} className="overflow-hidden">
                 <CardContent className="p-4 flex items-start gap-4">
                   <div className="bg-primary/10 p-2 rounded shrink-0">
                     <Database className="w-4 h-4 text-primary" />
@@ -74,10 +68,10 @@ export function MemorySearchBar({ userId }: { userId: string }) {
                     <p className="text-sm font-medium">{res.content}</p>
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
-                        {res.type}
+                        {res.category}
                       </span>
                       <span className="text-[10px] text-muted-foreground">
-                        Pertinence: {(res.score * 100).toFixed(1)}%
+                        Confiance : {(res.confidence * 100).toFixed(0)}%
                       </span>
                     </div>
                   </div>

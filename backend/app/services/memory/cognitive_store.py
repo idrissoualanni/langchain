@@ -13,25 +13,6 @@ from app.services.context.semantic.provider import get_embedding_provider
 
 logger = logging.getLogger(__name__)
 
-# Dimension déclarée de la colonne vector() de user_cognitive_memories.
-# Celle-ci a été créée à 1536 (provider de l'époque) ; le provider
-# actuel (gemma4:31b-cloud via Ollama Cloud) produit 1024 dimensions.
-# L'INSERT psycopg exige une correspondance exacte → padding à cette
-# constante (voir _pad_embedding).
-_COLUMN_DIM = 1536
-
-
-def _pad_embedding(vec: list[float], dim: int) -> list[float]:
-    """Borne un vecteur à `dim` dimensions (troncature ou padding zéro).
-
-    Le padding zéro ne modifie PAS la similarité cosinus : un zéro ne
-    contribue ni au produit scalaire ni à la norme L2.
-    """
-    if len(vec) >= dim:
-        return vec[:dim]
-    return vec + [0.0] * (dim - len(vec))
-
-
 class CognitiveStore:
     """
     Infrastructure vectorielle pour la mémoire cognitive.
@@ -75,14 +56,6 @@ class CognitiveStore:
         try:
             provider = get_embedding_provider()
             embedding = provider.embed_text(content)
-            # Dimension déclarée de la colonne (vector(1536) à la
-            # création). Un provider qui produit moins de dimensions
-            # (ex: gemma4:31b-cloud = 1024) fait échouer l'INSERT
-            # psycopg ("expected 1536 dimensions, not 1024"). On
-            # padde avec des zéros jusqu'à la dimension de la colonne
-            # — la similarité cosinus n'est pas affectée (le zéro ne
-            # contribue ni au produit scalaire ni à la norme).
-            embedding = _pad_embedding(embedding, _COLUMN_DIM)
             embedding_str = f"[{','.join(map(str, embedding))}]"
 
             with engine.begin() as conn:
