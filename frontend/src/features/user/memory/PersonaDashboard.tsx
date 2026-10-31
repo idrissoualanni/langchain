@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { LoadingState } from '@/components/ui/loading-state';
 import { User, Brain, Sparkles, Edit2, Check, X } from 'lucide-react';
+import { apiFetch } from '@/api/base';
 import { LearningMap } from './LearningMap';
 
 interface PersonaDashboardProps {
@@ -41,9 +42,10 @@ export function PersonaDashboard({ userId }: PersonaDashboardProps) {
   async function fetchOverview() {
     setLoading(true);
     try {
-      const res = await fetch('/api/user/memory/overview');
-      if (!res.ok) throw new Error('Failed to fetch overview');
-      const data = await res.json();
+      const data = await apiFetch<{
+        identity: UserProfile;
+        facts_by_category: Record<string, MemoryFact[]>;
+      }>(`/api/users/${userId}/memory`);
 
       setProfile(data.identity);
 
@@ -65,13 +67,10 @@ export function PersonaDashboard({ userId }: PersonaDashboardProps) {
   async function handleSaveProfile() {
     setSaveLoading(true);
     try {
-      const res = await fetch('/api/user/memory/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+      const updated = await apiFetch<UserProfile>('/api/users/${userId}/profile', {
+        method: 'PUT',
         body: JSON.stringify(editProfile),
       });
-      if (!res.ok) throw new Error('Failed to save profile');
-      const updated = await res.json();
       setProfile(updated);
       setIsEditing(false);
     } catch (err) {

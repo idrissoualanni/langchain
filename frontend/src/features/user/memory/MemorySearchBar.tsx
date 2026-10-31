@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Search, Database } from 'lucide-react';
+import { apiFetch } from '@/api/base';
 
 interface MemorySearchItem {
   content: string;
@@ -12,7 +13,7 @@ interface MemorySearchItem {
   score: number;
 }
 
-export function MemorySearchBar() {
+export function MemorySearchBar({ userId }: { userId: string }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<MemorySearchItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -25,9 +26,9 @@ export function MemorySearchBar() {
     setLoading(true);
     setHasSearched(true);
     try {
-      const res = await fetch(`/api/user/memory/cognitive/search?query=${encodeURIComponent(query)}`);
-      if (!res.ok) throw new Error('Search failed');
-      const data = await res.json();
+      const data = await apiFetch<MemorySearchItem[]>(
+        `/api/users/${userId}/memory/search?q=${encodeURIComponent(query)}`
+      );
       setResults(data);
     } catch (err) {
       console.error(err);

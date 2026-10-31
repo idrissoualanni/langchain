@@ -60,23 +60,20 @@ export const NeonUserContext = createContext<NeonUserData>({
   pending: true,
 });
 
-/** Délai maximal d'attente de GET /api/users/me avant de basculer en
- *  ERREUR. fetch n'a pas de timeout natif : sans borne, un cold start
- *  Render lent (~45 s observés) — ou un réseau noir — laissait l'UI
- *  en chargement éternel, sans rien dire. 30 s au-delà desquels on
- *  préfère afficher une erreur explicite à un spinner infini. */
-const ME_TIMEOUT_MS = 30_000;
+
 
 /** Traduit l'échec de /api/users/me en message UTILISABLE.
  *
  *  Le point important est de ne jamais présenter un échec technique
  *  comme une absence de droits : c'est ce qui produisait le
- *  downgrade silencieux. Ici on distingue explicitement le délai
- *  dépassé, le refus de la session, et la panne serveur/réseau. */
+ *  downgrade silencieux. Ici on distingue explicitement l'abandon
+ *  (changement d'utilisateur), le refus de la session, et la panne
+ *  serveur/réseau. */
 function describeMeError(err: unknown): string {
-  // AbortError = notre propre AbortController ( timeout ou cleanup ).
+  // AbortError = abandon au changement d'utilisateur ( cleanup de
+  // l'effet ) : la réponse obsolète ne doit pas écraser l'état.
   if (err instanceof DOMException && err.name === 'AbortError') {
-    return `Vérification de la session abandonnée après ${ME_TIMEOUT_MS / 1000} s — le serveur ne répond pas.`;
+    return "Vérification de la session abandonnée — utilisateur modifié.";
   }
   if (err instanceof ApiError) {
     if (err.status === 401) {
@@ -166,14 +163,12 @@ export function useCurrentUser() {
     setLoading(true);
     setError(null);
 
-    // EF-19 : fetch n'a pas de timeout → on en pose un. Le signal est
-    // aussi indispensable pour ANNULER la requête si l'effet est
-    // rejoué (changement d'utilisateur) — sinon la réponse tardive
-    // d'une session abandonnée écrasait la nouvelle.
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), ME_TIMEOUT_MS);
+    // EF-19 : pas de timeout — l'effet peut être rejoué (changement
+    // d'utilisateur) ; `alive` empêche une réponse tardive d'écraser
+    // la nouvelle session.
 
-    apiFetch<InternalUser>('/api/users/me', { signal: controller.signal })
+
+    apiFetch<InternalUser>('/api/users/me')
       .then((u) => {
         if (alive) setInternal(u);
       })
@@ -183,14 +178,11 @@ export function useCurrentUser() {
         setError(describeMeError(err));
       })
       .finally(() => {
-        window.clearTimeout(timer);
         if (alive) setLoading(false);
       });
 
     return () => {
       alive = false;
-      window.clearTimeout(timer);
-      controller.abort();
     };
   }, [signedIn, neonUser.userId, devSession?.token, reloadNonce]);
 

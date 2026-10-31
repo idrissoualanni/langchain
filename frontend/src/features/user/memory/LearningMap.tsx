@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Badge } from '@/components/ui/badge';
 import { BrainCircuit } from 'lucide-react';
+import { apiFetch } from '@/api/base';
 
 interface Concept {
   slug: string;
@@ -152,9 +153,7 @@ export function LearningMap({ userId }: LearningMapProps) {
     async function fetchMap() {
       setLoading(true);
       try {
-        const res = await fetch('/api/user/memory/learning-map');
-        if (!res.ok) throw new Error('Failed to fetch learning map');
-        const json = await res.json();
+        const json = await apiFetch<LearningMapData>('/api/user/memory/learning-map');
         setData(json);
       } catch (err) {
         console.error(err);

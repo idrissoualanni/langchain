@@ -47,9 +47,16 @@ def get_facts(user_id: str, category: str | None = None, limit: int = 100) -> li
     return list_facts(user_id, category=category, limit=limit)
 
 def get_store():
-    """Retourne le store cognitif (singleton)."""
-    from app.services.memory.cognitive_store import cognitive_store
-    return cognitive_store
+    """Retourne le store longue durée LangGraph (singleton).
+
+    C'est le PostgresStore (clé-valeur, namespaces) — PAS le
+    CognitiveStore (mémoire vectorielle). Le learning engine, le
+    graphe parent et le dashboard appellent store.get/put/
+    list_namespaces : sans eux, chaque tool learning échouait avec
+    "'CognitiveStore' object has no attribute 'get'".
+    """
+    from app.infrastructure.database.persistence import get_persistent_store
+    return get_persistent_store()
 
 def read_profile_for_api(user_id: str) -> dict:
     """Version de read_profile pour l'API (sécurisée)."""
