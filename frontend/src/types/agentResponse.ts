@@ -1,3 +1,5 @@
+import type React from 'react';
+
 // ---- V6.7 : AgentResponse (contrat public backend) ----
 // ADDENDUM : 5 statuts publics EXACTEMENT — success interdit.
 
@@ -64,6 +66,20 @@ export interface DiagramData {
   caption?: string;
   diagram_type?: string;
 }
+
+export type TableRow = Record<string, React.ReactNode>;
+
+export interface TableColumn {
+  header: string;
+  accessor: string;
+  className?: string;
+}
+
+/** Illustration : sous-type discriminé par `type`. */
+export type IllustrationData =
+  | { type: 'table'; title?: string; rows?: TableRow[]; columns?: TableColumn[] }
+  | ({ type: 'diagram'; title?: string } & DiagramData)
+  | { type?: 'image'; title?: string };
 
 export interface EvaluationData extends ExerciseData {
   score?: number;

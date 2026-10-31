@@ -54,10 +54,14 @@ export function SettingsModelPage() {
         setActiveModel(res.active_model);
         // Préférence déjà sauvegardée (localStorage) — prioritaire sur
         // le modèle actif du serveur, car c'est le choix de l'utilisateur.
-        const stored =
-          typeof window !== 'undefined'
-            ? window.localStorage.getItem(STORAGE_KEY)
-            : null;
+        // localStorage peut lever (navigation privée Safari, stockage
+        // bloqué) : sans préférence lisible, on retombe sur le serveur.
+        let stored: string | null = null;
+        try {
+          stored = window.localStorage.getItem(STORAGE_KEY);
+        } catch {
+          /* ignore */
+        }
         if (stored && res.models.some((m) => m.id === stored)) {
           setSelected(stored);
         } else {

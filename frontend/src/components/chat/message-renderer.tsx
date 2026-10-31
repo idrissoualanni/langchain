@@ -12,14 +12,15 @@ import { TTSReadAloud } from "./TTSReadAloud";
  * Extracteur de texte pour le TTS.
  * Récupère le texte des parties de message.
  */
-function getMessageText(content: any): string {
+function getMessageText(content: unknown): string {
     if (typeof content === "string") return content;
     if (Array.isArray(content)) {
         return content.map(getMessageText).filter(Boolean).join(" ");
     }
     if (content && typeof content === "object") {
-        if (content.text) return content.text;
-        if (content.content) return getMessageText(content.content);
+        const part = content as { text?: unknown; content?: unknown };
+        if (typeof part.text === "string" && part.text) return part.text;
+        if (part.content) return getMessageText(part.content);
     }
     return "";
 }

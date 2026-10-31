@@ -14,6 +14,7 @@ import type {
   EvaluationData,
   ExerciseData,
   HintData,
+  IllustrationData,
   QuizData,
   SearchData,
 } from '../../types/agentResponse';
@@ -84,23 +85,21 @@ export function ResponseRenderer({
     case 'diagram':
       return <DiagramCard data={data as unknown as DiagramData} />;
 
-    case 'illustration':
+    case 'illustration': {
+      const illustration = data as unknown as IllustrationData;
       return (
         <IllustrationCard
           id="illustration-default"
-          type={(data as any).type || 'image'}
-          title={(data as any).title}
+          type={illustration.type ?? 'image'}
+          title={illustration.title}
         >
-          {/* On délègue le rendu du contenu à un composant interne ou on utilise
-              les données structurées ici. Si data contient un tableau, on utilise
-              StyledTable, sinon on peut utiliser DiagramCard pour Mermaid. */}
-          {(data as any).type === 'table' ? (
+          {illustration.type === 'table' ? (
             <StyledTable
-              data={(data as any).rows || []}
-              columns={(data as any).columns || []}
+              data={illustration.rows ?? []}
+              columns={illustration.columns ?? []}
             />
-          ) : (data as any).type === 'diagram' ? (
-            <DiagramCard data={data as any} />
+          ) : illustration.type === 'diagram' ? (
+            <DiagramCard data={illustration} />
           ) : (
             <div className="text-sm text-muted-foreground italic">
               Illustration non supportée ou contenu manquant
@@ -108,6 +107,7 @@ export function ResponseRenderer({
           )}
         </IllustrationCard>
       );
+    }
 
     case 'search':
       return <SearchResultCard data={data as unknown as SearchData} />;
