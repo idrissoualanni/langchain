@@ -1,3 +1,4 @@
+import pytest
 # Tests unitaires V5.2 — tools pédagogiques interactifs.
 #
 # Exécution : python tests/test_v52_unit.py (depuis backend/)
@@ -1092,6 +1093,7 @@ def test_cross_thread():
 # ==================================================================
 
 
+@pytest.mark.integration
 def test_cross_user():
     print("\n--- §51 cross-user (API) ---")
     from fastapi.testclient import TestClient

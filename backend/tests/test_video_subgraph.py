@@ -236,6 +236,7 @@ class TestSegmentation:
 
 
 class TestPipeline:
+    @pytest.mark.integration
     def test_full_pipeline_success(self, tmp_path, media_file):
         value = 0.0
         stub = CountingTranscriber(LESSON)
@@ -268,6 +269,7 @@ class TestPipeline:
         store = VideoKnowledgeStore(tmp_path / "store")
         assert store.get_video("u1", out["result"]["video_id"]) is not None
 
+    @pytest.mark.integration
     def test_run_facade_returns_videoresult(self, tmp_path, media_file):
         stub = CountingTranscriber(LESSON)
         use_services(transcriber=stub)
@@ -313,6 +315,7 @@ class TestPipeline:
 
 
 class TestBoundedRetries:
+    @pytest.mark.integration
     def test_transient_then_success(self, tmp_path, media_file):
         errors = [VideoTransientError("provider KO 1"), VideoTransientError("provider KO 2")]
         stub = CountingTranscriber(LESSON, errors=errors)
@@ -463,6 +466,7 @@ class TestIndexFailure:
 # ============================================================
 
 
+@pytest.mark.integration
 class TestRetrievalNoReingestion:
     def test_retrieval_does_not_retranscribe(self, tmp_path, media_file):
         stub = CountingTranscriber(LESSON)

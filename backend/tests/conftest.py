@@ -28,14 +28,77 @@ n'a rien à y faire.
 from __future__ import annotations
 
 import ast
+import os
+import socket
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
+
+import pytest
+
+# Observabilité coupée AVANT tout import `app.*` : `load_dotenv` n'écrase
+# pas une variable déjà posée, donc le `.env` local ne peut plus réactiver
+# l'export. Sans ça, chaque `pytest` envoyait les traces de test (prompts,
+# faits utilisateurs fictifs) à api.smith.langchain.com avec la vraie clé.
+for _var in ("LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2", "LANGSMITH_ENABLED", "LANGFUSE_ENABLED"):
+    os.environ[_var] = "false"
 
 _BACKEND = Path(__file__).resolve().parents[1]
 if str(_BACKEND) not in sys.path:
     sys.path.insert(0, str(_BACKEND))
 
 _TESTS_DIR = Path(__file__).resolve().parent
+
+
+def _database_reachable() -> bool:
+    """La base de DATABASE_URL accepte-t-elle une connexion TCP ?
+
+    Simple ouverture de socket (2 s) : suffisant pour distinguer « Neon
+    configuré » de la valeur factice de la CI (localhost:5432 sans
+    serveur), sans ouvrir de session SQL.
+    """
+    from app.config import DATABASE_URL
+
+    parts = urlsplit(DATABASE_URL or "")
+    if not parts.hostname:
+        return False
+    try:
+        with socket.create_connection((parts.hostname, parts.port or 5432), timeout=2):
+            return True
+    except OSError:
+        return False
+
+
+def pytest_collection_modifyitems(config, items):
+    """`@pytest.mark.integration` : sauté si la base n'est pas joignable."""
+    if not any(item.get_closest_marker("integration") for item in items):
+        return
+    if _database_reachable():
+        return
+    skip = pytest.mark.skip(reason="base de données injoignable (test d'intégration)")
+    for item in items:
+        if item.get_closest_marker("integration"):
+            item.add_marker(skip)
+
+
+@pytest.fixture(autouse=True)
+def _deterministic_embeddings():
+    """Provider d'embedding local et déterministe pour chaque test.
+
+    Le provider réel (Ollama Cloud / Cloudflare) dépend du réseau et d'une
+    clé : un test qui l'appelait échouait dès que le service était
+    indisponible (« embedding provider indisponible »). Les tests qui
+    veulent un provider précis l'installent eux-mêmes via
+    `set_embedding_provider` — celui-ci est restauré au teardown.
+    """
+    from app.services.context.semantic.provider import (
+        LocalHashEmbeddingProvider,
+        set_embedding_provider,
+    )
+
+    set_embedding_provider(LocalHashEmbeddingProvider())
+    yield
+    set_embedding_provider(None)
 
 
 def _has_pytest_tests(tree: ast.Module) -> bool:

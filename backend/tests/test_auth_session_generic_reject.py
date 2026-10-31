@@ -33,8 +33,10 @@ MALFORMED = [
 
 @pytest.fixture(scope="module")
 def client() -> TestClient:
-    with TestClient(app, raise_server_exceptions=False) as c:
-        yield c
+    # SANS `with` : le lifespan (base, checkpointer LangGraph, agent) n'a
+    # rien à voir avec le rejet d'un corps malformé — et sans base il
+    # faisait échouer chaque test à l'initialisation.
+    return TestClient(app, raise_server_exceptions=False)
 
 
 def _post(client: TestClient, body: bytes):

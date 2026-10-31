@@ -41,6 +41,7 @@ def test_actions_exposees():
     assert set(ACTIONS) == {"upload", "search", "list", "delete"}
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_cycle_upload_search_list_delete(user_id, _purge):
     uploaded = await run_document_workflow(
@@ -91,6 +92,7 @@ async def test_cycle_upload_search_list_delete(user_id, _purge):
     assert listed_after.chunk_count == 0
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_workflow_result_contrat_main_graph(user_id, _purge):
     """La sortie doit être consommable par le Main Graph (workflow+status)."""
@@ -104,6 +106,7 @@ async def test_workflow_result_contrat_main_graph(user_id, _purge):
     assert isinstance(res, DocumentResult)
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_fail_safe_action_invalide(user_id, _purge):
     res = await run_document_workflow(
@@ -115,6 +118,7 @@ async def test_fail_safe_action_invalide(user_id, _purge):
     assert res.workflow == "document"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_fail_safe_contenu_vide(user_id, _purge):
     res = await run_document_workflow(
@@ -126,6 +130,7 @@ async def test_fail_safe_contenu_vide(user_id, _purge):
     assert "vide" in res.message.lower()
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_fail_safe_doc_absent(user_id, _purge):
     res = await run_document_workflow(
