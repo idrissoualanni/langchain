@@ -1,16 +1,13 @@
-# Routes Chat — POST /api/chat + GET /api/chat/stream (SSE)
+# Routes Chat — POST /api/chat + POST /api/chat/stream (SSE)
 #
 # Mission Identité :
 #   - l'identité vient du Bearer token ( get_current_user )
 #   - le user_id du BODY n'est plus une source d'identité : il est
 #     VÉRIFIÉ contre l'utilisateur courant ( 403 si usurpation )
-#   - SSE : user_id/thread_id/messages restent en query ( identité
-#     via Authorization header — JAMAIS de token en URL , §17 )
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
-from pydantic import ValidationError
 
 from app.services.agent.runner import run_agent, run_agent_stream
 from app.logging.events import log_event
@@ -18,7 +15,6 @@ from app.schemas import ChatRequest, ChatResponse
 from app.auth.resolver import CurrentUser, get_current_user
 from app.infrastructure.database.connections import init_db
 from app.infrastructure.database.threads import get_thread, thread_belongs_to_user
-from app.logging.events import log_event
 from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -30,12 +26,15 @@ def _validate_chat(
     """Validation : user existe, thread existe, thread au user.
 
     Mission Identité : le user_id du payload doit être CELUI DE LA
-    SESSION ( anti-usurpation ) — un user_id d'autrui → 403.
+    SESSION ( anti-usurpation ) — un user_id d'autrui → 403, admin
+    compris : un thread porte l'historique et la mémoire de son
+    propriétaire, sur lesquels l'administration n'a aucun droit de
+    lecture (AGENTS.md, Souveraineté).
     """
     init_db()
 
     # Anti-usurpation (§10) : le body ne définit pas l'identité
-    if not current.is_admin and payload.user_id != current.user_id:
+    if payload.user_id != current.user_id:
         raise HTTPException(
             status_code=403,
             detail="user_id ne correspond pas à la session",
@@ -104,70 +103,27 @@ def api_chat(
     return ChatResponse(**result)
 
 
-@router.get("/stream")
+@router.post("/stream")
 @limiter.limit("20/minute")
 async def api_chat_stream(
     request: Request,
     # `response` requis par le décorateur slowapi ( injection headers ),
     # cf. commentaire sur api_chat.
     response: Response,
-    user_id: str,
-    thread_id: str,
-    message: str,
-    model: str | None = None,
-    workflow: str | None = None,
-    payload: str | None = None,
+    payload_obj: ChatRequest,
     current: CurrentUser = Depends(get_current_user),
 ):
     """Envoyer un message — stream SSE des événements du pipeline.
 
-    Mission Identité (§17) : l'identité vient du HEADER
-    Authorization Bearer ( JAMAIS du query param ). user_id en
-    query n'est qu'une VÉRIFICATION anti-usurpation — 403 s'il ne
-    correspond pas à la session.
-
-    payload : JSON string (query param) — entrée structurée du
-    workflow (§8). Un JSON invalide est ignoré + tracé, jamais un
-    400 (le run continue sur la chaîne principale).
+    POST + corps JSON, et non GET + query : un GET qui lance un run
+    échappait au contrôle d'Origine (`enforce_origin` ne garde que les
+    méthodes mutantes) alors que le cookie de session est SameSite=None,
+    et le message de l'utilisateur finissait dans les journaux d'accès.
 
     Événements : RUN_START, STATE_LOAD, USER_MESSAGE, ASSISTANT_MESSAGE,
     CHECKPOINT_SAVED, RUN_END (+ TOOL_START/TOOL_END/TOOL_ERROR temps réel
     via le bus d'événements pendant le run).
     """
-    parsed_payload: dict = {}
-    if payload:
-        try:
-            decoded = json.loads(payload)
-            if isinstance(decoded, dict):
-                parsed_payload = decoded
-            else:
-                log_event(
-                    "CHAT_PAYLOAD_IGNORED",
-                    level="WARNING",
-                    message="payload JSON n'est pas un object — ignoré",
-                )
-        except json.JSONDecodeError:
-            log_event(
-                "CHAT_PAYLOAD_IGNORED",
-                level="WARNING",
-                message="payload JSON invalide — ignoré",
-            )
-
-    try:
-        payload_obj = ChatRequest(
-            user_id=user_id,
-            thread_id=thread_id,
-            message=message,
-            model=model,
-            workflow=workflow,
-            payload=parsed_payload,
-        )
-    except ValidationError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=json.loads(exc.json())[0]["msg"],
-        )
-
     _validate_chat(payload_obj, current)
 
     async def gen():

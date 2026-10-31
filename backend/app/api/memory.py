@@ -28,7 +28,9 @@ def _validate_thread_access(
 
     Le user_id ( query , rétrocompatibilité ) doit correspondre à
     la session — un simple retrait du param ne contourne plus rien
-    car la décision vient de current.user_id ( admin excepté ).
+    car la décision vient de current.user_id. Admin compris : l'état
+    d'un thread contient la conversation de son propriétaire
+    (AGENTS.md, Souveraineté).
     """
     init_db()
     thread = get_thread(thread_id)
@@ -37,19 +39,16 @@ def _validate_thread_access(
             404, detail="Thread introuvable"
         )
 
-    if not current.is_admin:
-        if not thread_belongs_to_user(
-            thread_id, current.user_id
-        ):
-            raise HTTPException(
-                403,
-                detail="Ce thread n'appartient pas à cet utilisateur",
-            )
-        if user_id is not None and user_id != current.user_id:
-            raise HTTPException(
-                403,
-                detail="user_id ne correspond pas à la session",
-            )
+    if not thread_belongs_to_user(thread_id, current.user_id):
+        raise HTTPException(
+            403,
+            detail="Ce thread n'appartient pas à cet utilisateur",
+        )
+    if user_id is not None and user_id != current.user_id:
+        raise HTTPException(
+            403,
+            detail="user_id ne correspond pas à la session",
+        )
     return thread
 
 

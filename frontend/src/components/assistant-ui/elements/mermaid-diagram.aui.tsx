@@ -95,7 +95,10 @@ export const MermaidDiagram: FC<MermaidDiagramProps> = ({ chart, className }) =>
 
     const mermaidTheme = toMermaidTheme(resolvedTheme);
     if (initializedTheme !== mermaidTheme) {
-      mermaid.initialize({ startOnLoad: false, theme: mermaidTheme });
+      // `strict` explicite : le source vient du modèle (donc d'un contenu
+      // potentiellement injecté via RAG/web) et le SVG est inséré par
+      // dangerouslySetInnerHTML — on ne dépend pas d'un défaut de version.
+      mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: mermaidTheme });
       initializedTheme = mermaidTheme;
     }
 

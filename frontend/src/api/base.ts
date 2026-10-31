@@ -59,7 +59,7 @@ async function tryRefreshSession(): Promise<void> {
 }
 
 /** Étend une réponse d'erreur FastAPI en message lisible. */
-async function readErrorDetail(res: Response): Promise<string> {
+export async function readErrorDetail(res: Response): Promise<string> {
   let detail = res.statusText;
   try {
     const body = await res.json();

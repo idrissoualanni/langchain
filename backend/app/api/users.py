@@ -63,6 +63,24 @@ def _require_owner_or_admin(
         )
 
 
+def _require_owner(user_id: str, current: CurrentUser) -> None:
+    """Ownership STRICTE — admin compris.
+
+    Pour la mémoire cognitive (faits, recherche) : l'administration n'a
+    aucun droit de lecture sur ces données (AGENTS.md, Souveraineté).
+    Même convention 404/403 que `_require_owner_or_admin`.
+    """
+    init_db()
+    if user_id == current.user_id:
+        return
+    if get_user(user_id) is None:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    raise HTTPException(
+        status_code=403,
+        detail="Accès refusé : mémoire d'un autre utilisateur",
+    )
+
+
 @router.get("/me", response_model=UserOut)
 def api_me(current: CurrentUser = Depends(get_current_user)) -> UserOut:
     """Utilisateur COURANT résolu depuis la session (Neon Auth).
@@ -209,7 +227,7 @@ def api_get_memory(
     current: CurrentUser = Depends(get_current_user),
 ) -> MemoryOverviewOut:
     """Vue complète de la mémoire — ownership vérifié."""
-    _require_owner_or_admin(user_id, current)
+    _require_owner(user_id, current)
     return MemoryOverviewOut(**memory_overview_for_api(user_id))
 
 
@@ -220,7 +238,7 @@ def api_list_facts(
     current: CurrentUser = Depends(get_current_user),
 ) -> list[MemoryFactOut]:
     """Liste les faits — ownership vérifié."""
-    _require_owner_or_admin(user_id, current)
+    _require_owner(user_id, current)
     try:
         facts = list_facts(user_id, category)
     except ValueError as exc:
@@ -237,7 +255,7 @@ def api_search_memory(
     current: CurrentUser = Depends(get_current_user),
 ) -> list[MemoryFactOut]:
     """Recherche les faits — ownership vérifié."""
-    _require_owner_or_admin(user_id, current)
+    _require_owner(user_id, current)
     facts = search_facts(user_id, q)
     return [MemoryFactOut(**f) for f in facts]
 
@@ -253,7 +271,7 @@ def api_create_fact(
     current: CurrentUser = Depends(get_current_user),
 ) -> MemoryFactOut:
     """Crée un fait — ownership vérifié."""
-    _require_owner_or_admin(user_id, current)
+    _require_owner(user_id, current)
     try:
         fact = save_fact(
             user_id,
@@ -278,7 +296,7 @@ def api_update_fact(
     current: CurrentUser = Depends(get_current_user),
 ) -> MemoryFactOut:
     """Modifie UN fait — ownership vérifié."""
-    _require_owner_or_admin(user_id, current)
+    _require_owner(user_id, current)
     try:
         fact = update_fact(
             user_id,
@@ -301,7 +319,7 @@ def api_delete_fact(
     current: CurrentUser = Depends(get_current_user),
 ) -> dict:
     """Supprime UN fait — ownership vérifié."""
-    _require_owner_or_admin(user_id, current)
+    _require_owner(user_id, current)
     try:
         return delete_fact(user_id, fact_id)
     except ValueError as exc:

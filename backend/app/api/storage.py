@@ -13,6 +13,9 @@
 #   - jamais de chemin client utilisé tel quel.
 from __future__ import annotations
 
+import unicodedata
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 
@@ -107,6 +110,24 @@ def _require_owner_or_admin(user_id: str, current: CurrentUser) -> None:
         )
 
 
+def _content_disposition(filename: str) -> str:
+    """En-tête `inline` sûr pour n'importe quel nom de fichier.
+
+    Les en-têtes HTTP sont encodés en latin-1 : un nom avec `’`, `œ` ou
+    un emoji levait UnicodeEncodeError (500), et un `"` cassait l'en-tête.
+    `filename` porte un repli ASCII ; `filename*` (RFC 6266) le vrai nom.
+    """
+    ascii_name = (
+        unicodedata.normalize("NFKD", filename)
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+    ascii_name = "".join(
+        c for c in ascii_name if c.isprintable() and c not in '"\\'
+    ).strip() or "fichier"
+    return f"inline; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename, safe='')}"
+
+
 async def _read_bounded(file: UploadFile) -> bytes:
     """Lit l'UploadFile en bornant la taille ( refuse trop tôt )."""
     data = await file.read(MAX_UPLOAD_BYTES + 1)
@@ -163,7 +184,15 @@ async def upload_object(
             data=data,
         )
     except ObjectStorageError as exc:
-        raise HTTPException(503, str(exc)) from exc
+        log_event(
+            "OBJECT_UPLOAD_ERROR",
+            level="ERROR",
+            message=f"Stockage objet indisponible | {str(exc)[:300]}",
+            user_id=user_id,
+        )
+        raise HTTPException(
+            503, "Stockage indisponible — réessayez dans un instant."
+        ) from exc
 
     log_event(
         "OBJECT_UPLOAD",
@@ -262,7 +291,7 @@ def download_object(
         content=obj["content"],
         media_type=obj["mime"] or "application/octet-stream",
         headers={
-            "Content-Disposition": f'inline; filename="{obj["filename"]}"',
+            "Content-Disposition": _content_disposition(obj["filename"]),
         },
     )
 
