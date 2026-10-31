@@ -45,14 +45,18 @@ langchain-mcp-adapters==0.3.2
 
 # Realtime
 livekit-api
+# livekit.rtc ( app/infrastructure/livekit/browser.py ) — déclaré
+# explicitement : il n'arrivait qu'en dépendance de livekit-agents.
+livekit
 # SDK Deepgram v2 : expose Deepgram() + LiveOptions utilisés par
 # app/features/transcription/service.py. Le package "deepgram" n'existe
 # pas sur PyPI ( build Render en échec ) ; deepgram-sdk<3 garde l'API v2.
 deepgram-sdk>=2.12,<3.0
-# Agent tuteur vocal — worker STT/LLM/TTS via LiveKit Inference.
-# Versions pinnées au moment de l'ajout ( livekit-agents 1.8.2 ).
-livekit-agents>=1.8.2
-livekit-plugins-silero>=1.8.2
+# livekit-agents / livekit-plugins-silero : RETIRÉS de l'image API.
+# L'agent vocal tourne sur LiveKit Cloud depuis agent/ ( son propre
+# requirements.txt ) ; aucun module de app/ ne les importe. Ils tiraient
+# onnxruntime, av et le runtime d'inférence local dans un service web
+# limité à 512 Mo de RAM ( plan free Render ).
 
 # Data / RAG
 sqlalchemy

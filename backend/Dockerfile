@@ -3,8 +3,8 @@
 # cette image : il s'exécute sur LiveKit Cloud ( agent `tutor`, projet
 # `live` ), déployé depuis le dossier `agent/` de la racine du dépôt.
 #
-# Base : slim pour réduire la taille. Les wheels de torch/onnxruntime
-# ( dépendances de livekit-plugins-silero ) existent pour linux/x86_64.
+# Base : slim pour réduire la taille. Aucune dépendance de l'agent vocal
+# ( livekit-agents, silero, onnxruntime ) : elles vivent dans agent/.
 #
 # MCP ( §39–§41 ) : l'image embarque la couche Model Context Protocol
 # ( mcp + langchain-mcp-adapters ) et le backend Google Calendar. Les

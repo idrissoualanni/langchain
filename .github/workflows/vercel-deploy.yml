@@ -1,26 +1,59 @@
+# Déploiement frontend Vercel — après une CI verte sur master uniquement.
+#
+# Build sur le runner (`vercel build`) puis envoi du résultat
+# (`vercel deploy --prebuilt`) avec la CLI officielle :
+#   - VITE_API_URL est réellement injecté dans le build. Avant, il était
+#     posé dans l'env du runner alors que le build tournait chez Vercel :
+#     la variable n'atteignait jamais Vite ;
+#   - plus d'action tierce non épinglée recevant VERCEL_TOKEN.
+#
+# Si l'intégration Git de Vercel est aussi active sur ce projet, la
+# désactiver (Settings → Git) : sinon chaque push déploie deux fois, et
+# l'intégration n'attend pas la CI.
 name: Vercel Deployment
 
 on:
-  push:
-    branches:
-      - master
-      - staging
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-vercel
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - uses: actions/checkout@v4
-
-      - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
         with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: >
-            ${{ github.ref == 'refs/heads/master' && '--prod' || '' }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
         env:
-          # These should be mapped in Vercel dashboard or passed as build args
-          # if the frontend needs different API URLs per environment.
-          VITE_API_URL: ${{ github.ref == 'refs/heads/master' && 'https://agent-tutor-api.onrender.com' || 'https://agent-tutor-api-staging.onrender.com' }}
+          VITE_API_URL: https://agent-tutor-api.onrender.com
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}

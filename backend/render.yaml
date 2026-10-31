@@ -23,7 +23,11 @@ services:
     dockerfilePath: ./Dockerfile
     # Pas de dockerCommand : le CMD de l'image lance uvicorn ( rôle API ).
     healthCheckPath: /api/health
-    autoDeploy: true
+    # false : la prod ne se déploie QUE via .github/workflows/deploy.yml
+    # ( CI verte → staging vérifié → approbation ). Avec true, chaque push
+    # sur master partait en prod avant la CI et sans approbation.
+    # ⚠️ À reporter aussi dans le dashboard ( Settings → Auto-Deploy : No ).
+    autoDeploy: false
     envVars:
       # Backend.
       - key: AUTH_MODE
@@ -91,3 +95,34 @@ services:
         value: eu-central-1
       - key: NEON_S3_BUCKET
         value: assets
+      # Variables lues par le code, saisies dans le dashboard. Déclarées
+      # ici ( sync: false = valeur jamais commitée ) pour que le blueprint
+      # décrive TOUT ce dont le service a besoin.
+      - key: NEON_AUTH_BASE_URL
+        sync: false
+      - key: ADMIN_EXTERNAL_IDS
+        sync: false
+      - key: AGENT_SERVICE_SECRET
+        sync: false
+      - key: OLLAMA_HOST
+        sync: false
+      - key: OLLAMA_API_KEY
+        sync: false
+      - key: EMBEDDING_PROVIDER
+        sync: false
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: LANGFUSE_ENABLED
+        sync: false
+      - key: LANGFUSE_BASE_URL
+        sync: false
+      - key: LANGFUSE_PUBLIC_KEY
+        sync: false
+      - key: LANGFUSE_SECRET_KEY
+        sync: false

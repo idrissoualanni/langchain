@@ -106,6 +106,11 @@ def get_agent(model=None):
     return _agent
 
 
+def is_agent_ready() -> bool:
+    """L'agent par défaut a-t-il été construit (lifespan) ? Sans le construire."""
+    return _agent is not None
+
+
 def build_graph():
     """Entrypoint langgraph.json — graphe parent compilé.
 
