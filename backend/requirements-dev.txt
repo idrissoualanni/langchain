@@ -1,0 +1,10 @@
+# Dépendances de DÉVELOPPEMENT et de CI — jamais installées dans l'image.
+-r requirements.txt
+
+pytest
+pytest-asyncio
+# Seul usage : tests/test_v52_unit.py (persistance checkpointer sur SQLite
+# local). La prod utilise langgraph-checkpoint-postgres (Neon).
+langgraph-checkpoint-sqlite
+ruff
+pip-audit

@@ -66,3 +66,6 @@ ENV.md
 !.opencode/agents/
 !.opencode/agents/**
 
+
+# Mémoire Claude Code personnelle (le pointeur partagé est CLAUDE.md)
+CLAUDE.local.md
