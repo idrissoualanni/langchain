@@ -250,7 +250,7 @@ def verify_neon_token(token: str) -> dict:
             "AUTH_AUD_UNEXPECTED",
             level="WARNING",
             message=(
-                f"aud non conforme, jette ACCEPT | aud={_safe_aud(actual_aud)} "
+                f"aud non conforme, jeton ACCEPTÉ | aud={_safe_aud(actual_aud)} "
                 f"attendu={expected or '(aucune config)'} "
                 f"kid={log_safe(_kid_of(token))} "
                 f"claims={sorted(claims.keys())}"
