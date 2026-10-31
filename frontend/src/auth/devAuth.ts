@@ -40,8 +40,12 @@ export function getDevSession(): DevSession | null {
 }
 
 export function setDevSession(s: DevSession | null): void {
-  if (s) localStorage.setItem(DEV_KEY, JSON.stringify(s));
-  else localStorage.removeItem(DEV_KEY);
+  try {
+    if (s) localStorage.setItem(DEV_KEY, JSON.stringify(s));
+    else localStorage.removeItem(DEV_KEY);
+  } catch {
+    /* stockage indisponible : session dev limitée à l'onglet */
+  }
 }
 
 export function isDevAuthMode(): boolean {

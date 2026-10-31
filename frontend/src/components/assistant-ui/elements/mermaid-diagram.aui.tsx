@@ -41,6 +41,12 @@ export type MermaidDiagramProps = {
  */
 function useIsStreaming(): boolean {
   try {
+    // L'appel est inconditionnel : seul le try/catch déclenche la règle.
+    // Le contexte (part texte ou non) est fixe pour un composant monté,
+    // donc l'ordre des hooks est stable d'un rendu à l'autre. Une part de
+    // raisonnement (MarkdownText partagé) lève ici : pas de variante
+    // optionnelle du hook dans @assistant-ui/react 0.15.
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     const part = useMessagePartText();
     return part.status.type !== "complete";
   } catch {

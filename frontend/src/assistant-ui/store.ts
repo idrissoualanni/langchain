@@ -93,15 +93,21 @@ function persistSelection(threadId: string) {
     .threads.find((t) => t.thread_id === threadId);
   const { user_id } = thread ?? { user_id: storeUserId };
   if (!user_id || !threadId) return;
-  localStorage.setItem(
-    'dsh_current_thread',
-    JSON.stringify({
-      thread_id: threadId,
-      user_id,
-      name: thread?.name ?? 'New Chat',
-      created_at: thread?.created_at ?? String(Date.now()),
-    }),
-  );
+  // Confort (restauration au F5) : un stockage indisponible ne doit
+  // pas faire échouer la sélection du thread.
+  try {
+    localStorage.setItem(
+      'dsh_current_thread',
+      JSON.stringify({
+        thread_id: threadId,
+        user_id,
+        name: thread?.name ?? 'New Chat',
+        created_at: thread?.created_at ?? String(Date.now()),
+      }),
+    );
+  } catch {
+    /* ignore */
+  }
 }
 
 export const useAssistantStore = create<AssistantStore>((set, get) => ({
@@ -188,7 +194,11 @@ export const useAssistantStore = create<AssistantStore>((set, get) => ({
         ...(wasCurrent ? { currentThreadId: null, messages: [] } : {}),
       }));
       if (wasCurrent) {
-        localStorage.removeItem('dsh_current_thread');
+        try {
+          localStorage.removeItem('dsh_current_thread');
+        } catch {
+          /* ignore */
+        }
         const remaining = get().threads;
         if (storeUserId && remaining.length > 0) {
           void get().switchThread(storeUserId, remaining[0].thread_id);

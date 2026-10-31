@@ -50,6 +50,24 @@ describe('ResponseRenderer', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('illustration table → StyledTable avec les colonnes typées', () => {
+    render(
+      <ResponseRenderer
+        response={base({
+          type: 'illustration',
+          data: {
+            type: 'table',
+            title: 'Complexités',
+            columns: [{ header: 'Algo', accessor: 'algo' }],
+            rows: [{ algo: 'Tri fusion' }],
+          },
+        })}
+      />,
+    );
+    expect(screen.getByText('Algo')).toBeInTheDocument();
+    expect(screen.getByText('Tri fusion')).toBeInTheDocument();
+  });
+
   it('type quiz → progression question i/N', () => {
     render(
       <ResponseRenderer

@@ -2,14 +2,11 @@
 
 import { memo } from "react";
 import { cn } from "@/lib/utils";
+import type { TableColumn, TableRow } from "@/types/agentResponse";
 
 interface StyledTableProps {
-  data: any[];
-  columns: {
-    header: string;
-    accessor: string;
-    className?: string;
-  }[];
+  data: TableRow[];
+  columns: TableColumn[];
   className?: string;
 }
 

@@ -48,7 +48,7 @@ export function KnowledgePage() {
     id: '',
     name: '',
     description: '',
-    scope: 'private' as const,
+    scope: 'private' as KnowledgeBase['scope'],
     enabled: true,
   });
   const { toast } = useToast();
@@ -228,7 +228,7 @@ export function KnowledgePage() {
                   <Label htmlFor="kb-scope">Default Scope</Label>
                   <Select
                     value={newKb.scope}
-                    onValueChange={(value: any) => setNewKb(prev => ({ ...prev, scope: value }))}
+                    onValueChange={(value) => setNewKb(prev => ({ ...prev, scope: value as KnowledgeBase['scope'] }))}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -289,7 +289,7 @@ export function KnowledgePage() {
               <Label htmlFor="edit-kb-scope">Scope</Label>
               <Select
                 value={editForm.scope}
-                onValueChange={(value: any) => setEditForm((prev) => ({ ...prev, scope: value }))}
+                onValueChange={(value) => setEditForm((prev) => ({ ...prev, scope: value as KnowledgeBase['scope'] }))}
               >
                 <SelectTrigger>
                   <SelectValue />
