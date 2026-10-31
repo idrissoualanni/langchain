@@ -488,12 +488,6 @@ if _looks_masked(LIVEKIT_API_SECRET):
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "").strip()
 
 # ------------------------------------------------------------------
-# Chiffrement des données (Fernet AES)
-# ------------------------------------------------------------------
-ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", "").strip()
-
-
-# ------------------------------------------------------------------
 # Limites de la boucle agentique (mission §14 — configurables, jamais
 # hardcodées dans le graphe)
 # ------------------------------------------------------------------
