@@ -14,7 +14,9 @@ from fastapi import HTTPException, Request
 from sse_starlette.sse import EventSourceResponse
 
 from app.auth.resolver import _resolve_from_token
-from app.logging.events import event_bus, get_recent_events
+from app.logging.events import event_bus, get_recent_events, log_event
+
+SSE_QUEUE_MAX = 1000
 
 
 async def sse_events(request: Request):
@@ -40,10 +42,24 @@ async def sse_events(request: Request):
     if not current.is_admin:
         raise HTTPException(403, "Réservé aux administrateurs")
 
-    queue: asyncio.Queue[dict] = asyncio.Queue()
+    # Bornée : un client lent (onglet en arrière-plan, réseau faible) ne
+    # fait plus grossir la mémoire du process sans limite. On abandonne
+    # le plus ancien — un flux d'observation tolère un trou, pas un OOM.
+    queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=SSE_QUEUE_MAX)
+    dropped = 0
 
     async def on_event(event: dict) -> None:
-        await queue.put(event)
+        nonlocal dropped
+        if queue.full():
+            queue.get_nowait()
+            dropped += 1
+            if dropped % SSE_QUEUE_MAX == 1:
+                log_event(
+                    "SSE_EVENTS_DROPPED",
+                    level="WARNING",
+                    message=f"Client SSE lent : {dropped} événement(s) abandonné(s)",
+                )
+        queue.put_nowait(event)
 
     sub_id = await event_bus.subscribe(on_event)
 

@@ -248,7 +248,7 @@ def get_langsmith_client():
 # ============================================================================
 
 @router.get("/summary", response_model=ObservabilitySummary)
-async def get_observability_summary(
+def get_observability_summary(
     hours: int = Query(default=24, ge=1, le=720),
     admin: dict = Depends(verify_admin_auth),
 ):
@@ -329,7 +329,7 @@ async def get_observability_summary(
 
 
 @router.get("/runs", response_model=list[RunInfo])
-async def get_recent_runs(
+def get_recent_runs(
     limit: int = Query(default=50, ge=1, le=500),
     project: Optional[str] = None,
     status_filter: Optional[str] = None,
@@ -418,7 +418,7 @@ async def get_recent_runs(
 
 
 @router.get("/run/{run_id}", response_model=TraceDetail)
-async def get_run_detail(
+def get_run_detail(
     run_id: str,
     admin: CurrentUser = Depends(verify_admin_auth),
 ):
@@ -651,7 +651,7 @@ async def get_run_detail(
 
 
 @router.get("/evaluations", response_model=list[EvaluationResult])
-async def get_evaluations(
+def get_evaluations(
     admin: dict = Depends(verify_admin_auth),
 ):
     """
@@ -710,7 +710,7 @@ async def get_evaluations(
 
 
 @router.get("/models/usage", response_model=list[ModelUsage] | UnavailableResponse)
-async def get_model_usage(
+def get_model_usage(
     days: int = Query(default=7, ge=1, le=90),
     response: Response = None,
     admin: dict = Depends(verify_admin_auth),
@@ -826,7 +826,7 @@ async def get_model_usage(
 
 
 @router.get("/errors", response_model=list[ErrorEntry] | UnavailableResponse)
-async def get_error_log(
+def get_error_log(
     limit: int = Query(default=100, ge=1, le=1000),
     response: Response = None,
     admin: dict = Depends(verify_admin_auth),
@@ -906,7 +906,7 @@ async def get_error_log(
 
 
 @router.get("/langsmith-link", response_model=LangSmithLink)
-async def get_langsmith_dashboard_link(
+def get_langsmith_dashboard_link(
     admin: dict = Depends(verify_admin_auth),
 ):
     """

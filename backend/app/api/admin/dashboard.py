@@ -86,7 +86,7 @@ def _learning_profile_count() -> int:
 
 
 @router.get("/metrics")
-async def get_dashboard_metrics(
+def get_dashboard_metrics(
     current_user: dict = Depends(get_current_admin_user)
 ):
     """Récupère les métriques principales du dashboard."""
@@ -144,7 +144,7 @@ async def get_dashboard_metrics(
 
 
 @router.get("/activity-stats")
-async def get_activity_stats(
+def get_activity_stats(
     days: int = Query(default=7, ge=1, le=365),
     current_user: dict = Depends(get_current_admin_user)
 ):
