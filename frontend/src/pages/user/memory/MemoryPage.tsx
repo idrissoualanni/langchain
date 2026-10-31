@@ -1,11 +1,28 @@
 import { PersonaDashboard } from '@/features/user/memory/PersonaDashboard';
 import { MemorySearchBar } from '@/features/user/memory/MemorySearchBar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
 
 export function MemoryPage() {
-  // In a real app, we would get userId from useCurrentUser
-  // For this implementation, we assume the context provider handles it or we pass it
-  const userId = "current-user";
+  // Mission Identité : l'identité vient de la session, jamais du client.
+  const { internal, loading, error } = useCurrentUser();
+  const userId = internal?.user_id ?? '';
+
+  if (error) {
+    return (
+      <div className="max-w-6xl mx-auto p-6">
+        <p className="text-destructive">{error}</p>
+      </div>
+    );
+  }
+
+  if (loading || !userId) {
+    return (
+      <div className="max-w-6xl mx-auto p-6">
+        <p className="text-muted-foreground">Chargement de la session…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8">
@@ -22,7 +39,7 @@ export function MemoryPage() {
             <CardTitle>Test de Mémoire Sémantique</CardTitle>
           </CardHeader>
           <CardContent>
-            <MemorySearchBar />
+            <MemorySearchBar userId={userId} />
           </CardContent>
         </Card>
       </section>
