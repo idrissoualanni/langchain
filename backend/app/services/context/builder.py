@@ -38,6 +38,7 @@ from app.schemas.context import (
     BuiltContext,
     ContextStats,
     DocumentContextInfo,
+    FallbackDecision,
     KnowledgeResult,
     KnowledgeSearchResult,
     ResolvedTools,

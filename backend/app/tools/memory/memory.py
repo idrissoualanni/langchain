@@ -18,6 +18,7 @@ from app.services.memory.memory import (
     save_fact,
     search_facts,
     update_fact,
+    write_profile,
 )
 
 # Import des nouveaux tools (aliases vers les noms officiels)

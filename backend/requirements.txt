@@ -16,7 +16,6 @@ langchain
 langchain-core
 langchain-ollama
 langgraph
-langgraph-checkpoint-sqlite
 langsmith
 # --- Langfuse observabilité (traces agent, auto-hébergé v4) ---
 # Épinglé : le CallbackHandler LangChain du SDK v4 n'accepte plus

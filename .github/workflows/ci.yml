@@ -14,9 +14,11 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    # dev = branche d'intégration (AGENTS.md) : la CI doit y tourner
+    # AVANT le merge vers master, pas seulement après.
+    branches: [master, dev, "task/**"]
   pull_request:
-    branches: [master]
+    branches: [master, dev]
   workflow_dispatch:
 
 # Évite l'accumulation de runs sur les pushes successifs d'une même branche.
@@ -56,12 +58,31 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: |
+            backend/requirements.lock
+            backend/requirements-dev.txt
 
       - name: Install dependencies
-        # Échoue explicitement si un package n'existe pas sur PyPI
-        # ( cf. bug « deepgram » qui a cassé Render ).
-        run: pip install --no-input -r requirements.txt
+        # Mêmes versions que l'image Render ( requirements.lock ), puis les
+        # outils de test. Échoue si un package n'existe pas sur PyPI.
+        run: |
+          pip install --no-input -r requirements.lock
+          pip install --no-input -r requirements-dev.txt
+
+      - name: Lock à jour
+        # requirements.txt modifié sans regénérer le verrou → échec. uv
+        # réutilise les versions déjà figées : seul un changement de
+        # requirements.txt fait bouger le fichier.
+        run: |
+          pip install --no-input uv
+          grep -v '^#' requirements.lock > requirements.lock.check
+          uv pip compile requirements.txt --python-version 3.11 --python-platform x86_64-manylinux_2_28 --no-header -o requirements.lock.check
+          grep -v '^#' requirements.lock | diff - requirements.lock.check
+
+      - name: Ruff (erreurs bloquantes uniquement)
+        # Syntaxe, noms non définis, imports invalides : ce qui casse au
+        # runtime. Le style n'est pas un critère de CI ici.
+        run: ruff check app tests scripts --select E9,F63,F7,F82
 
       - name: Syntax check ( compileall )
         # `../agent` = l'agent LiveKit Cloud ( projet autonome ). Docker
@@ -93,7 +114,12 @@ jobs:
         run: python -c "from app.tools import all_tools; assert len(all_tools) > 0; print(f'{len(all_tools)} tools registered')"
 
       - name: Run tests
-        run: python -m pytest tests -q --no-header
+        # Bloquant. Les tests @pytest.mark.integration (Neon requis) sont
+        # sautés automatiquement : la CI n'a pas de base.
+        run: python -m pytest -q --no-header -m "not integration"
+
+      - name: Audit des dépendances (informatif)
+        run: pip-audit -r requirements.lock --progress-spinner off
         continue-on-error: true
 
   # --------------------------------------------------------------------------
@@ -110,10 +136,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Node 20
+      - name: Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -124,13 +150,15 @@ jobs:
 
       - name: Lint (oxlint)
         run: npm run lint
-        continue-on-error: true
+
+      - name: Tests (Vitest)
+        run: npm test
 
       - name: Build (tsc + vite)
         env:
           # Variables publiques minimales : le build ne doit pas dépendre
           # d'un backend live pour réussir.
-          VITE_API_BASE_URL: http://localhost:8000
+          VITE_API_URL: http://localhost:8000
         run: npm run build
 
       - name: Upload build artifact

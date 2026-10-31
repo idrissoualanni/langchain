@@ -4,7 +4,8 @@
 # `live` ), déployé depuis le dossier `agent/` de la racine du dépôt.
 #
 # Base : slim pour réduire la taille. Aucune dépendance de l'agent vocal
-# ( livekit-agents, silero, onnxruntime ) : elles vivent dans agent/.
+# ( livekit-agents, silero ) : elles vivent dans agent/. onnxruntime et av
+# restent, tirés par faster-whisper ( transcription du VideoSubgraph ).
 #
 # MCP ( §39–§41 ) : l'image embarque la couche Model Context Protocol
 # ( mcp + langchain-mcp-adapters ) et le backend Google Calendar. Les
@@ -26,9 +27,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copie d'abord les dépendances : cache Docker préservé tant que
-# requirements.txt ne change pas.
-COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+# requirements.lock ne change pas.
+# requirements.lock : versions figées ( build reproductible — un paquet
+# publié entre deux builds ne peut plus casser la prod sans changement de
+# code ). requirements.txt reste la source éditée à la main.
+COPY requirements.lock .
+RUN pip install --no-cache-dir --user -r requirements.lock
 
 # ------------------------------------------------------------------
 # Runtime
