@@ -279,9 +279,12 @@ check(
 
 # ---------- 6. SSE ----------
 req = urllib.request.Request(
-    f"{BASE}/api/chat/stream?user_id={ua['user_id']}"
-    f"&thread_id={tid}&message=test",
-    headers={"Authorization": f"Bearer {ta_a}"},
+    f"{BASE}/api/chat/stream",
+    data=json.dumps(
+        {"user_id": ua["user_id"], "thread_id": tid, "message": "test"}
+    ).encode(),
+    headers={"Authorization": f"Bearer {ta_a}", "Content-Type": "application/json"},
+    method="POST",
 )
 try:
     with urllib.request.urlopen(req, timeout=90) as resp:
@@ -297,9 +300,12 @@ check(
 )
 
 req = urllib.request.Request(
-    f"{BASE}/api/chat/stream?user_id={ua['user_id']}"
-    f"&thread_id={tid}&message=test",
-    headers={"Authorization": "Bearer invalid-sse"},
+    f"{BASE}/api/chat/stream",
+    data=json.dumps(
+        {"user_id": ua["user_id"], "thread_id": tid, "message": "test"}
+    ).encode(),
+    headers={"Authorization": "Bearer invalid-sse", "Content-Type": "application/json"},
+    method="POST",
 )
 try:
     with urllib.request.urlopen(req, timeout=30) as resp:

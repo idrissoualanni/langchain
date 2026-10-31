@@ -9,7 +9,7 @@
 // Endpoints consommés (tous préexistants, sauf les deux ajouts
 // documentés de la mission) :
 //   POST /api/chat                      — run complet (fallback)
-//   GET  /api/chat/stream               — run streamé SSE (pipeline)
+//   POST /api/chat/stream               — run streamé SSE (pipeline)
 //   GET/POST /api/users/{id}/threads    — threads (préexistant)
 //   PUT  /api/threads/{id}              — renommage (ajout mission)
 //   GET  /api/threads/{id}/state        — historique checkpointer
@@ -29,6 +29,7 @@ import {
   ApiError,
   apiFetch as jsonFetch,
   apiFetchRaw,
+  readErrorDetail,
 } from '../api/base';
 
 // ------------------------------------------------------------------
@@ -242,7 +243,7 @@ function classifyActivityEvent(
 }
 
 /**
- * Run streamé via GET /api/chat/stream (SSE pipeline backend).
+ * Run streamé via POST /api/chat/stream (SSE pipeline backend).
  * AbortSignal → Stop generation (Cancel du Composer officiel).
  */
 export async function streamChat(
@@ -258,43 +259,43 @@ export async function streamChat(
   workflow?: string | null,
   payload?: Record<string, string> | null,
 ): Promise<void> {
-  const params = new URLSearchParams({
+  const body = JSON.stringify({
     user_id: userId,
     thread_id: threadId,
     message,
+    ...(model ? { model } : {}),
+    ...(workflow ? { workflow } : {}),
+    ...(payload && Object.keys(payload).length > 0 ? { payload } : {}),
   });
-  if (model) params.set('model', model);
-  if (workflow) params.set('workflow', workflow);
-  // Le payload est un objet → sérialisé en JSON dans l'URL (le backend
-  // le décode ; un JSON invalide y est ignoré + tracé, jamais un 400).
-  if (payload && Object.keys(payload).length > 0) {
-    params.set('payload', JSON.stringify(payload));
+
+  // POST + corps JSON : le message ne transite plus par l'URL (journaux
+  // d'accès) et la requête passe sous le contrôle d'Origine du backend.
+  const res = await apiFetchRaw('/api/chat/stream', {
+    method: 'POST',
+    headers: {
+      Accept: 'text/event-stream',
+      'Content-Type': 'application/json',
+    },
+    body,
+    signal,
+  });
+
+  // Un refus (403/429…) ou une panne serveur n'est PAS un motif de
+  // repli : rejouer sur POST /api/chat relancerait un run complet et
+  // contournerait la limite de débit.
+  if (!res.ok) {
+    throw new ApiError(res.status, await readErrorDetail(res));
   }
 
-  // Mission Identité (§17) : le token passe en HEADER ( jamais en
-  // URL ) — fetch streaming SSE , solution compatible headers.
-  const res = await apiFetchRaw(
-    `/api/chat/stream?${params.toString()}`,
-    { headers: { Accept: 'text/event-stream' }, signal },
-  );
-
-  if (!res.ok || !res.body) {
-    // Fallback officiel documenté (api/agent.ts existant) : POST
+  if (!res.body) {
+    // Réponse sans flux lisible (navigateur sans ReadableStream) :
+    // repli sur le run complet.
     const fallback = await jsonFetch<{
       response: string;
       agent_response: unknown;
     }>('/api/chat', {
       method: 'POST',
-      body: JSON.stringify({
-        user_id: userId,
-        thread_id: threadId,
-        message,
-        ...(model ? { model } : {}),
-        ...(workflow ? { workflow } : {}),
-        ...(payload && Object.keys(payload).length > 0
-          ? { payload }
-          : {}),
-      }),
+      body,
     });
     handlers.onAssistantChunk?.(fallback.response);
     handlers.onAgentResponse?.(
