@@ -40,8 +40,11 @@ router = APIRouter(prefix="/api/health", tags=["health"])
 @router.get("", response_model=HealthResponse)
 def api_health() -> HealthResponse:
     """Statut des composants : Ollama, LangGraph, base Neon."""
-    # Vérification légère sans importer le graph complet
-    langgraph_ok = True  # On suppose OK si l'app démarre
+    # Réel : l'agent est construit au lifespan ; s'il a échoué
+    # (AGENT_INIT_ERROR), le service répond mais ne peut pas converser.
+    from app.graph.main.graph import is_agent_ready
+
+    langgraph_ok = is_agent_ready()
 
     # Modèle défaut : registry models.yaml (source de vérité §6-§7) —
     # l'ancienne variable d'env MODEL_NAME a été supprimée.
