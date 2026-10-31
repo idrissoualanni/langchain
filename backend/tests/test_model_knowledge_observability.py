@@ -107,6 +107,7 @@ def test_model_resolver_disabled_model():
 # KNOWLEDGE ACCESS CONTROL TESTS
 # ============================================================
 
+@pytest.mark.integration
 def test_knowledge_access_public():
     """Test: Accès public autorisé."""
     from app.services.knowledge.resolver import check_access
@@ -121,6 +122,7 @@ def test_knowledge_access_public():
     print(f"✓ test_knowledge_access_public (allowed={allowed_result.allowed})")
 
 
+@pytest.mark.integration
 def test_knowledge_access_private_owner():
     """Test: Accès private autorisé au propriétaire."""
     from app.services.knowledge.resolver import check_access
@@ -136,6 +138,7 @@ def test_knowledge_access_private_owner():
     print(f"✓ test_knowledge_access_private_owner (allowed={allowed_result.allowed})")
 
 
+@pytest.mark.integration
 def test_knowledge_access_private_non_owner():
     """Test: Accès private refusé au non-propriétaire."""
     from app.services.knowledge.resolver import check_access
@@ -151,6 +154,7 @@ def test_knowledge_access_private_non_owner():
     print("✓ test_knowledge_access_private_non_owner")
 
 
+@pytest.mark.integration
 def test_knowledge_access_group_member():
     """Test: Accès group autorisé au membre."""
     from app.services.knowledge.resolver import check_access
@@ -164,6 +168,7 @@ def test_knowledge_access_group_member():
     print(f"✓ test_knowledge_access_group_member (allowed={allowed_result.allowed})")
 
 
+@pytest.mark.integration
 def test_knowledge_access_user_scope():
     """Test: Accès user scope."""
     from app.services.knowledge.resolver import check_access
@@ -191,6 +196,7 @@ def test_knowledge_access_admin_override():
     print("✓ test_knowledge_access_admin_override")
 
 
+@pytest.mark.integration
 def test_knowledge_access_cross_user_isolation():
     """Test: Isolation cross-user."""
     from app.services.knowledge.resolver import check_access
@@ -215,6 +221,7 @@ def test_knowledge_access_cross_user_isolation():
     print("✓ test_knowledge_access_cross_user_isolation")
 
 
+@pytest.mark.integration
 def test_knowledge_access_cross_group_isolation():
     """Test: Isolation cross-group."""
     from app.services.knowledge.resolver import check_access
