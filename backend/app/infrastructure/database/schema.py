@@ -336,6 +336,29 @@ _TABLES = [
     "ON agent_events(thread_id) WHERE thread_id <> ''",
     "CREATE INDEX IF NOT EXISTS idx_agent_events_level "
     "ON agent_events(level)",
+    # ---------------------------------------------------------------
+    # Mémoire cognitive — faits / profil / préférences vectorisés.
+    # Créée à la dimension du provider ( et non vector(1536) figé ) ;
+    # embedding_model = espace d'embedding ( cognitive_store.
+    # embedding_model_id ) : la recherche ne compare que des vecteurs
+    # du même modèle. Une base existante d'une autre dimension se
+    # migre avec scripts/reembed_cognitive_memories.py.
+    # ---------------------------------------------------------------
+    """
+    CREATE TABLE IF NOT EXISTS user_cognitive_memories (
+        id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id         TEXT NOT NULL,
+        content         TEXT NOT NULL,
+        embedding       vector(__DIM__),
+        embedding_model TEXT,
+        metadata        JSONB DEFAULT '{}'::jsonb,
+        memory_type     TEXT,
+        created_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        updated_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_cognitive_memories_user_id "
+    "ON user_cognitive_memories(user_id)",
 ]
 
 
@@ -423,6 +446,20 @@ def init_schema() -> None:
                     conn.execute(
                         text("ALTER TABLE mcp_files ADD COLUMN deleted_at TEXT")
                     )
+            # user_cognitive_memories.embedding_model : absente des bases
+            # créées par migrations/sql/cognitive_memory_setup.sql. Ajout
+            # idempotent ; les lignes existantes restent NULL jusqu'au
+            # ré-embedding ( elles sont d'un ancien modèle ).
+            if insp.has_table("user_cognitive_memories"):
+                cols = {
+                    c["name"]
+                    for c in insp.get_columns("user_cognitive_memories")
+                }
+                if "embedding_model" not in cols:
+                    conn.execute(text(
+                        "ALTER TABLE user_cognitive_memories "
+                        "ADD COLUMN embedding_model TEXT"
+                    ))
         log_event(
             "NEON_SCHEMA_INIT",
             message=(

@@ -62,22 +62,40 @@ def read_profile_for_api(user_id: str) -> dict:
     """Version de read_profile pour l'API (sécurisée)."""
     return read_profile(user_id)
 
-def update_fact(user_id: str, fact_id: str, content: str, thread_id: str = "") -> dict:
-    """Met à jour un fait existant via le CognitiveStore."""
-    from app.services.memory.cognitive_store import cognitive_store
-    try:
-        if hasattr(cognitive_store, "update_memory"):
-            cognitive_store.update_memory(user_id, fact_id, content)
-        else:
-            # Fallback delete + save
-            if hasattr(cognitive_store, "delete_memory"):
-                cognitive_store.delete_memory(user_id, fact_id)
-            cognitive_store.save_memory(user_id, content)
+def _fact(memory: dict) -> dict:
+    """Souvenir du CognitiveStore → contrat MemoryFact (API + tools)."""
+    meta = memory.get("metadata") or {}
+    return {
+        "id": memory["id"],
+        "category": memory.get("type") or "",
+        "content": memory["content"],
+        "source": meta.get("source", "user"),
+        "confidence": float(meta.get("confidence", 1.0)),
+        "created_at": memory.get("created_at", ""),
+        "updated_at": memory.get("updated_at", ""),
+    }
 
-        return {"updated": fact_id, "content": content}
+def update_fact(
+    user_id: str,
+    fact_id: str,
+    content: str | None = None,
+    category: str | None = None,
+    confidence: float | None = None,
+    thread_id: str = "",
+) -> dict:
+    """Modifie UN fait en place. ValueError s'il n'existe pas pour ce user."""
+    from app.services.memory.cognitive_store import cognitive_store
+    patch = {"confidence": confidence} if confidence is not None else None
+    try:
+        updated = cognitive_store.update_memory(
+            user_id, fact_id, content=content, memory_type=category, metadata_patch=patch
+        )
     except Exception as exc:
         log_event("MEMORY_UPDATE_ERROR", level="ERROR", message=f"Update failed: {exc}", user_id=user_id)
         raise
+    if updated is None:
+        raise ValueError(f"Fait introuvable : {fact_id}")
+    return _fact(updated)
 
 def patch_profile(user_id: str, fields: dict, thread_id: str = "") -> dict:
     """Met à jour partiellement le profil utilisateur via le CognitiveStore."""
@@ -88,37 +106,23 @@ def patch_profile(user_id: str, fields: dict, thread_id: str = "") -> dict:
 # ------------------------------------------------------------------
 
 def read_profile(user_id: str) -> dict:
-    """Lit le profil utilisateur depuis le CognitiveStore.
+    """Lit le profil utilisateur (le plus récent) depuis le CognitiveStore.
 
-    Retourne {"name": ..., "description": ...}.
+    Retourne {"name": ..., "description": ...}. Lecture directe du dernier
+    profil écrit : l'ancienne recherche sémantique (limit=1) pouvait
+    renvoyer n'importe quel souvenir et ignorer le profil.
     """
     from app.services.memory.cognitive_store import cognitive_store
     thread_id = _current_thread_id()
     try:
-        # On récupère le profil via une recherche sémantique ciblée sur le type 'profile'
-        memories = cognitive_store.retrieve_memories(
-            user_id=user_id,
-            query="profil utilisateur nom description",
-            limit=1
-        )
-
-        profile = {"name": None, "description": None}
-        if memories:
-            # On extrait les infos du premier résultat pertinent
-            meta = memories[0].get("metadata", {})
-            if meta.get("type") == "profile":
-                profile = {
-                    "name": meta.get("name"),
-                    "description": meta.get("description")
-                }
-
+        meta = cognitive_store.latest_profile(user_id) or {}
         log_event(
             "MEMORY_READ",
             message=f"Profile read via CognitiveStore | user={user_id}",
             user_id=user_id,
             thread_id=thread_id,
         )
-        return profile
+        return {"name": meta.get("name"), "description": meta.get("description")}
     except Exception as exc:
         log_event("MEMORY_READ_ERROR", level="ERROR", message=f"Profile read failed: {exc}", user_id=user_id)
         raise
@@ -130,15 +134,25 @@ def write_profile(user_id: str, fields: dict, thread_id: str = "") -> dict:
         thread_id = _current_thread_id()
 
     try:
+        # Fusion avec le profil courant : un patch partiel (le nom seul)
+        # ne doit pas effacer la description, puisque seul le DERNIER
+        # profil écrit est relu (read_profile).
+        current = cognitive_store.latest_profile(user_id) or {}
+        merged = {
+            "name": current.get("name"),
+            "description": current.get("description"),
+            **{k: v for k, v in fields.items() if v is not None},
+        }
         # On enregistre le profil comme un souvenir spécial de type 'identity'
         # pour qu'il soit indexé vectoriellement tout en restant identifiable via metadata
-        content = f"Profil utilisateur : {fields.get('name', '')} - {fields.get('description', '')}"
+        content = f"Profil utilisateur : {merged.get('name') or ''} - {merged.get('description') or ''}"
         cognitive_store.save_memory(
             user_id=user_id,
             content=content,
             memory_type="identity",
-            metadata={"type": "profile", **fields}
+            metadata={**merged, "type": "profile"}
         )
+        fields = {"name": merged.get("name"), "description": merged.get("description")}
 
         log_event(
             "MEMORY_WRITE",
@@ -169,14 +183,12 @@ def save_fact(
         thread_id = _current_thread_id()
 
     try:
-        # Le CognitiveStore gère l'embedding et l'insertion Neon
         memory_id = cognitive_store.save_memory(
             user_id=user_id,
             content=content,
             memory_type=category,
             metadata={"source": source, "confidence": confidence}
         )
-
         log_event(
             "MEMORY_WRITE",
             message=f"Fact saved to Neon | user={user_id} | cat={category}",
@@ -184,10 +196,20 @@ def save_fact(
             thread_id=thread_id,
             extra={"memory_id": memory_id, "category": category}
         )
-        return {"id": memory_id, "content": content, "category": category}
     except Exception as exc:
         log_event("MEMORY_WRITE_ERROR", level="ERROR", message=f"Fact save failed: {exc}", user_id=user_id)
         raise
+
+    saved = cognitive_store.get_memory(user_id, memory_id)
+    if saved is not None:
+        return _fact(saved)
+    # Pas de base (dev sans DATABASE_URL) : fait non persisté.
+    now = _now()
+    return {
+        "id": memory_id, "category": category, "content": content,
+        "source": source, "confidence": confidence,
+        "created_at": now, "updated_at": now,
+    }
 
 def search_facts(
     user_id: str,
@@ -196,65 +218,62 @@ def search_facts(
     limit: int = 10,
     thread_id: str = "",
 ) -> list[dict]:
-    """Recherche hybride (Sémantique + Lexical) via le HybridRetriever."""
-    from app.services.memory.hybrid_retriever import default_hybrid_retriever
+    """Recherche sémantique dans les faits DE CET utilisateur.
+
+    Passe par le CognitiveStore, où vivent les faits. L'ancien appel au
+    HybridRetriever ciblait le corpus de connaissances d'une MATIÈRE
+    (subject_id) et levait TypeError sur `user_id` : la route
+    /memory/search répondait 500 à chaque requête.
+    """
+    from app.services.memory.cognitive_store import cognitive_store
     if thread_id == "":
         thread_id = _current_thread_id()
 
     try:
-        # Utilisation du nouveau moteur de recherche "Sens Réel"
-        results = default_hybrid_retriever.retrieve(
-            user_id=user_id,
-            query=query,
-            limit=limit
+        results = cognitive_store.retrieve_memories(
+            user_id=user_id, query=query, limit=limit, min_score=0.0
         )
-
-        # Filtrage par catégorie si demandé
+        facts = [_fact(m) for m in results]
         if category:
-            results = [r for r in results if r.get("type") == category]
+            facts = [f for f in facts if f["category"] == category]
 
         log_event(
             "MEMORY_SEARCH",
-            message=f"Hybrid search Neon | user={user_id} | results={len(results)}",
+            message=f"Semantic search Neon | user={user_id} | results={len(facts)}",
             user_id=user_id,
             thread_id=thread_id,
-            extra={"query": query[:100], "results": len(results)}
+            extra={"query": query[:100], "results": len(facts)}
         )
-        return results
+        return facts
     except Exception as exc:
         log_event("MEMORY_SEARCH_ERROR", level="ERROR", message=f"Search failed: {exc}", user_id=user_id)
         raise
 
 def list_facts(user_id: str, category: str | None = None, thread_id: str = "", limit: int = 100) -> list[dict]:
-    """Liste les faits depuis Neon (via recherche sémantique large)."""
+    """Liste les faits d'un utilisateur, du plus récent au plus ancien."""
     from app.services.memory.cognitive_store import cognitive_store
-    if thread_id == "":
-        thread_id = _current_thread_id()
-
     try:
-        # On utilise le CognitiveStore pour récupérer les souvenirs sans filtre de requête spécifique
-        facts = cognitive_store.retrieve_memories(user_id=user_id, query="", limit=limit)
-        if category:
-            facts = [f for f in facts if f.get("type") == category]
-        return facts
+        memories = cognitive_store.list_memories(user_id, memory_type=category, limit=limit)
+        return [_fact(m) for m in memories]
     except Exception as exc:
         log_event("MEMORY_READ_ERROR", level="ERROR", message=f"List facts failed: {exc}", user_id=user_id)
         return []
 
 def delete_fact(user_id: str, fact_id: str, thread_id: str = "") -> dict:
-    """Supprime un fait dans Neon via le CognitiveStore."""
+    """Supprime un fait. ValueError s'il n'existe pas pour cet utilisateur.
+
+    L'ancienne version ne supprimait rien (méthode absente du store) tout
+    en répondant {"deleted": id} : l'utilisateur croyait sa donnée effacée.
+    """
     from app.services.memory.cognitive_store import cognitive_store
     try:
-        # On suppose que delete_memory sera implémenté dans CognitiveStore
-        if hasattr(cognitive_store, "delete_memory"):
-            cognitive_store.delete_memory(user_id, fact_id)
-        else:
-            logger.warning("delete_memory not yet implemented in CognitiveStore")
-
-        return {"deleted": fact_id}
+        deleted = cognitive_store.delete_memory(user_id, fact_id)
     except Exception as exc:
         log_event("MEMORY_DELETE_ERROR", level="ERROR", message=f"Delete failed: {exc}", user_id=user_id)
         raise
+    if not deleted:
+        raise ValueError(f"Fait introuvable : {fact_id}")
+    return {"deleted": fact_id}
 
 def memory_overview_for_api(user_id: str) -> dict:
     """Vue complète pour le frontend utilisant le moteur cognitif."""
@@ -264,7 +283,7 @@ def memory_overview_for_api(user_id: str) -> dict:
 
         by_category = {cat: [] for cat in FACT_CATEGORIES}
         for f in facts:
-            cat = f.get("type")
+            cat = f["category"]
             if cat in by_category:
                 by_category[cat].append(f)
 
@@ -275,5 +294,12 @@ def memory_overview_for_api(user_id: str) -> dict:
             "total_facts": len(facts),
             "categories": list(FACT_CATEGORIES),
         }
-    except Exception:
-        return {"user_id": user_id, "identity": {}, "facts_by_category": {}, "total_facts": 0}
+    except Exception as exc:
+        log_event("MEMORY_READ_ERROR", level="ERROR", message=f"Overview failed: {exc}", user_id=user_id)
+        return {
+            "user_id": user_id,
+            "identity": {},
+            "facts_by_category": {},
+            "total_facts": 0,
+            "categories": list(FACT_CATEGORIES),
+        }

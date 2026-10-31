@@ -104,7 +104,8 @@ class TestCognitiveMemoryIntegration:
         for d in user_data:
             score = cosine_similarity(q_vec, provider.embed_text(d["content"]))
             if score >= min_score:
-                rows.append((d["content"], "{}", "fact", score))
+                rows.append((d["id"], d["content"], "{}", "fact",
+                             "2026-10-31", "2026-10-31", score))
         return rows
 
     def test_sovereignty(self, mock_embedding_provider):
@@ -124,7 +125,11 @@ class TestCognitiveMemoryIntegration:
                     result = MagicMock()
                     result.scalar.return_value = mid
                     return result
-                if "SELECT content" in query_str:
+                if "pg_attribute" in query_str:
+                    result = MagicMock()
+                    result.first.return_value = None  # dimension inconnue
+                    return result
+                if "SELECT id, content" in query_str:
                     uid = params["user_id"]
                     # La query est le dernier texte embarqué AVANT le SELECT
                     # (retrieve_memories appelle embed_text(query) juste
@@ -175,7 +180,11 @@ class TestCognitiveMemoryIntegration:
                     result = MagicMock()
                     result.scalar.return_value = mid
                     return result
-                if "SELECT content" in query_str:
+                if "pg_attribute" in query_str:
+                    result = MagicMock()
+                    result.first.return_value = None  # dimension inconnue
+                    return result
+                if "SELECT id, content" in query_str:
                     uid = params["user_id"]
                     rows = self._select_rows(
                         storage.get(uid, []),
@@ -280,7 +289,11 @@ class TestCognitiveMemoryIntegration:
                     result = MagicMock()
                     result.scalar.return_value = mid
                     return result
-                if "SELECT content" in query_str:
+                if "pg_attribute" in query_str:
+                    result = MagicMock()
+                    result.first.return_value = None  # dimension inconnue
+                    return result
+                if "SELECT id, content" in query_str:
                     uid = params["user_id"]
                     rows = self._select_rows(
                         storage.get(uid, []),

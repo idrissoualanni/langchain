@@ -3,15 +3,65 @@ from __future__ import annotations
 import logging
 import json
 from datetime import datetime, timezone
-from typing import Any, Literal, Optional
+from typing import Any
+
+import uuid
 
 from sqlalchemy import create_engine, text
 from app.config import DATABASE_URL
+from app.core.exceptions import AppMemoryError
 from app.infrastructure.database.persistence import _postgres_url
 from app.logging.events import log_event
 from app.services.context.semantic.provider import get_embedding_provider
 
 logger = logging.getLogger(__name__)
+
+_TABLE = "user_cognitive_memories"
+_COLUMNS = "id, content, metadata, memory_type, created_at, updated_at"
+# Le profil est rangé comme un souvenir (metadata.type = 'profile') : il
+# ne doit jamais apparaître parmi les faits.
+_NOT_PROFILE = "COALESCE(metadata->>'type', '') <> 'profile'"
+
+
+def embedding_model_id(provider: Any) -> str:
+    """Identifiant de l'espace d'embedding : classe du provider + modèle.
+
+    Deux modèles différents produisent des espaces incomparables, même à
+    dimension égale : la recherche ne compare que des vecteurs du même
+    espace (colonne `embedding_model`).
+    """
+    return f"{type(provider).__name__}:{getattr(provider, '_model', '')}"
+
+
+def _vec_literal(vec: list[float]) -> str:
+    return f"[{','.join(map(str, vec))}]"
+
+
+def _as_uuid(value: str) -> str | None:
+    """UUID normalisé, ou None si `value` n'en est pas un (→ introuvable)."""
+    try:
+        return str(uuid.UUID(str(value)))
+    except (ValueError, AttributeError, TypeError):
+        return None
+
+
+def _iso(value: Any) -> str:
+    return value.isoformat() if hasattr(value, "isoformat") else str(value or "")
+
+
+def _row_to_memory(row: Any) -> dict:
+    metadata = row[2]
+    if isinstance(metadata, str):
+        metadata = json.loads(metadata)
+    return {
+        "id": str(row[0]),
+        "content": row[1],
+        "metadata": metadata or {},
+        "type": row[3],
+        "created_at": _iso(row[4]),
+        "updated_at": _iso(row[5]),
+    }
+
 
 class CognitiveStore:
     """
@@ -24,6 +74,7 @@ class CognitiveStore:
     def __init__(self):
         self._engine = None
         self._embedding_dim = None
+        self._column_dim: int | None = None
 
     def _get_engine(self):
         if self._engine is None:
@@ -39,11 +90,48 @@ class CognitiveStore:
             self._embedding_dim = len(sample)
         return self._embedding_dim
 
+    def _get_column_dim(self, conn) -> int | None:
+        """Dimension déclarée de la colonne `embedding` (pgvector : atttypmod)."""
+        if self._column_dim is None:
+            row = conn.execute(text(
+                "SELECT atttypmod FROM pg_attribute "
+                "WHERE attrelid = to_regclass(:t) AND attname = 'embedding'"
+            ), {"t": _TABLE}).first()
+            if row is not None and isinstance(row[0], int) and row[0] > 0:
+                self._column_dim = int(row[0])
+        return self._column_dim
+
+    def _embed(self, conn, content: str) -> tuple[str, str]:
+        """Embedding de `content` + identifiant de modèle — dimension vérifiée.
+
+        Refuse explicitement un vecteur dont la dimension diffère de la
+        colonne, plutôt que de le tronquer ou de le compléter : un vecteur
+        ajusté à la taille de la colonne n'appartient plus au même espace
+        que les autres, et la similarité cosinus perd tout sens.
+        """
+        provider = get_embedding_provider()
+        vec = provider.embed_text(content)
+        column_dim = self._get_column_dim(conn)
+        if column_dim is not None and len(vec) != column_dim:
+            log_event(
+                "EMBEDDING_DIM_MISMATCH",
+                level="ERROR",
+                message=(
+                    f"{_TABLE}.embedding est vector({column_dim}) mais le "
+                    f"provider produit {len(vec)} dimensions — lancer "
+                    "scripts/reembed_cognitive_memories.py"
+                ),
+            )
+            raise AppMemoryError(
+                f"Dimension d'embedding incompatible ({len(vec)} ≠ {column_dim})"
+            )
+        return _vec_literal(vec), embedding_model_id(provider)
+
     def save_memory(
         self,
         user_id: str,
         content: str,
-        memory_type: Literal["fact", "preference", "experience"] = "fact",
+        memory_type: str = "fact",
         metadata: dict[str, Any] = None
     ) -> str:
         metadata = metadata or {}
@@ -54,21 +142,19 @@ class CognitiveStore:
             return "fallback_id"
 
         try:
-            provider = get_embedding_provider()
-            embedding = provider.embed_text(content)
-            embedding_str = f"[{','.join(map(str, embedding))}]"
-
             with engine.begin() as conn:
+                embedding_str, model = self._embed(conn, content)
                 query = text("""
                     INSERT INTO user_cognitive_memories
-                    (user_id, content, embedding, metadata, memory_type, updated_at)
-                    VALUES (:user_id, :content, :embedding, :metadata, :memory_type, :now)
+                    (user_id, content, embedding, embedding_model, metadata, memory_type, updated_at)
+                    VALUES (:user_id, :content, :embedding, :model, :metadata, :memory_type, :now)
                     RETURNING id
                 """)
                 result = conn.execute(query, {
                     "user_id": user_id,
                     "content": content,
                     "embedding": embedding_str,
+                    "model": model,
                     "metadata": json.dumps(metadata) if isinstance(metadata, dict) else metadata,
                     "memory_type": memory_type,
                     "now": datetime.now(timezone.utc)
@@ -103,15 +189,16 @@ class CognitiveStore:
             return []
 
         try:
-            provider = get_embedding_provider()
-            query_embedding = provider.embed_text(query)
-            embedding_str = f"[{','.join(map(str, query_embedding))}]"
-
             with engine.connect() as conn:
-                sql = text("""
-                    SELECT content, metadata, memory_type, 1 - (embedding <=> :embedding) as score
+                embedding_str, model = self._embed(conn, query)
+                # Seuls les vecteurs du MÊME espace sont comparables : les
+                # lignes d'un ancien modèle attendent leur ré-embedding.
+                sql = text(f"""
+                    SELECT {_COLUMNS}, 1 - (embedding <=> :embedding) as score
                     FROM user_cognitive_memories
                     WHERE user_id = :user_id
+                    AND embedding_model = :model
+                    AND {_NOT_PROFILE}
                     AND 1 - (embedding <=> :embedding) >= :min_score
                     ORDER BY embedding <=> :embedding
                     LIMIT :limit
@@ -119,18 +206,16 @@ class CognitiveStore:
                 result = conn.execute(sql, {
                     "user_id": user_id,
                     "embedding": embedding_str,
+                    "model": model,
                     "min_score": min_score,
                     "limit": limit
                 })
 
                 memories = []
                 for row in result:
-                    memories.append({
-                        "content": row[0],
-                        "metadata": json.loads(row[1]) if isinstance(row[1], str) else row[1],
-                        "type": row[2],
-                        "score": float(row[3])
-                    })
+                    memory = _row_to_memory(row)
+                    memory["score"] = float(row[6])
+                    memories.append(memory)
 
                 log_event(
                     "COGNITIVE_MEM_READ",
@@ -147,6 +232,126 @@ class CognitiveStore:
                 user_id=user_id
             )
             return []
+
+    def list_memories(
+        self, user_id: str, memory_type: str | None = None, limit: int = 100
+    ) -> list[dict]:
+        """Souvenirs d'un utilisateur, du plus récent au plus ancien (hors profil).
+
+        Lecture SQL directe : lister n'est pas chercher. L'ancienne version
+        passait par une recherche sémantique sur une requête vide, filtrée
+        par un score minimum — elle renvoyait un sous-ensemble arbitraire.
+        """
+        engine = self._get_engine()
+        if engine is None:
+            return []
+        type_filter = "AND memory_type = :memory_type" if memory_type else ""
+        with engine.connect() as conn:
+            rows = conn.execute(text(f"""
+                SELECT {_COLUMNS} FROM user_cognitive_memories
+                WHERE user_id = :user_id AND {_NOT_PROFILE} {type_filter}
+                ORDER BY updated_at DESC
+                LIMIT :limit
+            """), {"user_id": user_id, "memory_type": memory_type, "limit": limit})
+            return [_row_to_memory(r) for r in rows]
+
+    def get_memory(self, user_id: str, memory_id: str) -> dict | None:
+        """Un souvenir de CET utilisateur, ou None (absent ou d'autrui)."""
+        mid = _as_uuid(memory_id)
+        engine = self._get_engine()
+        if mid is None or engine is None:
+            return None
+        with engine.connect() as conn:
+            row = conn.execute(text(f"""
+                SELECT {_COLUMNS} FROM user_cognitive_memories
+                WHERE id = CAST(:id AS uuid) AND user_id = :user_id
+            """), {"id": mid, "user_id": user_id}).first()
+        return _row_to_memory(row) if row is not None else None
+
+    def update_memory(
+        self,
+        user_id: str,
+        memory_id: str,
+        content: str | None = None,
+        memory_type: str | None = None,
+        metadata_patch: dict[str, Any] | None = None,
+    ) -> dict | None:
+        """Modifie un souvenir EN PLACE (ré-embedding si le contenu change).
+
+        Retourne le souvenir mis à jour, ou None s'il n'existe pas pour cet
+        utilisateur. L'ancien repli « supprimer puis réenregistrer » ne
+        supprimait rien (méthode absente) : chaque modification dupliquait.
+        """
+        current = self.get_memory(user_id, memory_id)
+        if current is None:
+            return None
+        metadata = {**current["metadata"], **(metadata_patch or {})}
+        engine = self._get_engine()
+        with engine.begin() as conn:
+            params: dict[str, Any] = {
+                "id": current["id"],
+                "user_id": user_id,
+                "memory_type": memory_type or current["type"],
+                "metadata": json.dumps(metadata),
+                "now": datetime.now(timezone.utc),
+            }
+            set_embedding = ""
+            if content is not None and content != current["content"]:
+                params["content"] = content
+                params["embedding"], params["model"] = self._embed(conn, content)
+                set_embedding = ", embedding = :embedding, embedding_model = :model"
+            else:
+                params["content"] = current["content"]
+            row = conn.execute(text(f"""
+                UPDATE user_cognitive_memories
+                SET content = :content, memory_type = :memory_type,
+                    metadata = :metadata, updated_at = :now{set_embedding}
+                WHERE id = CAST(:id AS uuid) AND user_id = :user_id
+                RETURNING {_COLUMNS}
+            """), params).first()
+        log_event(
+            "COGNITIVE_MEM_UPDATE",
+            message=f"Cognitive memory updated | user={user_id}",
+            user_id=user_id,
+            extra={"memory_id": current["id"]},
+        )
+        return _row_to_memory(row) if row is not None else None
+
+    def delete_memory(self, user_id: str, memory_id: str) -> bool:
+        """Supprime un souvenir de CET utilisateur. False s'il n'existe pas."""
+        mid = _as_uuid(memory_id)
+        engine = self._get_engine()
+        if mid is None or engine is None:
+            return False
+        with engine.begin() as conn:
+            deleted = conn.execute(text(
+                "DELETE FROM user_cognitive_memories "
+                "WHERE id = CAST(:id AS uuid) AND user_id = :user_id"
+            ), {"id": mid, "user_id": user_id}).rowcount
+        if deleted:
+            log_event(
+                "COGNITIVE_MEM_DELETE",
+                message=f"Cognitive memory deleted | user={user_id}",
+                user_id=user_id,
+                extra={"memory_id": mid},
+            )
+        return bool(deleted)
+
+    def latest_profile(self, user_id: str) -> dict | None:
+        """Métadonnées du profil le plus récent (metadata.type = 'profile')."""
+        engine = self._get_engine()
+        if engine is None:
+            return None
+        with engine.connect() as conn:
+            row = conn.execute(text("""
+                SELECT metadata FROM user_cognitive_memories
+                WHERE user_id = :user_id AND metadata->>'type' = 'profile'
+                ORDER BY updated_at DESC
+                LIMIT 1
+            """), {"user_id": user_id}).first()
+        if row is None:
+            return None
+        return json.loads(row[0]) if isinstance(row[0], str) else (row[0] or {})
 
     # --- Learning Map Implementation ---
 
