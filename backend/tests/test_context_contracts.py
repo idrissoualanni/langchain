@@ -14,6 +14,20 @@
 import sys
 import os
 
+# Script (aucune fonction test_) : il appelle le VRAI build_context dès
+# l'import, donc la base et le provider d'embeddings. Sans eux, la
+# collecte pytest bloquait plusieurs minutes et la CI dépassait son
+# délai. Sous pytest, il ne tourne que sur demande :
+#   RUN_LIVE_API_TESTS=1 pytest tests/test_context_contracts.py
+# Exécution directe inchangée : python tests/test_context_contracts.py
+if "pytest" in sys.modules and os.environ.get("RUN_LIVE_API_TESTS") != "1":
+    import pytest
+
+    pytest.skip(
+        "Script : exige la base et le provider d'embeddings (RUN_LIVE_API_TESTS=1)",
+        allow_module_level=True,
+    )
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
