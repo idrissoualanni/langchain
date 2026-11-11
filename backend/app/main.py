@@ -161,6 +161,21 @@ MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
 @app.middleware("http")
+async def catch_unhandled_inside_cors(request: Request, call_next):
+    """Transforme une exception non gérée en 500 JSON SOUS le CORS.
+
+    Sans lui, l'exception remontait jusqu'au ServerErrorMiddleware, AU-DESSUS
+    du CORSMiddleware : le 500 partait sans `Access-Control-Allow-Origin` et
+    le navigateur affichait une fausse « erreur CORS » masquant la vraie
+    panne. Déclaré en premier = middleware http le plus interne.
+    """
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        return await unhandled_exception_handler(request, exc)
+
+
+@app.middleware("http")
 async def enforce_origin(request: Request, call_next):
     """Rejette les requetes mutantes venues d'un site non autorisé.
 
@@ -208,6 +223,12 @@ async def security_headers(request: Request, call_next):
 # exactement ce qui rend le cookie `SameSite=None` utilisable, et c'est
 # aussi pourquoi ALLOWED_ORIGINS ne doit JAMAIS contenir `*` (le
 # navigateur le refuserait avec les credentials).
+# Rate limiting — global 30 req/min/user + limites par endpoint sensible.
+# Backend Redis ( REDIS_URL ) si dispo, sinon mémoire. 429 formaté
+# comme les AppError {code, detail}. Installé AVANT le CORS (donc plus
+# interne) : un 429 porte ainsi les en-têtes CORS et le front peut le lire.
+setup_rate_limiting(app)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -215,11 +236,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Rate limiting — global 30 req/min/user + limites par endpoint sensible.
-# Backend Redis ( REDIS_URL ) si dispo, sinon mémoire. 429 formaté
-# comme les AppError {code, detail}.
-setup_rate_limiting(app)
 
 # Routes API
 app.include_router(users.router)

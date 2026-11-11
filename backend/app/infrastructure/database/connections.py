@@ -308,6 +308,21 @@ def _is_connection_dead(exc: BaseException) -> bool:
     )
 
 
+def _is_read_only(sql: str) -> bool:
+    """True pour une requête de pure lecture (SELECT / PRAGMA / SHOW).
+
+    Prudence : un WITH peut contenir un INSERT/UPDATE, il n'est donc PAS
+    considéré comme lecture — une transaction d'écriture n'est jamais
+    close ni rejouée à tort.
+    """
+    head = sql.lstrip().split(None, 1)
+    if not head or head[0].upper() not in ("SELECT", "PRAGMA", "SHOW"):
+        return False
+    # Un SELECT verrouillant doit garder sa transaction (et son verrou).
+    upper = sql.upper()
+    return " FOR UPDATE" not in upper and " FOR SHARE" not in upper
+
+
 class AppConn:
     """Connexion compatible avec l'ancien get_conn() sqlite3.
 
@@ -318,6 +333,10 @@ class AppConn:
 
     def __init__(self, sa_conn: Connection):
         self._sa = sa_conn
+        # True dès qu'une écriture est en attente de commit sur la
+        # transaction courante : on ne doit alors ni la clore après une
+        # lecture, ni rejouer une requête sur une connexion neuve.
+        self._dirty = False
 
     @property
     def closed(self) -> bool:
@@ -329,33 +348,55 @@ class AppConn:
         # sur cette même connexion lève PendingRollbackError. On rollback
         # donc avant de remonter l'erreur, pour que les requêtes
         # ultérieures puissent reprendre sur une transaction saine.
-        try:
-            if params is None:
-                res = self._sa.execute(text(sql))
-            elif isinstance(params, dict):
-                res = self._sa.execute(text(sql), params)
-            else:
-                raise TypeError(
-                    "get_conn().execute() exige des paramètres NOMÉS en dict "
-                    f"(:name), reçu {type(params).__name__}. "
-                    "Réécrivez la requête en style portable SQLite/PostgreSQL."
-                )
-        except Exception as exc:
+        if params is not None and not isinstance(params, dict):
+            raise TypeError(
+                "get_conn().execute() exige des paramètres NOMÉS en dict "
+                f"(:name), reçu {type(params).__name__}. "
+                "Réécrivez la requête en style portable SQLite/PostgreSQL."
+            )
+        is_read = _is_read_only(sql)
+        for attempt in (1, 2):
             try:
-                self._sa.rollback()
-            except Exception:
-                # rollback lui-même en échec → la connexion est morte,
-                # on la déconnecte pour forcer une reconnexion propre au
-                # prochain get_conn().
-                self._dispose()
-            # Neon ( ou le pool ) peut avoir TUÉ la session sous-jacente.
-            # pool_pre_ping ne voit pas une connexion apparemment ouverte
-            # mais serveur-mort : on la jette pour que le prochain appel
-            # reparte sur une connexion fraîche.
-            if _is_connection_dead(exc):
-                self._dispose()
-            raise
-        return AppResult(res)
+                if params is None:
+                    res = self._sa.execute(text(sql))
+                else:
+                    res = self._sa.execute(text(sql), params)
+                break
+            except Exception as exc:
+                try:
+                    self._sa.rollback()
+                except Exception:
+                    # rollback lui-même en échec → la connexion est morte,
+                    # on la déconnecte pour forcer une reconnexion propre au
+                    # prochain get_conn().
+                    self._dispose()
+                # Neon ( ou le pool ) peut avoir TUÉ la session sous-jacente.
+                # pool_pre_ping ne voit pas une connexion apparemment ouverte
+                # mais serveur-mort : on la jette pour que le prochain appel
+                # reparte sur une connexion fraîche.
+                dead = _is_connection_dead(exc)
+                if dead:
+                    self._dispose()
+                # Rejeu UNIQUE, seulement sans écriture en attente : rien
+                # n'a pu être perdu avec la session tuée, la requête peut
+                # repartir telle quelle sur une connexion neuve.
+                if dead and attempt == 1 and not self._dirty:
+                    self._sa = self._sa.engine.connect()
+                    continue
+                self._dirty = False
+                raise
+        result = AppResult(res)
+        if is_read and not self._dirty:
+            # Cause racine du 500 /api/chat/stream : un SELECT ouvre une
+            # transaction implicite qui restait « idle in transaction »
+            # sur cette connexion thread-local jusqu'au prochain commit.
+            # Neon tuait la session (IdleInTransactionSessionTimeout) et
+            # la requête suivante tombait sur une connexion morte. On clôt
+            # donc la transaction de lecture dès les lignes récupérées.
+            self._sa.commit()
+        elif not is_read:
+            self._dirty = True
+        return result
 
     def _dispose(self) -> None:
         """Déconnecte en silence — get_conn() recréera la connexion."""
@@ -367,12 +408,15 @@ class AppConn:
     def executemany(self, sql: str, seq_params: list[dict]) -> None:
         """exécution en lot (INSERT/UPDATE multiples) — parametres nommés."""
         self._sa.execute(text(sql), seq_params)
+        self._dirty = True
 
     def commit(self) -> None:
         self._sa.commit()
+        self._dirty = False
 
     def rollback(self) -> None:
         self._sa.rollback()
+        self._dirty = False
 
     def close(self) -> None:
         if not self._sa.closed:

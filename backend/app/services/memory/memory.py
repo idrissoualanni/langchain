@@ -59,8 +59,21 @@ def get_store():
     return get_persistent_store()
 
 def read_profile_for_api(user_id: str) -> dict:
-    """Version de read_profile pour l'API (sécurisée)."""
-    return read_profile(user_id)
+    """Profil au contrat API ProfileOut : user_id, name, description, exists.
+
+    Cause du 500 corrigé : on renvoyait read_profile() tel quel
+    ({name, description}) alors que ProfileOut exige aussi user_id et
+    exists — GET /api/users/{id}/profile levait une ValidationError.
+    """
+    profile = read_profile(user_id)
+    name = profile.get("name")
+    description = profile.get("description")
+    return {
+        "user_id": user_id,
+        "name": name,
+        "description": description,
+        "exists": name is not None or description is not None,
+    }
 
 def _fact(memory: dict) -> dict:
     """Souvenir du CognitiveStore → contrat MemoryFact (API + tools)."""
