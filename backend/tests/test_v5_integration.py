@@ -14,6 +14,19 @@ import os
 # Port configurable (8001 par défaut : port de test utilisé
 # pendant l'intégration V6 pour ne pas écraser le serveur de
 # dev). BASE_PORT = 8000 restaure l'ancien comportement.
+# Script de bout en bout : il appelle une API RÉELLEMENT lancée dès
+# l'import. Sous pytest sans serveur, la collecte échouait et rendait toute
+# la CI rouge. Il ne tourne donc sous pytest que sur demande :
+#   RUN_LIVE_API_TESTS=1 BASE_PORT=8001 pytest <ce fichier>
+# Exécution directe inchangée : python <ce fichier>
+if "pytest" in sys.modules and os.environ.get("RUN_LIVE_API_TESTS") != "1":
+    import pytest
+
+    pytest.skip(
+        "Script live : exige l'API sur BASE_PORT (RUN_LIVE_API_TESTS=1)",
+        allow_module_level=True,
+    )
+
 BASE = f"http://127.0.0.1:{os.environ.get('BASE_PORT', '8001')}"
 
 results = []

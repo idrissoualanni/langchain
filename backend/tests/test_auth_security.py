@@ -11,6 +11,19 @@ import urllib.request
 
 sys.path.insert(0, ".")
 
+# Script de bout en bout : il appelle une API RÉELLEMENT lancée (mode dev
+# auth) dès l'import. Sous pytest sans serveur, la collecte échouait et
+# rendait toute la CI rouge. Il ne tourne donc sous pytest que sur demande :
+#   RUN_LIVE_API_TESTS=1 BASE_PORT=8001 pytest tests/test_auth_security.py
+# Exécution directe inchangée : python tests/test_auth_security.py
+if "pytest" in sys.modules and os.environ.get("RUN_LIVE_API_TESTS") != "1":
+    import pytest
+
+    pytest.skip(
+        "Script live : exige l'API sur BASE_PORT (RUN_LIVE_API_TESTS=1)",
+        allow_module_level=True,
+    )
+
 BASE = f"http://127.0.0.1:{os.environ.get('BASE_PORT', '8001')}"
 
 results = []

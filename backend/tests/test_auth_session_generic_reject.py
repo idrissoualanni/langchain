@@ -12,9 +12,11 @@
 # devient le MÊME 401 que celui d'une signature invalide. On compare
 # donc les corps de réponse entre eux, pas seulement les codes : deux
 # refus indistinguables par le client, c'est exactement ce qu'on veut.
+import jwt
 import pytest
 from fastapi.testclient import TestClient
 
+from app.auth import resolver
 from app.main import app
 
 #: Le refus doit être BYTE-identique quelle que soit la cause.
@@ -37,6 +39,24 @@ def client() -> TestClient:
     # rien à voir avec le rejet d'un corps malformé — et sans base il
     # faisait échouer chaque test à l'initialisation.
     return TestClient(app, raise_server_exceptions=False)
+
+
+class _JwksSansCleForgee:
+    """JWKS configurée qui ne connaît pas la clé du jeton forgé.
+
+    Sans elle, le test dépendait de NEON_AUTH_JWKS_URL (présente dans le
+    .env local, absente en CI) : JWKS non configurée → 503 volontaire
+    (panne d'opérateur, distincte d'un refus) au lieu du 401 testé ici.
+    Aucun appel réseau : la suite reste hermétique.
+    """
+
+    def get_signing_key_from_jwt(self, token: str):
+        raise jwt.PyJWKClientError("Unable to find a signing key that matches")
+
+
+@pytest.fixture(autouse=True)
+def _jwks_configuree(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(resolver, "_get_neon_jwk_client", lambda: _JwksSansCleForgee())
 
 
 def _post(client: TestClient, body: bytes):

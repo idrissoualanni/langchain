@@ -59,3 +59,13 @@ Ce document trace les choix techniques majeurs et leurs justifications pour évi
   → Clerk, graphe 17 → 15 nodes, façade `learning` non refactorisée, `.env.example` Clerk). Sa valeur réelle est
   l'historique qu'elle attache plus ces trois apports, tous vérifiés verts (`pytest`, `tsc`, `vitest`).
 - **Statut** : ✅ Implémenté.
+
+### ADR-007 : Levée de l'interdiction de push et de déploiement depuis ce poste
+- **Décision** : La règle « AUCUN Push / AUCUN Déploiement » d'`AGENTS.md` §4 est supprimée, sur décision
+  explicite du propriétaire du projet (2026-11-11). Le push reste soumis au **Bornage Git** (§2) et n'a lieu
+  qu'après tests verts. Le déploiement n'est jamais lancé à la main : il suit la chaîne existante
+  (push `master` → workflow CI → `deploy.yml` Render staging puis prod, et `vercel-deploy.yml`).
+- **Justification** : la consolidation de `dev` dans `master` (feature flags, correctif des mentions @,
+  suite hermétique) doit atteindre la production ; `origin/master` avait 51 commits de retard. ADR-004
+  (push unique) est remplacé par cette règle générale.
+- **Statut** : ✅ Implémenté.
