@@ -27,6 +27,7 @@ import {
   VerifyEmailPage,
 } from './pages/auth';
 import { AdminGate } from './auth/AdminGate';
+import { isFeatureEnabled } from './lib/flags';
 import { useCurrentUser } from './hooks/useCurrentUser';
 import { AssistantUIRuntimeProvider } from './assistant-ui/AssistantRuntimeProvider';
 
@@ -369,14 +370,17 @@ function AppShell() {
               </AdminGate>
             }
           />
-          <Route
-            path="/admin/exercises"
-            element={
-              <AdminGate>
-                <ExerciseLibraryPage />
-              </AdminGate>
-            }
-          />
+          {/* Flag adminExercises : /api/admin/exercises* absent du backend. */}
+          {isFeatureEnabled('adminExercises') && (
+            <Route
+              path="/admin/exercises"
+              element={
+                <AdminGate>
+                  <ExerciseLibraryPage />
+                </AdminGate>
+              }
+            />
+          )}
           <Route
             path="/admin/observability"
             element={

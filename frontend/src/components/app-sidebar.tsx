@@ -38,6 +38,7 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { ThreadList } from '@/components/assistant-ui/elements/thread-list.aui';
+import { isFeatureEnabled } from '@/lib/flags';
 
 interface NavItem {
   to: string;
@@ -154,9 +155,11 @@ export function AppSidebar() {
                 <NavEntry
                   item={{ to: '/admin/knowledge', label: 'Savoir', icon: BookOpenText }}
                 />
-                <NavEntry
-                  item={{ to: '/admin/exercises', label: 'Exercices', icon: Dumbbell }}
-                />
+                {isFeatureEnabled('adminExercises') && (
+                  <NavEntry
+                    item={{ to: '/admin/exercises', label: 'Exercices', icon: Dumbbell }}
+                  />
+                )}
                 <NavEntry
                   item={{ to: '/admin/observability', label: 'Observabilité', icon: Gauge }}
                 />

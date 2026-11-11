@@ -138,8 +138,28 @@ export interface ParsedComposerTerms {
  *     vide → le store garde le texte original pour l'affichage et
  *     laisse le backend valider le message vide).
  */
+// Directive insérée par le popover @ (formateur par défaut assistant-ui) :
+//   :mention[Deep Research]{name=deep-research}   ou   :mention[code]
+// Même motif que DIRECTIVE_RE de @assistant-ui/core.
+const DIRECTIVE_RE = /:([\w-]{1,64})\[([^\]\n]{1,1024})\](?:\{name=([^}\n]{1,1024})\})?/gu;
+
+/**
+ * Ramène les directives de termes CONNUS à la forme `@id`.
+ *
+ * Cause du bug corrigé : choisir un terme dans le popover insère une
+ * directive, pas `@id`. Le parseur ne voyait que `@id` : le routage
+ * était perdu et la directive brute partait au modèle. Une directive
+ * inconnue est laissée telle quelle.
+ */
+export function normalizeComposerText(text: string): string {
+  return (text ?? "").replace(DIRECTIVE_RE, (match, _type: string, label: string, name?: string) => {
+    const id = (name ?? label).trim().toLowerCase();
+    return TERM_IDS.has(id) ? `@${id}` : match;
+  });
+}
+
 export function parseComposerTerms(text: string): ParsedComposerTerms {
-  const raw = text ?? "";
+  const raw = normalizeComposerText(text);
   const found: ComposerTerm[] = [];
   let cleaned = raw.replace(
     /@([a-z][a-z0-9-]*)/gi,
@@ -172,6 +192,23 @@ export function parseComposerTerms(text: string): ParsedComposerTerms {
 
 /** True si le texte contient au moins un terme reconnu (UI : badge). */
 export function hasComposerTerm(text: string): boolean {
-  const ids = text?.match(/@([a-z][a-z0-9-]*)/gi) ?? [];
-  return ids.some((token) => TERM_IDS.has(token.slice(1).toLowerCase()));
+  return activeComposerTerm(text) !== null;
+}
+
+/** Premier terme reconnu du texte (forme @id ou directive), sinon null. */
+export function activeComposerTerm(text: string): ComposerTerm | null {
+  const ids = normalizeComposerText(text).match(/@([a-z][a-z0-9-]*)/gi) ?? [];
+  for (const token of ids) {
+    const term = COMPOSER_TERMS.find((t) => t.id === token.slice(1).toLowerCase());
+    if (term) return term;
+  }
+  return null;
+}
+
+/** Retire un terme du texte (forme @id ou directive) et normalise les espaces. */
+export function removeComposerTerm(text: string, termId: string): string {
+  return normalizeComposerText(text)
+    .replace(new RegExp(`@${termId}(?![a-z0-9-])`, "gi"), " ")
+    .replace(/[ \t]+/g, " ")
+    .trim();
 }
