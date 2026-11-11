@@ -49,6 +49,16 @@
 | LiveKit en conditions réelles | Non vérifiable depuis ce poste (secrets et LiveKit Cloud). À contrôler après déploiement : `GET /api/livekit/agent/status` |
 | Tests `integration` (Neon) | Sautés hors base |
 
+### 🚫 Écarté (connu, non bloquant)
+
+| Sujet | État |
+|---|---|
+| Conversion DOCX → Markdown | `mammoth` 1.13 échappe la ponctuation (`lecon\.`). Affichage correct, texte indexé bruité. Test `test_docx_to_markdown` en `xfail`. Correctif : désescaper la sortie avant découpage |
+| Bibliothèque d'exercices admin | Flag `adminExercises=false` (routes backend absentes) |
+| Groupes admin | Flag `adminGroups=false` (route backend absente) |
+| Commandes `/` | Non implémentées |
+| Service Render staging | Inexistant (404) : `deploy.yml` (staging puis prod) ne peut pas aboutir ; déploiement prod fait directement via l'API Render |
+
 ### ⚠️ Risques de déploiement
 
 1. **LiveKit — secrets par défaut** : `LIVEKIT_API_KEY`/`LIVEKIT_API_SECRET` retombent sur
