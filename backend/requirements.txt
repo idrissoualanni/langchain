@@ -15,6 +15,10 @@ cryptography
 langchain
 langchain-core
 langchain-ollama
+# SDK OpenAI : client compatible OpenAI de la passerelle multi-fournisseurs
+# (app/services/models/client_factory.py). Absent du verrou, l'API ne
+# démarrait pas sur une image propre (CI « Import smoke tests »).
+openai>=2.0
 langgraph
 langsmith
 # --- Langfuse observabilité (traces agent, auto-hébergé v4) ---
