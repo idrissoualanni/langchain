@@ -10,6 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
 import { apiRequest } from "@/api/request";
+import { isFeatureEnabled } from "@/lib/flags";
 
 interface Group {
   id: string;
@@ -24,11 +25,18 @@ interface GroupSelectorProps {
 }
 
 export function GroupSelector({ selectedGroups, onChange }: GroupSelectorProps) {
+  const groupsEnabled = isFeatureEnabled("adminGroups");
   const [groups, setGroups] = useState<Group[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(groupsEnabled);
+  const [loadError, setLoadError] = useState<string | null>(
+    groupsEnabled
+      ? null
+      : "Le service de groupes n'est pas encore disponible. Saisie manuelle possible ci-dessous.",
+  );
 
   useEffect(() => {
+    // Flag adminGroups éteint : la route n'existe pas, on ne l'appelle pas.
+    if (!groupsEnabled) return;
     const loadGroups = async () => {
       // NOTE : l'API /api/admin/groups n'existe pas encore côté backend.
       // On affiche un état d'erreur honnête au lieu d'un "Loading…" éternel
@@ -54,7 +62,7 @@ export function GroupSelector({ selectedGroups, onChange }: GroupSelectorProps) 
     };
 
     loadGroups();
-  }, []);
+  }, [groupsEnabled]);
 
   const handleAddGroup = (groupId: string) => {
     if (groupId === "__none__") return;

@@ -2,24 +2,18 @@
 
 import { XIcon } from "lucide-react";
 import { useAui, useAuiState } from "@assistant-ui/react";
-import { COMPOSER_TERMS, hasComposerTerm } from "@/hooks/use-composer-mentions";
+import { activeComposerTerm, removeComposerTerm } from "@/hooks/use-composer-mentions";
 
-/** Badge du terme @ actif dans le composer — retire le terme au clic. */
+/** Badge du terme @ actif dans le composer — retire le terme au clic.
+ *  Reconnaît le terme tapé (@id) comme celui choisi dans le popover
+ *  (directive :mention[…]{name=id}). */
 export function MentionBadge() {
-  const text = useAuiState((s) => s.composer.text);
+  const text = useAuiState((s) => s.composer.text) ?? "";
   const aui = useAui();
-  const termId = (() => {
-    if (!hasComposerTerm(text ?? "")) return null;
-    const m = (text ?? "").match(/@([a-z][a-z0-9-]*)/i);
-    return m ? m[1].toLowerCase() : null;
-  })();
-  const term = COMPOSER_TERMS.find((t) => t.id === termId);
+  const term = activeComposerTerm(text);
   if (!term) return null;
 
-  const remove = () => {
-    const next = (text ?? "").replace(new RegExp(`@${term.id}\\b`, "gi"), " ").replace(/[ \t]+/g, " ").trim();
-    aui.composer.setText(next);
-  };
+  const remove = () => aui.composer.setText(removeComposerTerm(text, term.id));
 
   return (
     <div className="flex items-center gap-1.5 rounded-full border border-border bg-muted px-2 py-1 text-xs">
