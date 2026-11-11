@@ -22,7 +22,7 @@ Ces règles sont opposables à tout agent et toute intervention humaine. Toute d
 - **Cycle de Vie** : `api/` $\rightarrow$ `services/` $\rightarrow$ `repositories/` $\rightarrow$ `infrastructure/database/`.
 - **Contrats** : Toute modification de route doit être reflétée dans `API.md`.
 - **Branche d'Intégration** : `dev`. Un worktree par tâche sous `.worktrees/<tache>` (branche `task/<tache>`) ; merge dans `dev` uniquement après tests verts.
-- **AUCUN Push** : Aucun `git push` depuis ce poste. **AUCUN Déploiement** : Render, Vercel ou autre, jamais depuis ce poste.
+- **Push & Déploiement** : `git push` autorisé depuis ce poste, toujours avec le **Bornage Git** (§2), et seulement après tests verts. Le déploiement passe par la CI : un push sur `master` déclenche CI → Render (staging puis prod) et Vercel. Voir `DECISIONS.md` ADR-007.
 - **Tests** : Tests unitaires **et** d'intégration obligatoires avant merge ; tout bug corrigé doit être accompagné d'un test de reproduction. Détail dans `.opencode/rules/tests.md`.
 
 ---
